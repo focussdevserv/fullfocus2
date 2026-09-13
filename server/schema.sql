@@ -1,0 +1,8 @@
+create table if not exists tasks (id bigserial primary key, title text not null, status text not null default 'todo', due_at timestamptz, created_at timestamptz not null default now());
+create table if not exists leads (id bigserial primary key, name text not null, company text, status text not null default 'new', created_at timestamptz not null default now());
+create table if not exists projects (id bigserial primary key, name text not null, status text not null default 'active', progress smallint not null default 0 check (progress between 0 and 100), created_at timestamptz not null default now());
+create table if not exists revenues (id bigserial primary key, description text not null, amount numeric(12,2) not null default 0, paid_at timestamptz, created_at timestamptz not null default now());
+insert into tasks (title, status) select 'Revisar briefing do cliente', 'doing' where not exists (select 1 from tasks);
+insert into leads (name, company, status) select 'Bruno Almeida', 'Nexum', 'qualified' where not exists (select 1 from leads);
+insert into projects (name, status, progress) select 'Website institucional', 'active', 78 where not exists (select 1 from projects);
+insert into revenues (description, amount, paid_at) select 'Mensalidade Website', 8400, now() where not exists (select 1 from revenues);

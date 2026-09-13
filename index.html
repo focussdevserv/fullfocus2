@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#020307" />
+    <meta name="description" content="Acesse o workspace da FocusDev." />
+    <title>Entrar · FocusDev</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d4fc2'/%3E%3Cpath d='M10 7h13v4h-8.5v4.5H22v4h-7.5V25H10z' fill='%23fff'/%3E%3Ccircle cx='24' cy='24' r='3.5' fill='%23f3132d'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <!-- ===================== Login / redefinição de senha ===================== -->
+    <main class="login-shell" id="login-shell">
+      <section class="hero" id="hero" data-scene="login" aria-label="FocusDev">
+        <div class="hero-glow" aria-hidden="true"></div>
+        <img
+          class="hero-art"
+          src="assets/login-spiderman-peek.png"
+          alt=""
+          width="448"
+          height="799"
+          decoding="async"
+          fetchpriority="high"
+        />
+        <div class="hero-scrim" aria-hidden="true"></div>
+
+        <a class="brand brand-on-dark" href="#" aria-label="FocusDev">
+          <span class="brand-focus">Focus</span><span class="brand-dev">Dev</span>
+        </a>
+
+        <div class="hero-copy hero-copy-login">
+          <h2 class="hero-title">
+            Crie<span class="dot">.</span> Evolua<span class="dot">.</span><br />
+            Conquiste<span class="dot">.</span>
+          </h2>
+          <p class="hero-lead">Seu próximo grande projeto começa com foco.</p>
+        </div>
+
+        <div class="hero-copy hero-copy-reset">
+          <h2 class="hero-title">Vamos recuperar<br />seu acesso<span class="dot">.</span></h2>
+          <p class="hero-lead">Em instantes você recebe um link por e-mail.</p>
+        </div>
+      </section>
+
+      <section class="auth" aria-labelledby="auth-title">
+        <!-- Login -->
+        <div class="auth-screen" id="login-screen">
+          <div class="brand" aria-label="FocusDev">
+            <span class="brand-focus">Focus</span><span class="brand-dev">Dev</span>
+          </div>
+
+          <header class="auth-heading">
+            <h1 id="auth-title">Bem-vindo de volta</h1>
+            <p>Entre na sua conta para continuar.</p>
+          </header>
+
+          <form class="form" id="login-form" novalidate>
+            <div class="field">
+              <label for="email">E-mail</label>
+              <div class="control">
+                <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <path d="m4 7 8 6 8-6" />
+                </svg>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="nome@empresa.com"
+                  aria-describedby="email-error"
+                  required
+                />
+              </div>
+              <p class="field-error" id="email-error"></p>
+            </div>
+
+            <div class="field">
+              <label for="password">Senha</label>
+              <div class="control">
+                <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="10" width="14" height="11" rx="2" />
+                  <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />
+                </svg>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="Sua senha"
+                  aria-describedby="password-error"
+                  required
+                />
+                <button
+                  class="password-toggle"
+                  id="password-toggle"
+                  type="button"
+                  aria-label="Mostrar senha"
+                  aria-pressed="false"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                    <circle cx="12" cy="12" r="2.4" />
+                  </svg>
+                </button>
+              </div>
+              <p class="field-error" id="password-error"></p>
+            </div>
+
+            <button class="button button-primary" id="login-submit" type="submit">
+              <span class="button-label">Entrar</span>
+              <span class="button-spinner" aria-hidden="true"></span>
+            </button>
+
+            <p class="form-status" id="login-status" role="status" aria-live="polite"></p>
+          </form>
+
+          <button class="link-button forgot-link" id="forgot-button" type="button">
+            Esqueci minha senha
+          </button>
+
+          <div class="divider" aria-hidden="true"><span>ou</span></div>
+
+          <button class="button button-secondary" id="create-account" type="button">
+            Criar uma conta
+          </button>
+        </div>
+
+        <!-- Redefinição de senha -->
+        <div class="auth-screen" id="reset-screen" hidden>
+          <div class="brand" aria-label="FocusDev">
+            <span class="brand-focus">Focus</span><span class="brand-dev">Dev</span>
+          </div>
+
+          <button class="link-button back-link" id="back-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+            Voltar para o login
+          </button>
+
+          <header class="auth-heading">
+            <h1>Redefinir senha</h1>
+            <p>Informe o e-mail da sua conta. Enviaremos um link para você criar uma nova senha.</p>
+          </header>
+
+          <form class="form" id="reset-form" novalidate>
+            <div class="field">
+              <label for="reset-email">E-mail</label>
+              <div class="control">
+                <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <path d="m4 7 8 6 8-6" />
+                </svg>
+                <input
+                  id="reset-email"
+                  name="reset-email"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="nome@empresa.com"
+                  aria-describedby="reset-email-error"
+                  required
+                />
+              </div>
+              <p class="field-error" id="reset-email-error"></p>
+            </div>
+
+            <button class="button button-primary" id="reset-submit" type="submit">
+              <span class="button-label">Enviar link</span>
+              <span class="button-spinner" aria-hidden="true"></span>
+            </button>
+
+            <p class="form-status" id="reset-status" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <!-- ===================== Workspace ===================== -->
+    <main class="app-shell" id="app-shell" hidden>
+      <aside class="app-sidebar" id="app-sidebar" aria-label="Menu principal">
+        <div class="brand brand-on-dark brand-small" aria-label="FocusDev">
+          <span class="brand-focus">Focus</span><span class="brand-dev">Dev</span>
+        </div>
+
+        <nav class="main-nav">
+          <div class="nav-group">
+            <p>Meu dia</p>
+            <a class="nav-item is-active" href="#inicio">Início</a>
+            <a class="nav-item" href="#agenda">Agenda</a>
+            <a class="nav-item" href="#tarefas">Tarefas</a>
+            <a class="nav-item" href="#caixa-de-entrada">Caixa de entrada</a>
+          </div>
+          <div class="nav-group">
+            <p>CRM</p>
+            <a class="nav-item" href="#leads">Leads</a>
+            <a class="nav-item" href="#campanhas">Campanhas</a>
+            <a class="nav-item" href="#funil">Funil</a>
+            <a class="nav-item" href="#oportunidades">Oportunidades</a>
+            <a class="nav-item" href="#propostas">Propostas</a>
+            <a class="nav-item" href="#follow-ups">Follow-ups</a>
+          </div>
+          <div class="nav-group">
+            <p>Contas e contatos</p>
+            <a class="nav-item" href="#conversas">Conversas</a>
+            <a class="nav-item" href="#contatos">Contatos</a>
+            <a class="nav-item" href="#consulta-cnpj">Consulta CNPJ</a>
+            <a class="nav-item" href="#clientes">Clientes</a>
+            <a class="nav-item" href="#portal-do-cliente">Portal do cliente</a>
+            <a class="nav-item" href="#empresas">Empresas</a>
+          </div>
+          <div class="nav-group">
+            <p>Operação</p>
+            <a class="nav-item" href="#contratos">Contratos</a>
+            <a class="nav-item" href="#projetos">Projetos</a>
+            <a class="nav-item" href="#arquivos">Arquivos</a>
+            <a class="nav-item" href="#tickets">Tickets</a>
+          </div>
+          <div class="nav-group">
+            <p>Financeiro</p>
+            <a class="nav-item" href="#visao-financeira">Visão financeira</a>
+            <a class="nav-item" href="#receitas">Receitas</a>
+            <a class="nav-item" href="#contas-a-receber">Contas a receber</a>
+            <a class="nav-item" href="#despesas">Despesas</a>
+            <a class="nav-item" href="#cobrancas">Cobranças</a>
+            <a class="nav-item" href="#assinaturas">Assinaturas</a>
+            <a class="nav-item" href="#relatorios">Relatórios</a>
+          </div>
+          <div class="nav-group">
+            <p>Catálogo</p>
+            <a class="nav-item" href="#catalogo">Catálogo</a>
+          </div>
+          <div class="nav-group">
+            <p>Automações</p>
+            <a class="nav-item" href="#automacoes">Automações</a>
+            <a class="nav-item" href="#templates">Templates</a>
+            <a class="nav-item" href="#integracoes">Integrações</a>
+          </div>
+          <div class="nav-group">
+            <p>Configurações</p>
+            <a class="nav-item" href="#equipe">Equipe</a>
+            <a class="nav-item" href="#configuracoes">Configurações</a>
+          </div>
+        </nav>
+
+        <div class="account-menu">
+          <button
+            class="account-trigger"
+            id="account-trigger"
+            type="button"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="account-dropdown"
+          >
+            <span class="avatar" aria-hidden="true">FD</span>
+            <span class="account-name"><strong>FocusDev</strong><small>Workspace</small></span>
+            <svg class="account-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+          <div class="account-dropdown" id="account-dropdown" hidden>
+            <a href="#minha-equipe">Minha equipe</a>
+            <a href="#configuracoes">Configurações</a>
+            <button id="logout-button" type="button">Sair da conta</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+
+      <section class="app-content" aria-label="Área de trabalho">
+        <header class="app-topbar">
+          <div>
+            <p class="eyebrow">Meu dia</p>
+            <h1 id="app-title" tabindex="-1">Bom dia, FocusDev</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="global-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+              <input id="global-search" type="search" placeholder="Buscar no workspace" autocomplete="off" />
+              <kbd>⌘ K</kbd>
+            </label>
+            <button class="notification-button" type="button" aria-label="Ver notificações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span aria-hidden="true"></span></button>
+          </div>
+          <button
+            class="mobile-menu"
+            id="mobile-menu"
+            type="button"
+            aria-label="Abrir menu"
+            aria-expanded="false"
+            aria-controls="app-sidebar"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+        </header>
+
+        <div class="dashboard-grid">
+          <section class="welcome-card dashboard-hero"><div><p class="card-kicker">Visão geral</p><h2>Foco no que move o negócio.</h2><p>Uma visão rápida das suas prioridades e dos próximos passos da equipe.</p></div><span class="welcome-icon" aria-hidden="true">✦</span></section>
+          <section class="metrics" aria-label="Indicadores principais">
+            <article class="metric-card"><span class="metric-label">Receita no mês</span><strong data-metric="revenue">R$ 48.240</strong><small class="positive">↑ 12,8% <em>vs. mês anterior</em></small></article>
+            <article class="metric-card"><span class="metric-label">Leads ativos</span><strong data-metric="leads">128</strong><small class="positive">↑ 8,4% <em>vs. mês anterior</em></small></article>
+            <article class="metric-card"><span class="metric-label">Tarefas abertas</span><strong data-metric="tasks">24</strong><small class="neutral">6 para hoje</small></article>
+            <article class="metric-card"><span class="metric-label">Projetos em andamento</span><strong data-metric="projects">12</strong><small class="warning">3 precisam de atenção</small></article>
+          </section>
+          <section class="data-card activity-card"><div class="section-heading"><div><p class="card-kicker">Acompanhe de perto</p><h2>Atividade recente</h2></div><button class="text-action" type="button">Ver tudo</button></div><div class="activity-list">
+            <article class="activity-item"><span class="activity-avatar blue">AM</span><div><strong>Alex Martins atualizou o projeto Website</strong><small>Há 12 minutos · Projetos</small></div><span class="activity-dot"></span></article>
+            <article class="activity-item"><span class="activity-avatar pink">JS</span><div><strong>Joana Silva adicionou um novo lead</strong><small>Há 38 minutos · CRM</small></div><span class="activity-dot"></span></article>
+            <article class="activity-item"><span class="activity-avatar green">RC</span><div><strong>Receita #1042 foi marcada como paga</strong><small>Há 1 hora · Financeiro</small></div><span class="activity-dot"></span></article>
+          </div></section>
+          <section class="data-card agenda-card"><div class="section-heading"><div><p class="card-kicker">Próximos passos</p><h2>Agenda de hoje</h2></div><button class="icon-action" type="button" aria-label="Adicionar evento">+</button></div><div class="agenda-list">
+            <article class="agenda-item"><time>09:30</time><div><strong>Reunião de alinhamento</strong><small>Google Meet · Equipe de produto</small></div></article>
+            <article class="agenda-item"><time>14:00</time><div><strong>Apresentação da proposta</strong><small>Cliente: Acme Inc.</small></div></article>
+            <article class="agenda-item"><time>16:30</time><div><strong>Revisão de tarefas</strong><small>Time de desenvolvimento</small></div></article>
+          </div></section>
+        </div>
+        <div class="search-results" id="search-results" hidden aria-live="polite"></div>
+      </section>
+    </main>
+  </body>
+</html>
