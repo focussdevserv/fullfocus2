@@ -47,13 +47,13 @@ app.get("/api/dashboard", async (_req, res) => {
   } catch (error) { res.status(503).json({ ok: false, error: error.message }); }
 });
 app.post("/api/tasks", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium", tags = String(req.body?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 8);
+  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium", tags = String(req.body?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 8), parentId = req.body?.parentId || null;
   if (!title) return res.status(400).json({ error: "Informe o título da tarefa." });
-  try { const result = await pool.query("insert into tasks (title, priority, tags, due_at) values ($1, $2, $3, $4) returning id,title,status,priority,tags,due_at", [title, priority, tags, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
+  try { const result = await pool.query("insert into tasks (title, priority, tags, parent_id, due_at) values ($1, $2, $3, $4, $5) returning id,title,status,priority,tags,parent_id,due_at", [title, priority, tags, parentId, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível criar a tarefa.", detail: error.message }); }
 });
 app.get("/api/tasks", async (_req, res) => {
-  try { const result = await pool.query("select id,title,status,priority,tags,due_at,created_at from tasks order by case when status = 'done' then 1 else 0 end, due_at nulls last, created_at desc"); res.json({ tasks: result.rows }); }
+  try { const result = await pool.query("select id,title,status,priority,tags,parent_id,due_at,created_at from tasks order by case when status = 'done' then 1 else 0 end, due_at nulls last, created_at desc"); res.json({ tasks: result.rows }); }
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar as tarefas.", detail: error.message }); }
 });
 app.patch("/api/tasks/:id", async (req, res) => {
