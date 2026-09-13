@@ -8,3 +8,4 @@ insert into projects (name, status, progress) select 'Website institucional', 'a
 insert into revenues (description, amount, paid_at) select 'Mensalidade Website', 8400, now() where not exists (select 1 from revenues);
 create extension if not exists pgcrypto;
 create table if not exists users (id uuid primary key default gen_random_uuid(), name text not null, email text not null unique, password_hash text not null, created_at timestamptz not null default now());
+create table if not exists events (id bigserial primary key, title text not null, starts_at timestamptz not null, description text, created_at timestamptz not null default now());

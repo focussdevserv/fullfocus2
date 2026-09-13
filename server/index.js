@@ -75,6 +75,12 @@ app.post("/api/projects", async (req, res) => {
   try { const result = await pool.query("insert into projects (name) values ($1) returning id,name,status,progress", [name]); res.status(201).json({ project: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível criar o projeto.", detail: error.message }); }
 });
+app.post("/api/events", async (req, res) => {
+  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt;
+  if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe título e horário válidos." });
+  try { const result = await pool.query("insert into events (title,starts_at,description) values ($1,$2,$3) returning id,title,starts_at,description", [title, startsAt, String(req.body?.description || "").trim() || null]); res.status(201).json({ event: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "Não foi possível criar o evento.", detail: error.message }); }
+});
 async function start() {
   try {
     const schema = await readFile(new URL("./schema.sql", import.meta.url), "utf8");
