@@ -57,7 +57,7 @@ app.get("/api/tasks", async (_req, res) => {
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar as tarefas.", detail: error.message }); }
 });
 app.patch("/api/tasks/:id", async (req, res) => {
-  const status = req.body?.status === "done" ? "done" : "doing", title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : null;
+  const status = ["todo", "doing", "blocked", "done"].includes(req.body?.status) ? req.body.status : "doing", title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : null;
   try { const result = await pool.query("update tasks set status=$1 where id=$2 returning id,title,status", [status, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Tarefa não encontrada." }); res.json({ task: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível atualizar a tarefa.", detail: error.message }); }
 });
