@@ -6,3 +6,5 @@ insert into tasks (title, status) select 'Revisar briefing do cliente', 'doing' 
 insert into leads (name, company, status) select 'Bruno Almeida', 'Nexum', 'qualified' where not exists (select 1 from leads);
 insert into projects (name, status, progress) select 'Website institucional', 'active', 78 where not exists (select 1 from projects);
 insert into revenues (description, amount, paid_at) select 'Mensalidade Website', 8400, now() where not exists (select 1 from revenues);
+create extension if not exists pgcrypto;
+create table if not exists users (id uuid primary key default gen_random_uuid(), name text not null, email text not null unique, password_hash text not null, created_at timestamptz not null default now());

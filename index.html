@@ -138,6 +138,20 @@
         </div>
 
         <!-- Redefinição de senha -->
+        <div class="auth-screen" id="register-screen" hidden>
+          <div class="brand" aria-label="FocusDev"><span class="brand-focus">Focus</span><span class="brand-dev">Dev</span></div>
+          <button class="link-button back-link" id="register-back" type="button">← Voltar para o login</button>
+          <header class="auth-heading"><h1>Crie sua conta</h1><p>Comece a organizar seus projetos com foco.</p></header>
+          <form class="form register-form" id="register-form" novalidate>
+            <div class="field"><label for="register-name">Nome</label><div class="control"><input id="register-name" type="text" placeholder="Seu nome completo" autocomplete="name" required /></div><p class="field-error"></p></div>
+            <div class="field"><label for="register-email">E-mail</label><div class="control"><input id="register-email" type="email" placeholder="nome@empresa.com" autocomplete="email" required /></div><p class="field-error"></p></div>
+            <div class="field"><label for="register-password">Senha</label><div class="control"><input id="register-password" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" required /></div><p class="field-error"></p></div>
+            <div class="field"><label for="register-confirm">Confirmar senha</label><div class="control"><input id="register-confirm" type="password" placeholder="Repita sua senha" autocomplete="new-password" required /></div><p class="field-error"></p></div>
+            <button class="button button-primary" id="register-submit" type="submit"><span class="button-label">Criar conta</span><span class="button-spinner" aria-hidden="true"></span></button>
+            <p class="form-status" id="register-status" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+
         <div class="auth-screen" id="reset-screen" hidden>
           <div class="brand" aria-label="FocusDev">
             <span class="brand-focus">Focus</span><span class="brand-dev">Dev</span>

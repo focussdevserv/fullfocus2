@@ -4,6 +4,7 @@ const loginShell = $("login-shell");
 const hero = $("hero");
 const loginScreen = $("login-screen");
 const resetScreen = $("reset-screen");
+const registerScreen = $("register-screen");
 
 const loginForm = $("login-form");
 const emailInput = $("email");
@@ -19,6 +20,10 @@ const resetEmail = $("reset-email");
 const resetSubmit = $("reset-submit");
 const resetStatus = $("reset-status");
 const backButton = $("back-button");
+const registerBack = $("register-back");
+const registerForm = $("register-form");
+const registerSubmit = $("register-submit");
+const registerStatus = $("register-status");
 
 const appShell = $("app-shell");
 const appTitle = $("app-title");
@@ -38,6 +43,21 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FAKE_REQUEST_MS = 650;
 
 const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+createAccount.addEventListener("click", showRegister);
+registerBack.addEventListener("click", showLogin);
+registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = $("register-name"), email = $("register-email"), password = $("register-password"), confirm = $("register-confirm");
+  [[name, name.value.trim().length >= 2 ? "" : "Informe seu nome."], [email, validateEmail(email)], [password, password.value.length >= 8 ? "" : "A senha deve ter pelo menos 8 caracteres."], [confirm, confirm.value === password.value ? "" : "As senhas não coincidem."]].forEach(([input, error]) => setFieldError(input, error));
+  if (registerForm.querySelector(".has-error")) return;
+  setLoading(registerSubmit, true); setStatus(registerStatus, "");
+  try {
+    const response = await fetch("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.value.trim(), email: email.value.trim(), password: password.value }) });
+    const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível criar a conta.");
+    setLoading(registerSubmit, false); setStatus(registerStatus, "Conta criada! Você já pode entrar."); loginScreen.hidden = false; registerScreen.hidden = true; emailInput.value = email.value; passwordInput.focus();
+  } catch (error) { setLoading(registerSubmit, false); setStatus(registerStatus, error.message, "error"); }
+});
 
 /* ---------------------------------------------------------------------------
    Utilidades de formulário
@@ -86,6 +106,7 @@ function showLogin() {
   appShell.hidden = true;
   loginShell.hidden = false;
   resetScreen.hidden = true;
+  registerScreen.hidden = true;
   loginScreen.hidden = false;
   hero.dataset.scene = "login";
 }
@@ -94,6 +115,14 @@ function showReset() {
   loginScreen.hidden = true;
   resetScreen.hidden = false;
   hero.dataset.scene = "reset";
+}
+
+function showRegister() {
+  loginScreen.hidden = true;
+  resetScreen.hidden = true;
+  registerScreen.hidden = false;
+  hero.dataset.scene = "login";
+  $("register-name").focus();
 }
 
 function showApp() {
@@ -151,14 +180,12 @@ loginForm.addEventListener("submit", async (event) => {
 
   setStatus(loginStatus, "");
   setLoading(loginSubmit, true);
-  await wait(FAKE_REQUEST_MS);
-  setLoading(loginSubmit, false);
-
-  clearForm(loginForm, loginStatus);
-  passwordInput.type = "password";
-  passwordToggle.setAttribute("aria-pressed", "false");
-  passwordToggle.setAttribute("aria-label", "Mostrar senha");
-  showApp();
+  try {
+    const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: emailInput.value.trim(), password: passwordInput.value }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Não foi possível entrar.");
+    setLoading(loginSubmit, false); clearForm(loginForm, loginStatus); passwordInput.type = "password"; passwordToggle.setAttribute("aria-pressed", "false"); passwordToggle.setAttribute("aria-label", "Mostrar senha"); showApp();
+  } catch (error) { setLoading(loginSubmit, false); setStatus(loginStatus, error.message, "error"); }
 });
 
 createAccount.addEventListener("click", () => {
