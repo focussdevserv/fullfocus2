@@ -81,6 +81,12 @@ app.post("/api/events", async (req, res) => {
   try { const result = await pool.query("insert into events (title,starts_at,description) values ($1,$2,$3) returning id,title,starts_at,description", [title, startsAt, String(req.body?.description || "").trim() || null]); res.status(201).json({ event: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível criar o evento.", detail: error.message }); }
 });
+app.patch("/api/events/:id", async (req, res) => {
+  const startsAt = req.body?.startsAt;
+  if (!startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe uma data válida." });
+  try { const result = await pool.query("update events set starts_at=$1 where id=$2 returning id,title,starts_at,description", [startsAt, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.json({ event: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "Não foi possível mover o evento.", detail: error.message }); }
+});
 async function start() {
   try {
     const schema = await readFile(new URL("./schema.sql", import.meta.url), "utf8");
