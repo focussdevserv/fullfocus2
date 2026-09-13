@@ -959,6 +959,11 @@ svg {
 .dialog-status { min-height: 18px; margin: 13px 0 0; color: var(--red); font-size: 11px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
 .dialog-actions .button { width: auto; min-height: 40px; margin-top: 0; padding: 0 17px; font-size: 12px; }
+.save-button { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 20px; border: 0; border-bottom: 4px solid #123b91; border-radius: 11px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .02em; box-shadow: 0 10px 20px rgb(37 99 235 / 22%); }
+.save-button:hover { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.save-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.quick-actions button:last-child { border-color: #b7ead8; background: linear-gradient(135deg, #eafbf5, #dff7ef); color: #087b5a; }
+.quick-actions button:last-child:hover { border-color: #72d3b1; background: linear-gradient(135deg, #dff8ef, #c9f2e3); }
 .global-search { display: flex; align-items: center; width: 280px; height: 44px; gap: 10px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--muted); }
 .global-search svg, .notification-button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .global-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
