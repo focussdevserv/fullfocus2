@@ -304,6 +304,12 @@
             <button class="notification-button" type="button" aria-label="Ver notificações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span aria-hidden="true"></span></button>
             <button class="button button-primary topbar-create" type="button">+ Criar</button>
           </div>
+          <div class="account-menu topbar-profile">
+            <button class="account-trigger" id="top-account-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="top-account-dropdown">
+              <span class="avatar">FD</span><span class="account-name"><strong>FocusDev</strong><small>Product Designer</small></span><svg class="account-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+            <div class="account-dropdown" id="top-account-dropdown" hidden><a href="#minha-equipe">Minha equipe</a><a href="#configuracoes">Configurações</a><button id="top-logout-button" type="button">Sair da conta</button></div>
+          </div>
           <button
             class="mobile-menu"
             id="mobile-menu"

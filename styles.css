@@ -582,6 +582,9 @@ svg {
   text-decoration: none;
   transition: background 0.15s ease, color 0.15s ease;
 }
+.nav-icon { width: 17px; height: 17px; flex: 0 0 17px; margin-right: 11px; color: #87a6d8; stroke-width: 1.7; transition: color .15s ease, transform .15s ease; }
+.nav-item:hover .nav-icon, .nav-item.is-active .nav-icon { color: currentColor; }
+.nav-item:hover .nav-icon { transform: translateX(1px); }
 
 .nav-item:hover {
   background: rgb(255 255 255 / 6%);
@@ -980,6 +983,13 @@ svg {
 /* Home / primeira tela */
 .app-content { position: relative; }
 .topbar-create { min-height: 44px; padding: 0 18px; font-size: 12px; box-shadow: 0 8px 18px rgb(13 79 194 / 18%); }
+.topbar-profile { position: relative; flex: 0 0 auto; margin-left: 2px; }
+.topbar-profile .account-trigger { min-width: 178px; padding: 6px 8px; border: 1px solid #e1e7f0; border-radius: 10px; background: #fff; color: var(--ink); box-shadow: 0 5px 16px rgb(21 54 94 / 5%); }
+.topbar-profile .account-name strong { font-size: 11px; }
+.topbar-profile .account-name small { color: var(--muted); font-size: 9px; }
+.topbar-profile .avatar { width: 30px; height: 30px; flex-basis: 30px; font-size: 9px; }
+.topbar-profile .account-chevron { color: var(--muted); }
+.topbar-profile .account-dropdown { min-width: 178px; }
 .dashboard-hero { position: relative; min-height: 190px; border-radius: 20px; background: linear-gradient(110deg, #0b43ac 0%, #2167d8 60%, #3d82ed 100%); box-shadow: 0 18px 34px rgb(13 79 194 / 18%); }
 .dashboard-hero .card-kicker { color: rgb(255 255 255 / 72%); }
 .live-pill { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 4px 8px; border: 1px solid rgb(255 255 255 / 20%); border-radius: 99px; color: #dfeaff; font-size: 9px; letter-spacing: .04em; vertical-align: 2px; }
@@ -1009,6 +1019,7 @@ svg {
 .chart-bars path { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: square; }
 .text-action { display: inline-flex; align-items: center; }
 @media (max-width: 780px) { .topbar-create { display: none; } .hero-character { top: -8px; right: -28px; width: 142px; height: 145px; opacity: .9; } .hero-actions { gap: 12px; } .metric-card { min-height: 116px; padding: 15px; } .metric-card strong { font-size: 19px; } .metric-chart { width: 65%; } }
+@media (max-width: 780px) { .topbar-profile { display: none; } }
 
 /* Login sobre a arte: composição desktop centralizada */
 @media (min-width: 901px) {

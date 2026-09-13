@@ -33,6 +33,9 @@ const mobileMenu = $("mobile-menu");
 const accountTrigger = $("account-trigger");
 const accountDropdown = $("account-dropdown");
 const logoutButton = $("logout-button");
+const topAccountTrigger = $("top-account-trigger");
+const topAccountDropdown = $("top-account-dropdown");
+const topLogoutButton = $("top-logout-button");
 const globalSearch = $("global-search");
 const searchResults = $("search-results");
 const dashboardGrid = document.querySelector(".dashboard-grid");
@@ -252,11 +255,13 @@ function closeSidebar() {
 function openAccountMenu() {
   accountDropdown.hidden = false;
   accountTrigger.setAttribute("aria-expanded", "true");
+  if (topAccountDropdown && topAccountTrigger) { topAccountDropdown.hidden = false; topAccountTrigger.setAttribute("aria-expanded", "true"); }
 }
 
 function closeAccountMenu() {
   accountDropdown.hidden = true;
   accountTrigger.setAttribute("aria-expanded", "false");
+  if (topAccountDropdown && topAccountTrigger) { topAccountDropdown.hidden = true; topAccountTrigger.setAttribute("aria-expanded", "false"); }
 }
 
 mobileMenu.addEventListener("click", () => {
@@ -267,6 +272,9 @@ sidebarBackdrop.addEventListener("click", closeSidebar);
 
 accountTrigger.addEventListener("click", () => {
   accountDropdown.hidden ? openAccountMenu() : closeAccountMenu();
+});
+topAccountTrigger?.addEventListener("click", () => {
+  topAccountDropdown.hidden ? openAccountMenu() : closeAccountMenu();
 });
 
 document.addEventListener("click", (event) => {
@@ -294,6 +302,29 @@ document.querySelectorAll(".nav-item").forEach((item) => {
     renderWorkspaceView(item.getAttribute("href"), label);
     closeSidebar();
   });
+});
+
+const navIconPaths = {
+  inicio: '<path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-6h6v6"/>',
+  agenda: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/>',
+  tarefas: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 2.5 2.5L16 9"/>',
+  leads: '<circle cx="9" cy="8" r="3"/><path d="M3 20c.7-3.4 2.7-5 6-5s5.3 1.6 6 5M16 5.5a3 3 0 0 1 0 5.8M17 15c2.2.5 3.5 2.1 4 5"/>',
+  projetos: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/>',
+  receitas: '<path d="M4 18V6M4 18h17"/><path d="m7 14 3-4 3 2 5-6"/>',
+  conversas: '<path d="M4 5h16v11H8l-4 4Z"/><path d="M8 9h8M8 12h5"/>',
+  contatos: '<circle cx="12" cy="8" r="3"/><path d="M5 20c.8-3.5 3.1-5 7-5s6.2 1.5 7 5"/>',
+  contratos: '<path d="M6 3h9l3 3v15H6Z"/><path d="M15 3v4h4M9 12h6M9 16h5"/>',
+  arquivos: '<path d="M4 6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>',
+  tickets: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4Z"/><path d="M12 8v1M12 12v1M12 16v1"/>',
+  'visao-financeira': '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M15 9.5c-.7-.7-1.6-1-3-1-1.5 0-2.5.8-2.5 2s1 2 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1.4 0-2.3-.3-3-1"/>',
+  relatorios: '<path d="M5 20V10M12 20V4M19 20v-7"/><path d="M3 20h18"/>',
+  catalogo: '<path d="M4 6a2 2 0 0 1 2-2h12v16H6a2 2 0 0 1-2-2Z"/><path d="M8 8h6M8 12h6"/>',
+  automacoes: '<path d="m13 2-9 11h7l-1 9 9-11h-7Z"/>',
+  equipe: '<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c.7-3.4 2.7-5 6-5s5.3 1.6 6 5M16 15c2.8.2 4.3 1.7 5 4"/>'
+};
+document.querySelectorAll(".nav-item").forEach((item) => {
+  const key = item.getAttribute("href")?.slice(1);
+  item.insertAdjacentHTML("afterbegin", `<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">${navIconPaths[key] || '<circle cx="12" cy="12" r="3"/>'}</svg>`);
 });
 
 const views = {
@@ -358,6 +389,11 @@ document.addEventListener("keydown", (event) => {
 });
 
 logoutButton.addEventListener("click", () => {
+  closeAccountMenu();
+  showLogin();
+  emailInput.focus();
+});
+topLogoutButton?.addEventListener("click", () => {
   closeAccountMenu();
   showLogin();
   emailInput.focus();
