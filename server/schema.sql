@@ -12,3 +12,5 @@ insert into revenues (description, amount, paid_at) select 'Mensalidade Website'
 create extension if not exists pgcrypto;
 create table if not exists users (id uuid primary key default gen_random_uuid(), name text not null, email text not null unique, password_hash text not null, created_at timestamptz not null default now());
 create table if not exists events (id bigserial primary key, title text not null, starts_at timestamptz not null, description text, created_at timestamptz not null default now());
+alter table events add column if not exists recurrence text not null default 'none';
+alter table events add column if not exists reminder_minutes integer not null default 30;

@@ -90,14 +90,14 @@ app.post("/api/projects", async (req, res) => {
   catch (error) { res.status(503).json({ error: "Não foi possível criar o projeto.", detail: error.message }); }
 });
 app.post("/api/events", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt;
+  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt, recurrence = ["none", "daily", "weekly", "monthly"].includes(req.body?.recurrence) ? req.body.recurrence : "none", reminderMinutes = Number(req.body?.reminderMinutes) || 0;
   if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe título e horário válidos." });
-  try { const result = await pool.query("insert into events (title,starts_at,description) values ($1,$2,$3) returning id,title,starts_at,description", [title, startsAt, String(req.body?.description || "").trim() || null]); res.status(201).json({ event: result.rows[0] }); }
+  try { const result = await pool.query("insert into events (title,starts_at,description,recurrence,reminder_minutes) values ($1,$2,$3,$4,$5) returning id,title,starts_at,description,recurrence,reminder_minutes", [title, startsAt, String(req.body?.description || "").trim() || null, recurrence, reminderMinutes]); res.status(201).json({ event: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível criar o evento.", detail: error.message }); }
 });
 app.get("/api/events", async (_req, res) => {
   try {
-    const result = await pool.query("select id,title,starts_at,description from events order by starts_at asc");
+    const result = await pool.query("select id,title,starts_at,description,recurrence,reminder_minutes from events order by starts_at asc");
     res.json({ events: result.rows });
   } catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar os eventos.", detail: error.message }); }
 });
@@ -111,8 +111,14 @@ app.delete("/api/events/:id", async (req, res) => {
   try { const result = await pool.query("delete from events where id=$1 returning id", [req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento nÃ£o encontrado." }); res.status(204).end(); }
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel excluir o evento.", detail: error.message }); }
 });
+app.patch("/api/events/:id/schedule", async (req, res) => {
+  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt, recurrence = ["none", "daily", "weekly", "monthly"].includes(req.body?.recurrence) ? req.body.recurrence : "none", reminderMinutes = Number(req.body?.reminderMinutes) || 0;
+  if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe título e horário válidos." });
+  try { const result = await pool.query("update events set title=$1, starts_at=$2, description=$3, recurrence=$4, reminder_minutes=$5 where id=$6 returning id,title,starts_at,description,recurrence,reminder_minutes", [title, startsAt, String(req.body?.description || "").trim() || null, recurrence, reminderMinutes, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.json({ event: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "Não foi possível atualizar o evento.", detail: error.message }); }
+});
 app.patch("/api/events/:id/details", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt;
+  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt, recurrence = ["none", "daily", "weekly", "monthly"].includes(req.body?.recurrence) ? req.body.recurrence : "none", reminderMinutes = Number(req.body?.reminderMinutes) || 0;
   if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe tÃ­tulo e horÃ¡rio vÃ¡lidos." });
   try { const result = await pool.query("update events set title=$1, starts_at=$2, description=$3 where id=$4 returning id,title,starts_at,description", [title, startsAt, String(req.body?.description || "").trim() || null, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento nÃ£o encontrado." }); res.json({ event: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel editar o evento.", detail: error.message }); }
