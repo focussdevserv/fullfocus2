@@ -42,6 +42,7 @@ const dashboardGrid = document.querySelector(".dashboard-grid");
 const initialDashboardMarkup = dashboardGrid?.innerHTML || "";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SESSION_KEY = "focusdev_session";
 // Simula a latência da API enquanto o endpoint de autenticação não existe.
 const FAKE_REQUEST_MS = 650;
 
@@ -128,13 +129,30 @@ function showRegister() {
   $("register-name").focus();
 }
 
-function showApp() {
+function showApp(user) {
   loginShell.hidden = true;
   appShell.hidden = false;
   closeSidebar();
   closeAccountMenu();
+  if (user?.name) {
+    const firstName = user.name.trim().split(/\s+/)[0];
+    appTitle.textContent = `Bom dia, ${firstName}`;
+    document.querySelectorAll(".account-name strong").forEach((element) => { element.textContent = firstName; });
+    document.querySelectorAll(".avatar").forEach((element) => { element.textContent = user.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); });
+  }
   appTitle.focus();
   syncDashboard();
+}
+
+function saveSession(user) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ id: user.id, name: user.name, email: user.email })); } catch { /* armazenamento indisponível */ }
+}
+
+function restoreSession() {
+  try {
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (session?.id && session?.name) showApp(session);
+  } catch { localStorage.removeItem(SESSION_KEY); }
 }
 
 async function syncDashboard() {
@@ -187,7 +205,7 @@ loginForm.addEventListener("submit", async (event) => {
     const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: emailInput.value.trim(), password: passwordInput.value }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Não foi possível entrar.");
-    setLoading(loginSubmit, false); clearForm(loginForm, loginStatus); passwordInput.type = "password"; passwordToggle.setAttribute("aria-pressed", "false"); passwordToggle.setAttribute("aria-label", "Mostrar senha"); showApp();
+    setLoading(loginSubmit, false); clearForm(loginForm, loginStatus); passwordInput.type = "password"; passwordToggle.setAttribute("aria-pressed", "false"); passwordToggle.setAttribute("aria-label", "Mostrar senha"); saveSession(data.user); showApp(data.user);
   } catch (error) { setLoading(loginSubmit, false); setStatus(loginStatus, error.message, "error"); }
 });
 
@@ -406,11 +424,15 @@ document.addEventListener("keydown", (event) => {
 
 logoutButton.addEventListener("click", () => {
   closeAccountMenu();
+  localStorage.removeItem(SESSION_KEY);
   showLogin();
   emailInput.focus();
 });
 topLogoutButton?.addEventListener("click", () => {
   closeAccountMenu();
+  localStorage.removeItem(SESSION_KEY);
   showLogin();
   emailInput.focus();
 });
+
+restoreSession();
