@@ -954,8 +954,8 @@ svg {
 .create-dialog h2 { margin: 6px 0 22px; color: var(--ink); font-size: 24px; letter-spacing: -.04em; }
 .dialog-close { position: absolute; top: 14px; right: 16px; width: 30px; height: 30px; border: 0; border-radius: 8px; background: #f3f6fb; color: var(--muted); font-size: 22px; line-height: 1; }
 .dialog-field { display: grid; gap: 7px; margin-top: 14px; color: var(--ink); font-size: 12px; font-weight: 700; }
-.dialog-field input { width: 100%; padding: 12px 13px; border: 1px solid #d7e1ef; border-radius: 9px; outline: 0; color: var(--ink); font: inherit; font-weight: 400; }
-.dialog-field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb(40 108 231 / 12%); }
+.dialog-field input, .dialog-field select { width: 100%; padding: 12px 13px; border: 1px solid #d7e1ef; border-radius: 9px; outline: 0; color: var(--ink); font: inherit; font-weight: 400; }
+.dialog-field input:focus, .dialog-field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb(40 108 231 / 12%); }
 .dialog-status { min-height: 18px; margin: 13px 0 0; color: var(--red); font-size: 11px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
 .dialog-actions .button { width: auto; min-height: 40px; margin-top: 0; padding: 0 17px; font-size: 12px; }

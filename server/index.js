@@ -111,6 +111,12 @@ app.delete("/api/events/:id", async (req, res) => {
   try { const result = await pool.query("delete from events where id=$1 returning id", [req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento nÃ£o encontrado." }); res.status(204).end(); }
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel excluir o evento.", detail: error.message }); }
 });
+app.patch("/api/events/:id/details", async (req, res) => {
+  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt;
+  if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe tÃ­tulo e horÃ¡rio vÃ¡lidos." });
+  try { const result = await pool.query("update events set title=$1, starts_at=$2, description=$3 where id=$4 returning id,title,starts_at,description", [title, startsAt, String(req.body?.description || "").trim() || null, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento nÃ£o encontrado." }); res.json({ event: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel editar o evento.", detail: error.message }); }
+});
 async function start() {
   try {
     const schema = await readFile(new URL("./schema.sql", import.meta.url), "utf8");
