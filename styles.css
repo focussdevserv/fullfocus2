@@ -1164,7 +1164,8 @@ tbody tr:last-child td { border-bottom: 0; } td:first-child { color: var(--ink);
 .day-event:active, .day-event.is-dragging { cursor: grabbing; opacity: .58; }
 .event-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; }
 .event-dot.blue { background: #4389ed; } .event-dot.pink { background: #d45287; } .event-dot.orange { background: #e99a3e; }
-.event-edit, .event-delete, .task-delete { padding: 2px 5px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px; line-height: 1; }
+.event-edit, .event-delete, .task-edit, .task-delete { padding: 2px 5px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px; line-height: 1; }
+.task-edit:hover { color: var(--blue); }
 .event-edit:hover { color: var(--blue); } .event-delete:hover, .task-delete:hover { color: var(--red); }
 .agenda-add-link { margin-top: 15px; padding: 0; border: 0; background: transparent; color: var(--blue); font: inherit; font-size: 11px; font-weight: 800; }
 .agenda-upcoming { grid-column: 1 / -1; }

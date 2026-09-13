@@ -65,6 +65,12 @@ app.delete("/api/tasks/:id", async (req, res) => {
   try { const result = await pool.query("delete from tasks where id=$1 returning id", [req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Tarefa nÃ£o encontrada." }); res.status(204).end(); }
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel excluir a tarefa.", detail: error.message }); }
 });
+app.patch("/api/tasks/:id/details", async (req, res) => {
+  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium";
+  if (!title) return res.status(400).json({ error: "Informe o tÃ­tulo da tarefa." });
+  try { const result = await pool.query("update tasks set title=$1, priority=$2, due_at=$3 where id=$4 returning id,title,status,priority,due_at", [title, priority, req.body?.dueAt || null, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Task not found." }); res.json({ task: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel editar a tarefa.", detail: error.message }); }
+});
 app.post("/api/leads", async (req, res) => {
   const name = String(req.body?.name || "").trim(), company = String(req.body?.company || "").trim();
   if (!name) return res.status(400).json({ error: "Informe o nome do lead." });
