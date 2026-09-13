@@ -1079,6 +1079,7 @@ svg {
 .quick-actions button:nth-child(odd) .quick-icon { background-image: url("assets/icons8-spiderman-head.png"); }
 .quick-actions button:nth-child(even) .quick-icon { background-image: url("assets/icons8-spiderman-new.png"); }
 .priorities-card { grid-column: 1 / -1; }
+.priorities-card, .activity-card, .agenda-card { border-color: rgb(255 255 255 / 82%); background: linear-gradient(135deg, rgb(255 255 255 / 78%), rgb(235 242 253 / 54%)); box-shadow: 0 14px 30px rgb(39 76 129 / 7%), inset 0 1px rgb(255 255 255 / 90%); backdrop-filter: blur(18px); }
 .task-count { padding: 5px 8px; border-radius: 6px; background: #eef4ff; color: var(--blue); font-size: 10px; font-weight: 800; }
 .priority-list { display: grid; gap: 0; }
 .priority-item { display: flex; min-height: 55px; align-items: center; gap: 10px; border-bottom: 1px solid #edf1f6; cursor: pointer; }
