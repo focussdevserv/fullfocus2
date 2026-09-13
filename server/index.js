@@ -81,6 +81,12 @@ app.post("/api/events", async (req, res) => {
   try { const result = await pool.query("insert into events (title,starts_at,description) values ($1,$2,$3) returning id,title,starts_at,description", [title, startsAt, String(req.body?.description || "").trim() || null]); res.status(201).json({ event: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível criar o evento.", detail: error.message }); }
 });
+app.get("/api/events", async (_req, res) => {
+  try {
+    const result = await pool.query("select id,title,starts_at,description from events order by starts_at asc");
+    res.json({ events: result.rows });
+  } catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar os eventos.", detail: error.message }); }
+});
 app.patch("/api/events/:id", async (req, res) => {
   const startsAt = req.body?.startsAt;
   if (!startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe uma data válida." });
