@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import pg from "pg";
 import crypto from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 
 const { Pool } = pg;
@@ -12,6 +14,8 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process
 
 app.use(cors());
 app.use(express.json());
+const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+app.use(express.static(frontendRoot));
 const hashPassword = (password, salt = crypto.randomBytes(16).toString("hex")) => ({ salt, hash: crypto.scryptSync(password, salt, 64).toString("hex") });
 const verifyPassword = (password, salt, expected) => crypto.timingSafeEqual(Buffer.from(hashPassword(password, salt).hash, "hex"), Buffer.from(expected, "hex"));
 app.post("/api/auth/register", async (req, res) => {
