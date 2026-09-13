@@ -47,13 +47,13 @@ app.get("/api/dashboard", async (_req, res) => {
   } catch (error) { res.status(503).json({ ok: false, error: error.message }); }
 });
 app.post("/api/tasks", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium";
+  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium", tags = String(req.body?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 8);
   if (!title) return res.status(400).json({ error: "Informe o título da tarefa." });
-  try { const result = await pool.query("insert into tasks (title, priority, due_at) values ($1, $2, $3) returning id,title,status,priority,due_at", [title, priority, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
+  try { const result = await pool.query("insert into tasks (title, priority, tags, due_at) values ($1, $2, $3, $4) returning id,title,status,priority,tags,due_at", [title, priority, tags, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível criar a tarefa.", detail: error.message }); }
 });
 app.get("/api/tasks", async (_req, res) => {
-  try { const result = await pool.query("select id,title,status,priority,due_at,created_at from tasks order by case when status = 'done' then 1 else 0 end, due_at nulls last, created_at desc"); res.json({ tasks: result.rows }); }
+  try { const result = await pool.query("select id,title,status,priority,tags,due_at,created_at from tasks order by case when status = 'done' then 1 else 0 end, due_at nulls last, created_at desc"); res.json({ tasks: result.rows }); }
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar as tarefas.", detail: error.message }); }
 });
 app.patch("/api/tasks/:id", async (req, res) => {
@@ -66,9 +66,9 @@ app.delete("/api/tasks/:id", async (req, res) => {
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel excluir a tarefa.", detail: error.message }); }
 });
 app.patch("/api/tasks/:id/details", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium";
+  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium", tags = String(req.body?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 8);
   if (!title) return res.status(400).json({ error: "Informe o tÃ­tulo da tarefa." });
-  try { const result = await pool.query("update tasks set title=$1, priority=$2, due_at=$3 where id=$4 returning id,title,status,priority,due_at", [title, priority, req.body?.dueAt || null, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Task not found." }); res.json({ task: result.rows[0] }); }
+  try { const result = await pool.query("update tasks set title=$1, priority=$2, tags=$3, due_at=$4 where id=$5 returning id,title,status,priority,tags,due_at", [title, priority, tags, req.body?.dueAt || null, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Task not found." }); res.json({ task: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel editar a tarefa.", detail: error.message }); }
 });
 app.post("/api/leads", async (req, res) => {
