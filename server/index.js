@@ -47,19 +47,23 @@ app.get("/api/dashboard", async (_req, res) => {
   } catch (error) { res.status(503).json({ ok: false, error: error.message }); }
 });
 app.post("/api/tasks", async (req, res) => {
-  const title = String(req.body?.title || "").trim();
+  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium";
   if (!title) return res.status(400).json({ error: "Informe o título da tarefa." });
-  try { const result = await pool.query("insert into tasks (title, due_at) values ($1, $2) returning id,title,status,due_at", [title, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
+  try { const result = await pool.query("insert into tasks (title, priority, due_at) values ($1, $2, $3) returning id,title,status,priority,due_at", [title, priority, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível criar a tarefa.", detail: error.message }); }
 });
 app.get("/api/tasks", async (_req, res) => {
-  try { const result = await pool.query("select id,title,status,due_at,created_at from tasks order by case when status = 'done' then 1 else 0 end, due_at nulls last, created_at desc"); res.json({ tasks: result.rows }); }
+  try { const result = await pool.query("select id,title,status,priority,due_at,created_at from tasks order by case when status = 'done' then 1 else 0 end, due_at nulls last, created_at desc"); res.json({ tasks: result.rows }); }
   catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar as tarefas.", detail: error.message }); }
 });
 app.patch("/api/tasks/:id", async (req, res) => {
-  const status = req.body?.status === "done" ? "done" : "doing";
+  const status = req.body?.status === "done" ? "done" : "doing", title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : null;
   try { const result = await pool.query("update tasks set status=$1 where id=$2 returning id,title,status", [status, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Tarefa não encontrada." }); res.json({ task: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível atualizar a tarefa.", detail: error.message }); }
+});
+app.delete("/api/tasks/:id", async (req, res) => {
+  try { const result = await pool.query("delete from tasks where id=$1 returning id", [req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Tarefa nÃ£o encontrada." }); res.status(204).end(); }
+  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel excluir a tarefa.", detail: error.message }); }
 });
 app.post("/api/leads", async (req, res) => {
   const name = String(req.body?.name || "").trim(), company = String(req.body?.company || "").trim();
@@ -96,6 +100,10 @@ app.patch("/api/events/:id", async (req, res) => {
   if (!startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe uma data válida." });
   try { const result = await pool.query("update events set starts_at=$1 where id=$2 returning id,title,starts_at,description", [startsAt, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.json({ event: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível mover o evento.", detail: error.message }); }
+});
+app.delete("/api/events/:id", async (req, res) => {
+  try { const result = await pool.query("delete from events where id=$1 returning id", [req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento nÃ£o encontrado." }); res.status(204).end(); }
+  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel excluir o evento.", detail: error.message }); }
 });
 async function start() {
   try {

@@ -1164,6 +1164,8 @@ tbody tr:last-child td { border-bottom: 0; } td:first-child { color: var(--ink);
 .day-event:active, .day-event.is-dragging { cursor: grabbing; opacity: .58; }
 .event-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; }
 .event-dot.blue { background: #4389ed; } .event-dot.pink { background: #d45287; } .event-dot.orange { background: #e99a3e; }
+.event-edit, .event-delete, .task-delete { padding: 2px 5px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px; line-height: 1; }
+.event-edit:hover { color: var(--blue); } .event-delete:hover, .task-delete:hover { color: var(--red); }
 .agenda-add-link { margin-top: 15px; padding: 0; border: 0; background: transparent; color: var(--blue); font: inherit; font-size: 11px; font-weight: 800; }
 .agenda-upcoming { grid-column: 1 / -1; }
 .upcoming-date { min-width: 58px; color: var(--muted); font-size: 10px; font-weight: 700; }
@@ -1188,8 +1190,9 @@ tbody tr:last-child td { border-bottom: 0; } td:first-child { color: var(--ink);
 .task-check input:checked + span { border-color: var(--blue); background: var(--blue); box-shadow: inset 0 0 0 4px #fff; }
 .task-row.is-done strong { color: var(--muted); text-decoration: line-through; }
 .task-status { padding: 5px 8px; border-radius: 6px; font-size: 10px; font-style: normal; font-weight: 800; white-space: nowrap; }
-.task-status.doing { background: #eef4ff; color: var(--blue); }
-.task-status.done { background: #e8f8f1; color: #15966a; }
+.task-status.doing, .task-status.priority-medium { background: #eef4ff; color: var(--blue); }
+.task-status.done, .task-status.priority-low { background: #e8f8f1; color: #15966a; }
+.task-status.priority-high { background: #fff0f3; color: var(--red); }
 .task-empty, .agenda-empty { padding: 18px 0; color: var(--muted); font-size: 12px; text-align: center; }
 @media (max-width: 780px) { .agenda-layout { grid-template-columns: 1fr; } .calendar-day { min-height: 40px; } .agenda-upcoming .text-action { display: none; } }
 @media (max-width: 780px) { .page-intro { align-items: flex-start; flex-direction: column; gap: 14px; } .compact-action { width: 100%; } .quick-summary, .task-summary { grid-template-columns: 1fr; } .table-card { padding: 17px 12px; } th, td { padding-left: 9px; padding-right: 9px; } }

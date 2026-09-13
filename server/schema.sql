@@ -1,4 +1,5 @@
-create table if not exists tasks (id bigserial primary key, title text not null, status text not null default 'todo', due_at timestamptz, created_at timestamptz not null default now());
+create table if not exists tasks (id bigserial primary key, title text not null, status text not null default 'todo', priority text not null default 'medium' check (priority in ('low','medium','high')), due_at timestamptz, created_at timestamptz not null default now());
+alter table tasks add column if not exists priority text not null default 'medium';
 create table if not exists leads (id bigserial primary key, name text not null, company text, status text not null default 'new', created_at timestamptz not null default now());
 create table if not exists projects (id bigserial primary key, name text not null, status text not null default 'active', progress smallint not null default 0 check (progress between 0 and 100), created_at timestamptz not null default now());
 create table if not exists revenues (id bigserial primary key, description text not null, amount numeric(12,2) not null default 0, paid_at timestamptz, created_at timestamptz not null default now());
