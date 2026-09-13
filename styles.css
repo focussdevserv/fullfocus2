@@ -1043,10 +1043,10 @@ svg {
 .metric-purple { background: linear-gradient(135deg, #5940b9, #7561d0); }
 .metric-blue { background: linear-gradient(135deg, #3a9bcf, #5eb8e3); }
 .metric-orange { background: linear-gradient(135deg, #f99b42, #ffb064); }
-.metric-pink { background-image: linear-gradient(135deg, rgb(211 75 146 / 88%), rgb(123 20 75 / 76%)), url("assets/spiderman-card-bg.png"); background-position: center, center 42%; background-size: cover; }
-.metric-purple { background-image: linear-gradient(135deg, rgb(89 64 185 / 88%), rgb(31 18 92 / 78%)), url("assets/spiderman-card-bg.png"); background-position: center, center 48%; background-size: cover; }
-.metric-blue { background-image: linear-gradient(135deg, rgb(58 155 207 / 88%), rgb(10 58 111 / 78%)), url("assets/spiderman-card-bg.png"); background-position: center, center 54%; background-size: cover; }
-.metric-orange { background-image: linear-gradient(135deg, rgb(249 155 66 / 88%), rgb(130 42 24 / 76%)), url("assets/spiderman-card-bg.png"); background-position: center, center 60%; background-size: cover; }
+.metric-pink { background-image: linear-gradient(135deg, rgb(211 75 146 / 52%), rgb(123 20 75 / 42%)), url("assets/spiderman-card-bg.png"); background-position: center, center 42%; background-size: cover; }
+.metric-purple { background-image: linear-gradient(135deg, rgb(89 64 185 / 52%), rgb(31 18 92 / 44%)), url("assets/spiderman-card-bg.png"); background-position: center, center 48%; background-size: cover; }
+.metric-blue { background-image: linear-gradient(135deg, rgb(58 155 207 / 52%), rgb(10 58 111 / 44%)), url("assets/spiderman-card-bg.png"); background-position: center, center 54%; background-size: cover; }
+.metric-orange { background-image: linear-gradient(135deg, rgb(249 155 66 / 52%), rgb(130 42 24 / 42%)), url("assets/spiderman-card-bg.png"); background-position: center, center 60%; background-size: cover; }
 .metric-copy { position: relative; z-index: 1; }
 .metric-label { display: block; color: rgb(255 255 255 / 86%); font-size: 10px; font-weight: 700; }
 .metric-label::before { display: none; }
