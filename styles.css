@@ -954,7 +954,12 @@ svg {
 .card-kicker { margin: 0; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; grid-column: 1 / -1; }
 .metric-card, .data-card { border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: 0 8px 24px rgba(21, 54, 94, .04); }
-.metric-card { min-height: 122px; padding: 19px; }
+.metric-card { position: relative; min-height: 122px; padding: 19px; overflow: hidden; }
+.metric-card::before { position: absolute; top: 16px; right: 16px; display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgb(255 255 255 / 42%); border-radius: 10px; color: rgb(255 255 255 / 92%); font-size: 17px; font-weight: 800; line-height: 1; }
+.metric-pink::before { content: "✦"; background: rgb(255 255 255 / 18%); }
+.metric-purple::before { content: "⌁"; background: rgb(255 255 255 / 16%); }
+.metric-blue::before { content: "⌑"; background: rgb(255 255 255 / 16%); }
+.metric-orange::before { content: "✣"; background: rgb(255 255 255 / 18%); }
 .metric-label { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
 .metric-card strong { display: block; margin: 12px 0 8px; font-size: 25px; letter-spacing: -.04em; }
 .metric-card small, .activity-item small, .agenda-item small { color: var(--muted); font-size: 11px; }
