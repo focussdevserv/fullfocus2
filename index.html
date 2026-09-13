@@ -266,25 +266,6 @@
           </div>
         </nav>
 
-        <div class="account-menu">
-          <button
-            class="account-trigger"
-            id="account-trigger"
-            type="button"
-            aria-haspopup="true"
-            aria-expanded="false"
-            aria-controls="account-dropdown"
-          >
-            <span class="avatar" aria-hidden="true">FD</span>
-            <span class="account-name"><strong>FocusDev</strong><small>Workspace</small></span>
-            <svg class="account-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-          </button>
-          <div class="account-dropdown" id="account-dropdown" hidden>
-            <a href="#minha-equipe">Minha equipe</a>
-            <a href="#configuracoes">Configurações</a>
-            <button id="logout-button" type="button">Sair da conta</button>
-          </div>
-        </div>
       </aside>
 
       <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
@@ -330,6 +311,8 @@
             <article class="metric-card metric-blue"><div class="metric-copy"><span class="metric-label">Tarefas abertas</span><strong data-metric="tasks">24</strong><small>6 para hoje</small></div><svg class="metric-chart" viewBox="0 0 180 55" aria-hidden="true"><path class="chart-line" d="M0 41c18-5 22-20 38-11s21 19 35 4 25-25 40-13 23 4 32-7 20 2 35-3" /><circle cx="145" cy="14" r="3" /></svg></article>
             <article class="metric-card metric-orange"><div class="metric-copy"><span class="metric-label">Projetos em andamento</span><strong data-metric="projects">12</strong><small>3 precisam de atenção</small></div><svg class="metric-chart chart-bars" viewBox="0 0 120 45" aria-hidden="true"><path d="M3 42V27h12v15M23 42V17h12v25M43 42V10h12v32M63 42V23h12v19M83 42V13h12v29M103 42V4h12v38" /></svg></article>
           </section>
+          <section class="data-card quick-actions-card"><div class="section-heading"><div><p class="card-kicker">Atalhos</p><h2>Ações rápidas</h2></div></div><div class="quick-actions"><button type="button"><span class="quick-icon blue">+</span><span>Nova tarefa</span></button><button type="button"><span class="quick-icon pink">+</span><span>Novo lead</span></button><button type="button"><span class="quick-icon orange">+</span><span>Nova receita</span></button><button type="button"><span class="quick-icon green">+</span><span>Novo projeto</span></button></div></section>
+          <section class="data-card priorities-card"><div class="section-heading"><div><p class="card-kicker">Prioridades</p><h2>Minhas tarefas de hoje</h2></div><span class="task-count">6 tarefas</span></div><div class="priority-list"><label class="priority-item"><input type="checkbox" /><span class="checkmark"></span><span class="priority-text"><strong>Revisar briefing do cliente</strong><small>Projeto Website · 14:00</small></span><em class="priority-high">Alta</em></label><label class="priority-item"><input type="checkbox" /><span class="checkmark"></span><span class="priority-text"><strong>Enviar proposta comercial</strong><small>Lead: Carolina Mendes · 16:30</small></span><em class="priority-medium">Média</em></label><label class="priority-item"><input type="checkbox" /><span class="checkmark"></span><span class="priority-text"><strong>Validar pagamentos pendentes</strong><small>Financeiro · Hoje</small></span><em class="priority-low">Baixa</em></label></div><div class="task-progress"><span>Progresso do dia</span><strong>2 de 6 concluídas</strong><div><i></i></div></div></section>
           <section class="data-card activity-card"><div class="section-heading"><div><p class="card-kicker">Acompanhe de perto</p><h2>Atividade recente</h2></div><button class="text-action" type="button">Ver tudo <span>→</span></button></div><div class="activity-list">
             <article class="activity-item"><span class="activity-avatar blue">AM</span><div><strong>Alex Martins atualizou o projeto Website</strong><small>Há 12 minutos · Projetos</small></div><span class="activity-dot"></span></article>
             <article class="activity-item"><span class="activity-avatar pink">JS</span><div><strong>Joana Silva adicionou um novo lead</strong><small>Há 38 minutos · CRM</small></div><span class="activity-dot"></span></article>

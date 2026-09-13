@@ -30,9 +30,6 @@ const appTitle = $("app-title");
 const appSidebar = $("app-sidebar");
 const sidebarBackdrop = $("sidebar-backdrop");
 const mobileMenu = $("mobile-menu");
-const accountTrigger = $("account-trigger");
-const accountDropdown = $("account-dropdown");
-const logoutButton = $("logout-button");
 const topAccountTrigger = $("top-account-trigger");
 const topAccountDropdown = $("top-account-dropdown");
 const topLogoutButton = $("top-logout-button");
@@ -295,14 +292,10 @@ function closeSidebar() {
 }
 
 function openAccountMenu() {
-  accountDropdown.hidden = false;
-  accountTrigger.setAttribute("aria-expanded", "true");
   if (topAccountDropdown && topAccountTrigger) { topAccountDropdown.hidden = false; topAccountTrigger.setAttribute("aria-expanded", "true"); }
 }
 
 function closeAccountMenu() {
-  accountDropdown.hidden = true;
-  accountTrigger.setAttribute("aria-expanded", "false");
   if (topAccountDropdown && topAccountTrigger) { topAccountDropdown.hidden = true; topAccountTrigger.setAttribute("aria-expanded", "false"); }
 }
 
@@ -312,22 +305,19 @@ mobileMenu.addEventListener("click", () => {
 
 sidebarBackdrop.addEventListener("click", closeSidebar);
 
-accountTrigger.addEventListener("click", () => {
-  accountDropdown.hidden ? openAccountMenu() : closeAccountMenu();
-});
 topAccountTrigger?.addEventListener("click", () => {
   topAccountDropdown.hidden ? openAccountMenu() : closeAccountMenu();
 });
 
 document.addEventListener("click", (event) => {
-  if (!accountDropdown.hidden && !event.target.closest(".account-menu")) closeAccountMenu();
+  if (topAccountDropdown && !topAccountDropdown.hidden && !event.target.closest(".account-menu")) closeAccountMenu();
 });
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  if (!accountDropdown.hidden) {
+  if (topAccountDropdown && !topAccountDropdown.hidden) {
     closeAccountMenu();
-    accountTrigger.focus();
+    topAccountTrigger?.focus();
   } else if (appSidebar.classList.contains("is-open")) {
     closeSidebar();
     mobileMenu.focus();
@@ -446,12 +436,6 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-logoutButton.addEventListener("click", () => {
-  closeAccountMenu();
-  localStorage.removeItem(SESSION_KEY);
-  showLogin();
-  emailInput.focus();
-});
 topLogoutButton?.addEventListener("click", () => {
   closeAccountMenu();
   localStorage.removeItem(SESSION_KEY);

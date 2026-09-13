@@ -1029,10 +1029,35 @@ svg {
 .chart-bars { right: 10px; width: 52%; height: 54px; }
 .chart-bars path { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: square; }
 .text-action { display: inline-flex; align-items: center; }
+.quick-actions-card { grid-column: 1 / -1; }
+.quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.quick-actions button { display: flex; min-height: 56px; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #edf1f6; border-radius: 10px; background: #fbfcfe; color: var(--ink); font-size: 11px; font-weight: 700; text-align: left; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.quick-actions button:hover { border-color: #c4d5f2; background: #f5f8ff; transform: translateY(-2px); }
+.quick-icon { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 8px; font-size: 19px; font-weight: 400; }
+.quick-icon.blue { background: #e7efff; color: #286ce7; } .quick-icon.pink { background: #ffedf5; color: #d45287; } .quick-icon.orange { background: #fff3df; color: #d58a22; } .quick-icon.green { background: #e7f8f1; color: #15966a; }
+.priorities-card { grid-column: 1 / -1; }
+.task-count { padding: 5px 8px; border-radius: 6px; background: #eef4ff; color: var(--blue); font-size: 10px; font-weight: 800; }
+.priority-list { display: grid; gap: 0; }
+.priority-item { display: flex; min-height: 55px; align-items: center; gap: 10px; border-bottom: 1px solid #edf1f6; cursor: pointer; }
+.priority-item:last-child { border-bottom: 0; }
+.priority-item input { position: absolute; opacity: 0; }
+.checkmark { width: 17px; height: 17px; flex: 0 0 17px; border: 1.5px solid #b7c5d9; border-radius: 5px; background: #fff; }
+.priority-item input:checked + .checkmark { border-color: var(--blue); background: var(--blue); box-shadow: inset 0 0 0 3px #fff; }
+.priority-text { min-width: 0; flex: 1; }
+.priority-text strong, .priority-text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.priority-text strong { color: var(--ink); font-size: 11px; }
+.priority-text small { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.priority-item em { padding: 4px 7px; border-radius: 5px; font-size: 9px; font-style: normal; font-weight: 800; }
+.priority-high { background: #fff0f1; color: #d33b4b; } .priority-medium { background: #fff6e5; color: #bd7d1c; } .priority-low { background: #eaf8f2; color: #16805b; }
+.task-progress { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 14px; color: var(--muted); font-size: 10px; }
+.task-progress strong { color: var(--ink-soft); font-size: 10px; }
+.task-progress > div { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: 20px; background: #edf2f9; }
+.task-progress i { display: block; width: 33%; height: 100%; border-radius: inherit; background: var(--blue); }
 @media (max-width: 780px) { .topbar-create { display: none; } .hero-character { top: -8px; right: -28px; width: 142px; height: 145px; opacity: .9; } .hero-weather { right: 14px; bottom: 14px; min-width: 158px; padding: 7px 9px; } .weather-symbol { width: 26px; height: 26px; font-size: 17px; } .hero-weather strong { font-size: 15px; } .hero-actions { gap: 12px; } .metric-card { min-height: 116px; padding: 15px; } .metric-card strong { font-size: 19px; } .metric-chart { width: 65%; } }
 @media (max-width: 780px) { .topbar-profile { display: none; } }
 @media (max-width: 780px) { .dashboard-hero { min-height: 205px; } .hero-message { max-width: calc(100% - 145px); } .hero-weather { right: 14px; bottom: 14px; } }
 @media (max-width: 480px) { .hero-message { max-width: 100%; } .hero-weather { top: 14px; right: 14px; bottom: auto; transform: scale(.88); transform-origin: top right; } .dashboard-hero h2 { max-width: 230px; } .dashboard-hero .hero-actions { margin-top: 15px; } }
+@media (max-width: 560px) { .quick-actions { grid-template-columns: repeat(2, 1fr); } .quick-actions button { min-height: 48px; } }
 
 /* Login sobre a arte: composição desktop centralizada */
 @media (min-width: 901px) {
