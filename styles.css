@@ -1072,6 +1072,9 @@ svg {
 .quick-actions button { display: flex; min-height: 56px; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #edf1f6; border-radius: 10px; background: #fbfcfe; color: var(--ink); font-size: 11px; font-weight: 700; text-align: left; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
 .quick-actions button:hover { border-color: #c4d5f2; background: #f5f8ff; transform: translateY(-2px); }
 .quick-icon { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 8px; font-size: 19px; font-weight: 400; }
+.quick-icon { background-repeat: no-repeat; background-position: center; background-size: 19px; font-size: 0; }
+.quick-actions button:nth-child(odd) .quick-icon { background-image: url("assets/icons8-spiderman-head.png"); }
+.quick-actions button:nth-child(even) .quick-icon { background-image: url("assets/icons8-spiderman-new.png"); }
 .quick-icon.blue { background: #e7efff; color: #286ce7; } .quick-icon.pink { background: #ffedf5; color: #d45287; } .quick-icon.orange { background: #fff3df; color: #d58a22; } .quick-icon.green { background: #e7f8f1; color: #15966a; }
 .priorities-card { grid-column: 1 / -1; }
 .task-count { padding: 5px 8px; border-radius: 6px; background: #eef4ff; color: var(--blue); font-size: 10px; font-weight: 800; }
