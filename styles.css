@@ -1006,8 +1006,8 @@ svg {
 .live-pill { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 4px 8px; border: 1px solid rgb(255 255 255 / 20%); border-radius: 99px; color: #dfeaff; font-size: 9px; letter-spacing: .04em; vertical-align: 2px; }
 .live-pill i { width: 5px; height: 5px; border-radius: 50%; background: #55e0a6; box-shadow: 0 0 0 3px rgb(85 224 166 / 18%); }
 .hero-actions { display: flex; align-items: center; gap: 18px; margin-top: 20px; }
-.button-light { min-height: 36px; padding: 0 15px; border: 0; border-radius: 9px; background: #fff; color: var(--blue); font-size: 11px; font-weight: 800; }
-.hero-link { padding: 0; border: 0; background: transparent; color: #fff; font-size: 11px; font-weight: 700; }
+.button-light { width: auto; min-height: 36px; flex: 0 0 auto; padding: 0 15px; border: 0; border-radius: 9px; background: #fff; color: var(--blue); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.hero-link { flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: #fff; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .hero-link span, .text-action span { margin-left: 4px; font-size: 15px; }
 .hero-character { position: absolute; top: -16px; right: -4px; width: 220px; height: 210px; object-fit: contain; object-position: top right; filter: drop-shadow(0 12px 12px rgb(4 27 85 / 22%)); pointer-events: none; }
 .metric-card { position: relative; display: flex; min-height: 132px; align-items: flex-start; justify-content: space-between; overflow: hidden; border: 0; color: #fff; transition: transform .18s ease, box-shadow .18s ease; }
@@ -1031,6 +1031,8 @@ svg {
 .text-action { display: inline-flex; align-items: center; }
 @media (max-width: 780px) { .topbar-create { display: none; } .hero-character { top: -8px; right: -28px; width: 142px; height: 145px; opacity: .9; } .hero-weather { right: 14px; bottom: 14px; min-width: 158px; padding: 7px 9px; } .weather-symbol { width: 26px; height: 26px; font-size: 17px; } .hero-weather strong { font-size: 15px; } .hero-actions { gap: 12px; } .metric-card { min-height: 116px; padding: 15px; } .metric-card strong { font-size: 19px; } .metric-chart { width: 65%; } }
 @media (max-width: 780px) { .topbar-profile { display: none; } }
+@media (max-width: 780px) { .dashboard-hero { min-height: 205px; } .hero-message { max-width: calc(100% - 145px); } .hero-weather { right: 14px; bottom: 14px; } }
+@media (max-width: 480px) { .hero-message { max-width: 100%; } .hero-weather { top: 14px; right: 14px; bottom: auto; transform: scale(.88); transform-origin: top right; } .dashboard-hero h2 { max-width: 230px; } .dashboard-hero .hero-actions { margin-top: 15px; } }
 
 /* Login sobre a arte: composição desktop centralizada */
 @media (min-width: 901px) {
