@@ -52,6 +52,10 @@ app.post("/api/tasks", async (req, res) => {
   try { const result = await pool.query("insert into tasks (title, due_at) values ($1, $2) returning id,title,status,due_at", [title, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
   catch (error) { res.status(503).json({ error: "Não foi possível criar a tarefa.", detail: error.message }); }
 });
+app.get("/api/tasks", async (_req, res) => {
+  try { const result = await pool.query("select id,title,status,due_at,created_at from tasks order by case when status = 'done' then 1 else 0 end, due_at nulls last, created_at desc"); res.json({ tasks: result.rows }); }
+  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar as tarefas.", detail: error.message }); }
+});
 app.patch("/api/tasks/:id", async (req, res) => {
   const status = req.body?.status === "done" ? "done" : "doing";
   try { const result = await pool.query("update tasks set status=$1 where id=$2 returning id,title,status", [status, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Tarefa não encontrada." }); res.json({ task: result.rows[0] }); }
