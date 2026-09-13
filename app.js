@@ -289,7 +289,7 @@ document.querySelectorAll(".nav-item").forEach((item) => {
     document.querySelector(".nav-item.is-active")?.classList.remove("is-active");
     item.classList.add("is-active");
     const label = item.textContent.trim();
-    appTitle.textContent = label === "Início" ? "Bom dia, FocusDev" : label;
+    appTitle.textContent = item.getAttribute("href") === "#inicio" ? "Bom dia, FocusDev" : label;
     document.querySelector(".eyebrow").textContent = item.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
     renderWorkspaceView(item.getAttribute("href"), label);
     closeSidebar();
