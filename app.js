@@ -33,6 +33,8 @@ const mobileMenu = $("mobile-menu");
 const topAccountTrigger = $("top-account-trigger");
 const topAccountDropdown = $("top-account-dropdown");
 const topLogoutButton = $("top-logout-button");
+const createMenuTrigger = $("create-menu-trigger");
+const createMenu = $("create-menu");
 const globalSearch = $("global-search");
 const searchResults = $("search-results");
 const dashboardGrid = document.querySelector(".dashboard-grid");
@@ -309,8 +311,14 @@ topAccountTrigger?.addEventListener("click", () => {
   topAccountDropdown.hidden ? openAccountMenu() : closeAccountMenu();
 });
 
+createMenuTrigger?.addEventListener("click", () => {
+  createMenu.hidden = !createMenu.hidden;
+  createMenuTrigger.setAttribute("aria-expanded", String(!createMenu.hidden));
+});
+
 document.addEventListener("click", (event) => {
   if (topAccountDropdown && !topAccountDropdown.hidden && !event.target.closest(".account-menu")) closeAccountMenu();
+  if (createMenu && !createMenu.hidden && !event.target.closest(".create-menu-wrap")) { createMenu.hidden = true; createMenuTrigger?.setAttribute("aria-expanded", "false"); }
 });
 
 document.addEventListener("keydown", (event) => {
