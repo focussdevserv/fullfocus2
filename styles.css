@@ -982,7 +982,7 @@ svg {
 
 /* Home / primeira tela */
 .app-content { position: relative; }
-.topbar-create { min-height: 44px; padding: 0 18px; font-size: 12px; box-shadow: 0 8px 18px rgb(13 79 194 / 18%); }
+.topbar-create { min-height: 44px; margin-top: 0; padding: 0 18px; font-size: 12px; box-shadow: 0 8px 18px rgb(13 79 194 / 18%); }
 .topbar-profile { position: relative; flex: 0 0 auto; margin-left: 2px; }
 .app-topbar { position: sticky; top: 0; z-index: 10; min-height: 68px; padding: 10px 0 12px; background: rgb(245 247 251 / 94%); backdrop-filter: blur(12px); }
 .topbar-profile { bottom: auto; margin-top: 0; padding-top: 0; background: transparent; }
