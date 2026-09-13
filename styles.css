@@ -1204,5 +1204,11 @@ tbody tr:last-child td { border-bottom: 0; } td:first-child { color: var(--ink);
 .kanban-task strong { color: var(--ink); font-size: 12px; }
 .kanban-task small { color: var(--muted); font-size: 10px; }
 .kanban-task > div { display: flex; justify-content: flex-end; }
+.agenda-view-toggle { margin-left: 8px; }
+.calendar-toolbar > div { display: flex; align-items: center; }
+.is-week-view { grid-template-columns: repeat(7, minmax(86px, 1fr)); }
+.calendar-week-day { min-height: 112px; align-content: start; gap: 9px; padding-top: 14px; }
+.calendar-week-day span { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.calendar-week-day strong { font-size: 21px; }
 @media (max-width: 780px) { .agenda-layout { grid-template-columns: 1fr; } .calendar-day { min-height: 40px; } .agenda-upcoming .text-action { display: none; } }
 @media (max-width: 780px) { .page-intro { align-items: flex-start; flex-direction: column; gap: 14px; } .compact-action { width: 100%; } .quick-summary, .task-summary { grid-template-columns: 1fr; } .table-card { padding: 17px 12px; } th, td { padding-left: 9px; padding-right: 9px; } }
