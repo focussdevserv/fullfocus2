@@ -1047,6 +1047,10 @@ svg {
 .metric-purple { background-image: linear-gradient(135deg, rgb(89 64 185 / 52%), rgb(31 18 92 / 44%)), url("assets/spiderman-card-bg.png"); background-position: center, center 48%; background-size: cover; }
 .metric-blue { background-image: linear-gradient(135deg, rgb(58 155 207 / 52%), rgb(10 58 111 / 44%)), url("assets/spiderman-card-bg.png"); background-position: center, center 54%; background-size: cover; }
 .metric-orange { background-image: linear-gradient(135deg, rgb(249 155 66 / 52%), rgb(130 42 24 / 42%)), url("assets/spiderman-card-bg.png"); background-position: center, center 60%; background-size: cover; }
+.metric-pink { background-image: linear-gradient(135deg, rgb(176 21 83 / 48%), rgb(4 8 20 / 35%)), url("assets/spiderman-card-hero.png"); background-position: center, 62% center; background-size: cover; }
+.metric-purple { background-image: linear-gradient(135deg, rgb(64 40 151 / 45%), rgb(3 6 18 / 38%)), url("assets/spiderman-card-web.png"); background-position: center, center center; background-size: cover; }
+.metric-blue { background-image: linear-gradient(135deg, rgb(20 116 177 / 45%), rgb(2 8 18 / 38%)), url("assets/spiderman-card-duo.png"); background-position: center, center center; background-size: cover; }
+.metric-orange { background-image: linear-gradient(135deg, rgb(194 72 23 / 45%), rgb(3 6 16 / 38%)), url("assets/spiderman-card-web.png"); background-position: center, 72% center; background-size: cover; }
 .metric-copy { position: relative; z-index: 1; }
 .metric-label { display: block; color: rgb(255 255 255 / 86%); font-size: 10px; font-weight: 700; }
 .metric-label::before { display: none; }
