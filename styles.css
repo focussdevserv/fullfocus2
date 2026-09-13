@@ -995,6 +995,13 @@ svg {
 .topbar-profile .avatar { background: var(--red); color: #fff; }
 .topbar-profile .account-dropdown { top: calc(100% + 8px); bottom: auto; }
 .dashboard-hero { position: relative; min-height: 190px; border-radius: 20px; background: linear-gradient(110deg, #0b43ac 0%, #2167d8 60%, #3d82ed 100%); box-shadow: 0 18px 34px rgb(13 79 194 / 18%); }
+.hero-message { position: relative; z-index: 2; }
+.hero-weather { position: absolute; z-index: 3; right: 22px; bottom: 20px; display: flex; align-items: center; gap: 10px; min-width: 190px; padding: 10px 13px; border: 1px solid rgb(255 255 255 / 18%); border-radius: 13px; background: rgb(4 35 108 / 32%); color: #fff; backdrop-filter: blur(8px); }
+.weather-symbol { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; background: rgb(255 255 255 / 17%); color: #ffe28b; font-size: 21px; }
+.hero-weather small, .hero-weather strong, .hero-weather > div > span { display: block; }
+.hero-weather small { color: rgb(255 255 255 / 66%); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.hero-weather strong { margin: 2px 0; font-size: 18px; letter-spacing: -.03em; }
+.hero-weather > div > span { overflow: hidden; max-width: 150px; color: rgb(255 255 255 / 72%); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-hero .card-kicker { color: rgb(255 255 255 / 72%); }
 .live-pill { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 4px 8px; border: 1px solid rgb(255 255 255 / 20%); border-radius: 99px; color: #dfeaff; font-size: 9px; letter-spacing: .04em; vertical-align: 2px; }
 .live-pill i { width: 5px; height: 5px; border-radius: 50%; background: #55e0a6; box-shadow: 0 0 0 3px rgb(85 224 166 / 18%); }
@@ -1022,7 +1029,7 @@ svg {
 .chart-bars { right: 10px; width: 52%; height: 54px; }
 .chart-bars path { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: square; }
 .text-action { display: inline-flex; align-items: center; }
-@media (max-width: 780px) { .topbar-create { display: none; } .hero-character { top: -8px; right: -28px; width: 142px; height: 145px; opacity: .9; } .hero-actions { gap: 12px; } .metric-card { min-height: 116px; padding: 15px; } .metric-card strong { font-size: 19px; } .metric-chart { width: 65%; } }
+@media (max-width: 780px) { .topbar-create { display: none; } .hero-character { top: -8px; right: -28px; width: 142px; height: 145px; opacity: .9; } .hero-weather { right: 14px; bottom: 14px; min-width: 158px; padding: 7px 9px; } .weather-symbol { width: 26px; height: 26px; font-size: 17px; } .hero-weather strong { font-size: 15px; } .hero-actions { gap: 12px; } .metric-card { min-height: 116px; padding: 15px; } .metric-card strong { font-size: 19px; } .metric-chart { width: 65%; } }
 @media (max-width: 780px) { .topbar-profile { display: none; } }
 
 /* Login sobre a arte: composição desktop centralizada */

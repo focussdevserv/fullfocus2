@@ -142,6 +142,7 @@ function showApp(user) {
   }
   appTitle.focus();
   syncDashboard();
+  loadWeather();
 }
 
 function saveSession(user) {
@@ -165,6 +166,29 @@ async function syncDashboard() {
       if (target) target.textContent = key === "revenue" ? `R$ ${Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : value;
     });
   } catch { /* API opcional durante o desenvolvimento local */ }
+}
+
+const weatherLabels = { 0: "Céu limpo", 1: "Predominantemente limpo", 2: "Parcialmente nublado", 3: "Nublado", 45: "Neblina", 48: "Neblina", 51: "Garoa leve", 53: "Garoa", 55: "Garoa forte", 61: "Chuva leve", 63: "Chuva", 65: "Chuva forte", 80: "Pancadas leves", 81: "Pancadas de chuva", 82: "Pancadas fortes", 95: "Trovoada" };
+const weatherIcons = { 0: "☀", 1: "🌤", 2: "⛅", 3: "☁", 45: "〰", 48: "〰", 51: "☂", 53: "☂", 55: "☂", 61: "☂", 63: "☂", 65: "☂", 80: "☂", 81: "☂", 82: "☂", 95: "ϟ" };
+
+async function loadWeather() {
+  const widget = $("hero-weather");
+  if (!widget || !navigator.geolocation) return;
+  const position = await new Promise((resolve) => navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { enableHighAccuracy: false, timeout: 7000, maximumAge: 900000 }));
+  const coords = position?.coords || { latitude: -23.5505, longitude: -46.6333 };
+  try {
+    const params = new URLSearchParams({ latitude: coords.latitude, longitude: coords.longitude, current: "temperature_2m,apparent_temperature,weather_code", timezone: "auto" });
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+    if (!response.ok) throw new Error("weather unavailable");
+    const data = await response.json();
+    const code = data.current.weather_code;
+    $("weather-temperature").textContent = `${Math.round(data.current.temperature_2m)}°C`;
+    $("weather-summary").textContent = `${weatherLabels[code] || "Condição atual"} · sensação ${Math.round(data.current.apparent_temperature)}°C`;
+    widget.querySelector(".weather-symbol").textContent = weatherIcons[code] || "☼";
+  } catch {
+    $("weather-temperature").textContent = "Indisponível";
+    $("weather-summary").textContent = "Tente novamente mais tarde";
+  }
 }
 
 /* ---------------------------------------------------------------------------
