@@ -46,6 +46,35 @@ app.get("/api/dashboard", async (_req, res) => {
     res.json({ tasks: tasks.rows[0].total, leads: leads.rows[0].total, projects: projects.rows[0].total, revenue: revenue.rows[0].total });
   } catch (error) { res.status(503).json({ ok: false, error: error.message }); }
 });
+app.post("/api/tasks", async (req, res) => {
+  const title = String(req.body?.title || "").trim();
+  if (!title) return res.status(400).json({ error: "Informe o título da tarefa." });
+  try { const result = await pool.query("insert into tasks (title, due_at) values ($1, $2) returning id,title,status,due_at", [title, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "Não foi possível criar a tarefa.", detail: error.message }); }
+});
+app.patch("/api/tasks/:id", async (req, res) => {
+  const status = req.body?.status === "done" ? "done" : "doing";
+  try { const result = await pool.query("update tasks set status=$1 where id=$2 returning id,title,status", [status, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Tarefa não encontrada." }); res.json({ task: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "Não foi possível atualizar a tarefa.", detail: error.message }); }
+});
+app.post("/api/leads", async (req, res) => {
+  const name = String(req.body?.name || "").trim(), company = String(req.body?.company || "").trim();
+  if (!name) return res.status(400).json({ error: "Informe o nome do lead." });
+  try { const result = await pool.query("insert into leads (name,company) values ($1,$2) returning id,name,company,status", [name, company || null]); res.status(201).json({ lead: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "Não foi possível criar o lead.", detail: error.message }); }
+});
+app.post("/api/revenues", async (req, res) => {
+  const description = String(req.body?.description || "").trim(), amount = Number(req.body?.amount);
+  if (!description || !Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Informe descrição e valor válidos." });
+  try { const result = await pool.query("insert into revenues (description,amount,paid_at) values ($1,$2,$3) returning id,description,amount,paid_at", [description, amount, req.body?.paid ? new Date() : null]); res.status(201).json({ revenue: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "Não foi possível registrar a receita.", detail: error.message }); }
+});
+app.post("/api/projects", async (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Informe o nome do projeto." });
+  try { const result = await pool.query("insert into projects (name) values ($1) returning id,name,status,progress", [name]); res.status(201).json({ project: result.rows[0] }); }
+  catch (error) { res.status(503).json({ error: "Não foi possível criar o projeto.", detail: error.message }); }
+});
 async function start() {
   try {
     const schema = await readFile(new URL("./schema.sql", import.meta.url), "utf8");

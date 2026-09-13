@@ -316,6 +316,25 @@ createMenuTrigger?.addEventListener("click", () => {
   createMenuTrigger.setAttribute("aria-expanded", String(!createMenu.hidden));
 });
 
+const createConfig = {
+  tarefa: { title: "Nova tarefa", endpoint: "/api/tasks", fields: [{ name: "title", label: "Título", placeholder: "Ex.: Revisar briefing do cliente" }] },
+  lead: { title: "Novo lead", endpoint: "/api/leads", fields: [{ name: "name", label: "Nome", placeholder: "Nome do contato" }, { name: "company", label: "Empresa", placeholder: "Empresa (opcional)" }] },
+  receita: { title: "Nova receita", endpoint: "/api/revenues", fields: [{ name: "description", label: "Descrição", placeholder: "Ex.: Mensalidade do projeto" }, { name: "amount", label: "Valor", type: "number", placeholder: "0,00" }] },
+  projeto: { title: "Novo projeto", endpoint: "/api/projects", fields: [{ name: "name", label: "Nome do projeto", placeholder: "Ex.: Website institucional" }] }
+};
+const createDialog = document.createElement("div");
+createDialog.className = "create-dialog-backdrop";
+createDialog.hidden = true;
+createDialog.innerHTML = '<form class="create-dialog" id="create-dialog-form"><button class="dialog-close" type="button" aria-label="Fechar">×</button><p class="card-kicker" id="dialog-kicker">Novo registro</p><h2 id="dialog-title"></h2><div id="dialog-fields"></div><p class="dialog-status" id="dialog-status" role="status"></p><div class="dialog-actions"><button class="button button-secondary" id="dialog-cancel" type="button">Cancelar</button><button class="button button-primary" type="submit">Salvar</button></div></form>';
+document.body.append(createDialog);
+const dialogForm = $("create-dialog-form"), dialogFields = $("dialog-fields"), dialogTitle = $("dialog-title"), dialogStatus = $("dialog-status");
+function closeCreateDialog() { createDialog.hidden = true; dialogForm.reset(); dialogStatus.textContent = ""; }
+function openCreateDialog(kind) { const config = createConfig[kind]; if (!config) return; dialogTitle.textContent = config.title; dialogFields.innerHTML = config.fields.map((field) => `<label class="dialog-field">${field.label}<input name="${field.name}" type="${field.type || "text"}" placeholder="${field.placeholder}" required /></label>`).join(""); dialogForm.dataset.kind = kind; createDialog.hidden = false; dialogFields.querySelector("input")?.focus(); }
+document.querySelectorAll(".create-menu a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); createMenu.hidden = true; createMenuTrigger?.setAttribute("aria-expanded", "false"); const text = link.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
+document.querySelectorAll(".quick-actions button").forEach((button) => button.addEventListener("click", () => { const text = button.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
+dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); const config = createConfig[dialogForm.dataset.kind]; const payload = Object.fromEntries(new FormData(dialogForm)); if (payload.amount) payload.amount = payload.amount.replace(",", "."); const submit = dialogForm.querySelector("[type=submit]"); submit.disabled = true; dialogStatus.textContent = "Salvando..."; try { const response = await fetch(config.endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); closeCreateDialog(); await syncDashboard(); } catch (error) { dialogStatus.textContent = error.message; } finally { submit.disabled = false; } });
+dialogForm.querySelector(".dialog-close").addEventListener("click", closeCreateDialog); $("dialog-cancel").addEventListener("click", closeCreateDialog);
+
 document.addEventListener("click", (event) => {
   if (topAccountDropdown && !topAccountDropdown.hidden && !event.target.closest(".account-menu")) closeAccountMenu();
   if (createMenu && !createMenu.hidden && !event.target.closest(".create-menu-wrap")) { createMenu.hidden = true; createMenuTrigger?.setAttribute("aria-expanded", "false"); }
