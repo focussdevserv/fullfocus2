@@ -1076,6 +1076,8 @@ svg {
 .quick-actions button:nth-child(odd) .quick-icon { background-image: url("assets/icons8-spiderman-head.png"); }
 .quick-actions button:nth-child(even) .quick-icon { background-image: url("assets/icons8-spiderman-new.png"); }
 .quick-icon.blue { background: #e7efff; color: #286ce7; } .quick-icon.pink { background: #ffedf5; color: #d45287; } .quick-icon.orange { background: #fff3df; color: #d58a22; } .quick-icon.green { background: #e7f8f1; color: #15966a; }
+.quick-actions button:nth-child(odd) .quick-icon { background-image: url("assets/icons8-spiderman-head.png"); }
+.quick-actions button:nth-child(even) .quick-icon { background-image: url("assets/icons8-spiderman-new.png"); }
 .priorities-card { grid-column: 1 / -1; }
 .task-count { padding: 5px 8px; border-radius: 6px; background: #eef4ff; color: var(--blue); font-size: 10px; font-weight: 800; }
 .priority-list { display: grid; gap: 0; }
