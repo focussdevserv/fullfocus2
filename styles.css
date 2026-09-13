@@ -989,14 +989,26 @@ svg {
 .hero-link { padding: 0; border: 0; background: transparent; color: #fff; font-size: 11px; font-weight: 700; }
 .hero-link span, .text-action span { margin-left: 4px; font-size: 15px; }
 .hero-character { position: absolute; top: -16px; right: -4px; width: 220px; height: 210px; object-fit: contain; object-position: top right; filter: drop-shadow(0 12px 12px rgb(4 27 85 / 22%)); pointer-events: none; }
-.metric-card { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
-.metric-card:hover { border-color: #b8cdf1; box-shadow: 0 12px 26px rgb(21 54 94 / 10%); transform: translateY(-2px); }
-.metric-label::before { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 2px; background: var(--blue); content: ""; vertical-align: 1px; }
-.metric-card:nth-child(2) .metric-label::before { background: #ec6492; }
-.metric-card:nth-child(3) .metric-label::before { background: #e9a83b; }
-.metric-card:nth-child(4) .metric-label::before { background: #36b987; }
+.metric-card { position: relative; display: flex; min-height: 132px; align-items: flex-start; justify-content: space-between; overflow: hidden; border: 0; color: #fff; transition: transform .18s ease, box-shadow .18s ease; }
+.metric-card:hover { border-color: transparent; box-shadow: 0 14px 28px rgb(21 54 94 / 16%); transform: translateY(-3px); }
+.metric-pink { background: linear-gradient(135deg, #d34b92, #e165a2); }
+.metric-purple { background: linear-gradient(135deg, #5940b9, #7561d0); }
+.metric-blue { background: linear-gradient(135deg, #3a9bcf, #5eb8e3); }
+.metric-orange { background: linear-gradient(135deg, #f99b42, #ffb064); }
+.metric-copy { position: relative; z-index: 1; }
+.metric-label { display: block; color: rgb(255 255 255 / 86%); font-size: 10px; font-weight: 700; }
+.metric-label::before { display: none; }
+.metric-card strong { margin: 14px 0 6px; color: #fff; font-size: 21px; letter-spacing: -.04em; }
+.metric-card small { color: rgb(255 255 255 / 82%); font-size: 10px; font-weight: 600; }
+.metric-card small em { color: inherit; }
+.metric-chart { position: absolute; right: -5px; bottom: 0; width: 68%; height: 54px; overflow: visible; color: rgb(255 255 255 / 86%); }
+.metric-chart .chart-fill { fill: rgb(255 255 255 / 16%); stroke: none; }
+.metric-chart .chart-line { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
+.metric-chart circle { fill: currentColor; }
+.chart-bars { right: 10px; width: 52%; height: 54px; }
+.chart-bars path { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: square; }
 .text-action { display: inline-flex; align-items: center; }
-@media (max-width: 780px) { .topbar-create { display: none; } .hero-character { top: -8px; right: -28px; width: 142px; height: 145px; opacity: .9; } .hero-actions { gap: 12px; } }
+@media (max-width: 780px) { .topbar-create { display: none; } .hero-character { top: -8px; right: -28px; width: 142px; height: 145px; opacity: .9; } .hero-actions { gap: 12px; } .metric-card { min-height: 116px; padding: 15px; } .metric-card strong { font-size: 19px; } .metric-chart { width: 65%; } }
 
 /* Login sobre a arte: composição desktop centralizada */
 @media (min-width: 901px) {
