@@ -14,3 +14,15 @@ async function renderTeamAccess() {
 }
 
 registerRoutes({ equipe: renderTeamAccess });
+
+const rolePanelObserver = new MutationObserver(() => {
+  if (location.hash !== "#equipe" || dashboardGrid.querySelector("[data-new-team-role]")) return;
+  const panel = document.createElement("section"); panel.className = "data-card config-card"; panel.innerHTML = `<h3>Novo cargo personalizado</h3><p>Defina permissões JSON e campos ocultos para este cargo.</p><form data-new-team-role><input name="name" placeholder="Nome do cargo" required><input name="department" placeholder="Departamento"><textarea name="permissions" rows="3" placeholder='{"crm":{"view":true,"create":false}}'>{}</textarea><input name="hidden_fields" placeholder='["pix_key","internal_notes"]'><button class="button button-primary" type="submit">Criar cargo</button><output data-role-result></output></form>`;
+  dashboardGrid.append(panel);
+  panel.querySelector("form").addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget, values = Object.fromEntries(new FormData(form));
+    try { await api("/api/team_roles", { method: "POST", body: { name: values.name, department: values.department, permissions: JSON.parse(values.permissions || "{}"), hidden_fields: JSON.parse(values.hidden_fields || "[]") } }); ui.toast("Cargo criado.", "success"); renderTeamAccess(); }
+    catch (error) { form.querySelector("[data-role-result]").textContent = error.message.includes("JSON") ? "Permissões e campos ocultos devem ser JSON válido." : error.message; }
+  });
+});
+rolePanelObserver.observe(dashboardGrid, { childList: true });
