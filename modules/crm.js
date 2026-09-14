@@ -450,9 +450,6 @@ async function renderFollowups() {
     const followupCard = dashboardGrid.querySelector(".crm-card");
     const followupToolbar = toolbar({ search: { value: followupState.query, placeholder: "Buscar follow-up..." }, filters: [{ key: "status", value: followupState.status, options: [["open", "Pendentes"], ["all", "Todos"], ["late", "Atrasados"], ["today", "Hoje"], ["done", "Concluídos"]] }, { key: "channel", value: followupState.channel, options: [["all", "Todos os canais"], ["whatsapp", "WhatsApp"], ["ligacao", "Ligação"], ["email", "E-mail"], ["reuniao", "Reunião"]] }] });
     if (followupCard) followupCard.insertAdjacentHTML("afterbegin", followupToolbar);
-    /*
-    if (followupCard) followupCard.insertAdjacentHTML("afterbegin", toolbar({ search: { value: followupState.query, placeholder: "Buscar contato ou observação..." }, filters: [{ key: "status", value: followupState.status, options: [["open", "Pendentes"], ["all", "Todos"], ["late", "Atrasados"], ["today", "Hoje"], ["done", "Concluídos"]] }, { key: "channel", value: followupState.channel, options: [["all", "Todos os canais"], ["whatsapp", "WhatsApp"], ["ligacao", "Ligação"], ["email", "E-mail"], ["reuniao", "Reunião"] }] }));
-    */
     dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { followupState.query = e.target.value; clearTimeout(followupState.timer); followupState.timer = setTimeout(() => renderFollowups(), 250); });
     dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { followupState[el.dataset.filter] = el.value; renderFollowups(); }));
     dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => followupForm(null, renderFollowups)));
