@@ -1524,6 +1524,30 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .campaign-status.is-draft { border: 1px solid rgb(245 158 11 / 30%); background: rgb(245 158 11 / 15%); color: #ffd38a; }
 @media (max-width: 780px) { .campaign-metrics { grid-template-columns: 1fr; } .campaign-row { grid-template-columns: 48px minmax(0, 1fr) auto; } .campaign-thumb { width: 48px; height: 48px; } .campaign-stat, .campaign-status { grid-column: 2 / -1; } }
 
+/* Funil comercial: pipeline horizontal com oportunidades acionaveis */
+.funnel-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; padding: 13px 16px; border: 1px solid rgb(145 180 230 / 20%); border-radius: 13px; background: rgb(14 31 57 / 72%); }
+.funnel-toolbar > div { display: flex; align-items: center; gap: 12px; }
+.funnel-toolbar strong { color: #eff5ff; font-size: 13px; }
+.funnel-toolbar span { color: #91a4bf; font-size: 11px; }
+.funnel-board { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 13px; overflow-x: auto; padding-bottom: 8px; }
+.funnel-column { min-width: 220px; border: 1px solid rgb(145 180 230 / 22%); border-radius: 14px; background-color: rgb(14 31 57 / 76%); background-image: linear-gradient(145deg, rgb(3 8 18 / 92%), rgb(8 19 38 / 76%)), var(--funnel-image); background-position: center, 90% 12%; background-size: cover; }
+.funnel-column > header { display: flex; justify-content: space-between; gap: 10px; padding: 15px; border-bottom: 1px solid rgb(145 180 230 / 18%); }
+.funnel-column > header > div { display: grid; gap: 5px; }
+.funnel-column h3 { margin: 0; color: #eff5ff; font-size: 13px; }
+.funnel-column header span, .funnel-column header strong { color: #b9d4ff; font-size: 11px; }
+.funnel-column header > strong { align-self: center; }
+.funnel-column-list { display: grid; gap: 9px; padding: 11px; }
+.funnel-opportunity { display: grid; gap: 5px; padding: 12px; border: 1px solid rgb(145 180 230 / 20%); border-radius: 11px; background: linear-gradient(135deg, rgb(31 53 86 / 76%), rgb(8 19 38 / 74%)); box-shadow: inset 0 1px rgb(255 255 255 / 7%); }
+.funnel-opportunity-top { display: flex; align-items: center; justify-content: space-between; }
+.funnel-opportunity .lead-avatar { width: 30px; height: 30px; border-radius: 9px; font-size: 10px; }
+.funnel-opportunity > strong { color: #eff5ff; font-size: 12px; }
+.funnel-opportunity > small, .funnel-opportunity > div:last-child span { color: #91a4bf; font-size: 10px; }
+.funnel-opportunity > div:last-child { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; }
+.funnel-opportunity > div:last-child b { color: #79e0bc; font-size: 11px; }
+.funnel-add { padding: 9px; border: 1px dashed rgb(120 174 251 / 38%); border-radius: 9px; background: transparent; color: #9ec4ff; font: inherit; font-size: 11px; cursor: pointer; }
+.funnel-add:hover { border-color: #f3132d; background: rgb(243 19 45 / 14%); color: #fff; }
+@media (max-width: 780px) { .funnel-toolbar { align-items: flex-start; flex-direction: column; } .funnel-toolbar > div { flex-wrap: wrap; } .funnel-board { grid-template-columns: repeat(4, minmax(220px, 78vw)); } }
+
 /* Barra superior integrada ao novo fundo escuro */
 .app-topbar {
   position: relative;
