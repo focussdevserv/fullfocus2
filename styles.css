@@ -1241,3 +1241,16 @@ body.dark-mode .app-topbar { background: rgb(9 17 32 / 92%); }
 body.dark-mode .data-card, body.dark-mode .metric-card, body.dark-mode .global-search, body.dark-mode .notification-button, body.dark-mode .theme-toggle, body.dark-mode .create-dialog, body.dark-mode .kanban-task { background: #111a2d; border-color: #293852; }
 body.dark-mode .calendar-day, body.dark-mode .kanban-column { background: #142039; border-color: #293852; }
 body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.dark-mode .task-filter, body.dark-mode .task-priority-filter { background: #0d1728; border-color: #31445f; color: var(--ink); }
+
+/* Cards visuais com as imagens de referência do usuário */
+.priorities-card, .activity-card, .agenda-card { position: relative; overflow: hidden; color: #fff; background-position: center; background-size: cover; }
+.priorities-card { background-image: linear-gradient(105deg, rgb(3 8 18 / 94%), rgb(3 8 18 / 72%)), url("assets/card-mask.png"); background-position: center, 76% center; }
+.activity-card { background-image: linear-gradient(105deg, rgb(3 8 18 / 92%), rgb(3 8 18 / 60%)), url("assets/card-web.png"); background-position: center, 70% center; }
+.agenda-card { background-image: linear-gradient(105deg, rgb(3 8 18 / 90%), rgb(3 8 18 / 56%)), url("assets/card-bridge.png"); background-position: center, 64% center; }
+.priorities-card .card-kicker, .activity-card .card-kicker, .agenda-card .card-kicker,
+.priorities-card h2, .activity-card h2, .agenda-card h2,
+.priorities-card .task-progress, .activity-card .text-action, .agenda-card .icon-action { color: #fff; }
+.priorities-card .priority-item, .activity-card .activity-item, .agenda-card .agenda-item { border-color: rgb(255 255 255 / 18%); background: rgb(0 0 0 / 24%); }
+.priorities-card .priority-text strong, .priorities-card .priority-text small, .activity-card .activity-item strong, .activity-card .activity-item small, .agenda-card .agenda-item strong, .agenda-card .agenda-item small { color: #fff; }
+.priorities-card .task-progress > div { background: rgb(255 255 255 / 22%); }
+.priorities-card .task-progress i { background: #f3132d; }
