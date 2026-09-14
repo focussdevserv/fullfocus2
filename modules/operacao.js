@@ -85,3 +85,32 @@ async function openProjectOverview(id) {
 const projectOverviewObserver = new MutationObserver(() => { if (location.hash !== "#projetos") return; const table = dashboardGrid.querySelector(".operations-table tbody"); if (!table || table.dataset.overviewActions === "1") return; table.dataset.overviewActions = "1"; table.querySelectorAll("tr").forEach((row, index) => { const projectId = row.querySelector("[data-edit]")?.dataset.edit; if (!projectId) return; const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = "Resumo"; button.addEventListener("click", () => openProjectOverview(projectId)); row.lastElementChild?.append(" ", button); }); });
 projectOverviewObserver.observe(dashboardGrid, { childList: true, subtree: true });
 registerRoutes({ contratos: renderContracts, projetos: renderProjects, arquivos: renderFiles, tickets: renderTickets });
+
+async function openProjectWorkspace(id) {
+  const panel = document.createElement("aside");
+  panel.className = "conta-drawer conta-drawer-wide";
+  panel.innerHTML = '<button class="conta-close" type="button" aria-label="Fechar">×</button><p class="card-kicker">Projeto</p><h2>Carregando workspace…</h2><div class="conta-related">Carregando áreas relacionadas…</div>';
+  document.body.append(panel);
+  panel.querySelector(".conta-close").onclick = () => panel.remove();
+  try {
+    const data = await api(`/api/projects/${id}/workspace`), project = data.project || {};
+    const list = (items, render) => items?.length ? items.map(render).join("") : '<p class="operations-muted">Nenhum registro nesta área.</p>';
+    panel.querySelector("h2").textContent = project.name || "Projeto";
+    panel.querySelector(".conta-related").innerHTML = `<section><h3>Visão geral</h3><p>${esc(labels[project.status] || project.status || "—")} · ${Number(project.progress || 0)}% · Cliente: ${esc(project.client_name || "Sem cliente")}</p><div class="operations-progress"><span style="width:${Math.max(0, Math.min(100, Number(project.progress) || 0))}%"></span></div></section><section><h3>Tarefas</h3>${list(data.tasks, (item) => `<p>${esc(item.title)} · ${esc(labels[item.status] || item.status || "Pendente")}</p>`)}</section><section><h3>Entregas e aprovações</h3>${list(data.deliveries, (item) => `<p>Versão ${esc(item.version)} · ${esc(item.status)}${item.client_approved ? " · Aprovada" : ""}</p>`)}${list(data.approvals, (item) => `<p>${esc(item.title)} · ${esc(item.status)}</p>`)}</section><section><h3>Alterações e suporte</h3>${list(data.changes, (item) => `<p>${esc(item.title)} · ${esc(item.status)}${item.additional_cost ? ` · ${money(item.additional_cost)}` : ""}</p>`)}${list(data.tickets, (item) => `<p>${esc(item.title)} · ${esc(labels[item.status] || item.status)}</p>`)}</section><section><h3>Infraestrutura e horas</h3>${list(data.infrastructure, (item) => `<p>${esc(item.name)} · ${esc(item.provider || item.kind || "Recurso")}${item.expires_on ? ` · vence ${esc(item.expires_on)}` : ""}</p>`)}<p>Total registrado: ${Math.round((data.time_entries || []).reduce((sum, item) => sum + Number(item.minutes || 0), 0) / 60 * 10) / 10}h</p></section><section><h3>Arquivos</h3>${list(data.files, (item) => `<p>${esc(item.name)} · ${esc(item.kind || "Arquivo")}</p>`)}</section>`;
+  } catch (error) { panel.querySelector(".conta-related").textContent = error.message; }
+}
+
+const projectWorkspaceObserver = new MutationObserver(async () => {
+  if (location.hash !== "#projetos") return;
+  const table = dashboardGrid.querySelector(".operations-table tbody");
+  if (!table || table.dataset.workspaceActions === "1") return;
+  table.dataset.workspaceActions = "1";
+  let rows;
+  try { rows = (await api("/api/projects")).projects || []; } catch (error) { toast(error.message, "error"); return; }
+  table.querySelectorAll("tr").forEach((row, index) => {
+    const project = rows[index]; if (!project || row.querySelector("[data-workspace]")) return;
+    const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.workspace = project.id; button.textContent = "Workspace";
+    button.addEventListener("click", () => openProjectWorkspace(project.id)); row.lastElementChild?.append(" ", button);
+  });
+});
+projectWorkspaceObserver.observe(dashboardGrid, { childList: true, subtree: true });
