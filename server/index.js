@@ -72,6 +72,14 @@ app.use("/api", (req, res, next) => {
   });
   next();
 });
+app.get("/api/activity", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+  try {
+    const q = await pool.query("select a.id,a.action,a.entity_type,a.entity_id,a.changes,a.created_at,u.name as actor_name from audit_events a left join users u on u.id=a.actor_id and u.organization_id=a.organization_id where a.organization_id=$1 order by a.created_at desc limit $2", [org, limit]);
+    res.json({ activities: q.rows });
+  } catch { res.status(503).json({ error: "Não foi possível carregar o histórico de atividades." }); }
+});
 const entities = {
   contacts: { fields: ["name", "email", "phone", "role", "notes", "department", "document", "birth_date", "city", "state", "preferred_channel", "contact_type", "source", "owner", "tags", "is_primary", "company_id"], required: ["name"] }, companies: { fields: ["name", "document", "email", "phone", "website", "address", "legal_name", "trade_name", "state_registration", "municipal_registration", "status", "founded_on", "size", "segment", "primary_activity", "whatsapp", "zip_code", "street", "street_number", "city", "state", "country", "internal_owner", "source", "last_cnpj_lookup_at"], required: ["name"] },
   leads: { fields: ["name", "company", "company_id", "contact_id", "email", "phone", "source", "status", "notes", "value", "campaign_id", "owner_id", "tags"], required: ["name"] }, opportunities: { fields: ["name", "lead_id", "company_id", "contact_id", "stage", "amount", "expected_close", "notes", "probability", "owner_id", "tags"], required: ["name"] },
@@ -101,10 +109,6 @@ const entities = {
 const normalize = (table, body) => { const spec = entities[table]; const values = {}; for (const key of spec.fields) if (body?.[key] !== undefined) values[key] = body[key]; for (const key of ["email", "document", "phone"]) if (values[key] !== undefined) values[key] = normalizeIdentity(key, values[key]); if (["tasks", "leads", "opportunities"].includes(table) && typeof values.tags === "string") values.tags = values.tags.split(",").map(asText).filter(Boolean).slice(0, 8); if (!["amount", "value"].every((k) => values[k] === undefined || isValidAmount(table, k, values[k]))) throw new Error("amount must be a positive number"); return values; };
 const relations = { company_id: "companies", contact_id: "contacts", lead_id: "leads", opportunity_id: "opportunities", client_id: "clients", contract_id: "contracts", project_id: "projects", parent_id: "tasks", receivable_id: "receivables", charge_id: "charges", owner_id: "users", assignee_id: "users", user_id: "users" };
 async function validateRelations(values, org) { for (const [field, table] of Object.entries(relations)) { if (values[field] === undefined || values[field] === null || values[field] === "") continue; const result = await pool.query(`select 1 from ${table} where id=$1 and organization_id=$2`, [values[field], org]); if (!result.rowCount) { const error = new Error(`${field} does not belong to this organization.`); error.code = "invalid_relation"; throw error; } } }
-async function recordAudit(req, org, action, entityType, entityId, changes = {}) {
-  if (!req.user) return;
-  await pool.query("insert into audit_events (organization_id,actor_id,action,entity_type,entity_id,changes,ip_address,user_agent) values ($1,$2,$3,$4,$5,$6,$7,$8)", [org, req.user.id, action, entityType, entityId ?? null, JSON.stringify(changes), req.ip || null, req.get("user-agent") || null]).catch(() => {});
-}
 const createCrud = (table) => {
   const route = `/api/${table}`; app.post(route, async (req, res) => { const org = tenant(req, res); if (!org) return; let values; try { values = normalize(table, req.body); await validateRelations(values, org); } catch (e) { if (e.code === "invalid_relation" || e.message === "amount must be a positive number") return res.status(400).json({ error: e.message }); return res.status(503).json({ error: "Não foi possível validar o registro." }); } const missing = entities[table].required.find((k) => values[k] === undefined || values[k] === ""); if (missing) return res.status(400).json({ error: `${missing} is required.` }); const keys = Object.keys(values), cols = ["organization_id", ...keys], params = [org, ...keys.map((k) => values[k])], marks = cols.map((_, i) => `$${i + 1}`); try { const q = await pool.query(`insert into ${table} (${cols.join(",")}) values (${marks.join(",")}) returning *`, params); res.status(201).json({ [singular(table)]: q.rows[0] }); } catch (e) { const { status, error } = classifyDbError(e, "Não foi possível criar o registro."); res.status(status).json({ error }); } });
   app.get(route, async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query(`select * from ${table} where organization_id=$1 order by created_at desc`, [org]); res.json({ [table]: q.rows }); } catch { res.status(503).json({ error: "Não foi possível carregar os registros." }); } });
