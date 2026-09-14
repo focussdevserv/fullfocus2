@@ -178,7 +178,41 @@ app.use("/api", (req, res, next) => {
   if (table === "clients" && req.body?.status !== undefined && !["lead", "prospecting", "active", "inactive", "blocked", "churned", "onboarding", "maintenance", "delinquent", "closed"].includes(String(req.body.status))) return res.status(400).json({ error: "status is invalid." });
   return next();
 });
+/* Antes de qualquer exclusÃ£o de entidade, guarda uma cÃ³pia recuperÃ¡vel na lixeira. */
+app.use("/api", async (req, res, next) => {
+  if (req.method !== "DELETE") return next();
+  const [, table, id] = req.path.split("/");
+  if (!entities[table] || !/^\d+$/.test(id || "") || ["audit_events", "trash"].includes(table)) return next();
+  const org = tenant(req, res); if (!org) return;
+  try {
+    const found = await pool.query(`select * from ${table} where id=$1 and organization_id=$2`, [id, org]);
+    if (!found.rowCount) return res.status(404).json({ error: "Registro nÃ£o encontrado." });
+    await pool.query("insert into trash (organization_id,entity_type,entity_id,payload,deleted_by,restore_until) values ($1,$2,$3,$4,$5,now()+interval '30 days')", [org, table, id, JSON.stringify(found.rows[0]), req.user?.id || null]);
+    return next();
+  } catch { return res.status(503).json({ error: "NÃ£o foi possÃ­vel preparar a exclusÃ£o recuperÃ¡vel." }); }
+});
 Object.keys(entities).forEach(createCrud);
+
+app.post("/api/trash/:id/restore", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  if (!(["owner", "admin"].includes(req.user?.role))) return res.status(403).json({ error: "Apenas proprietÃ¡rios e administradores restauram registros." });
+  const client = await pool.connect().catch(() => null); if (!client) return res.status(503).json({ error: "ServiÃ§o indisponÃ­vel." });
+  try {
+    await client.query("begin");
+    const deleted = await client.query("select * from trash where id=$1 and organization_id=$2 and (restore_until is null or restore_until > now()) for update", [req.params.id, org]);
+    if (!deleted.rowCount) { await client.query("rollback"); return res.status(404).json({ error: "Registro nÃ£o encontrado ou prazo de restauraÃ§Ã£o encerrado." }); }
+    const item = deleted.rows[0], table = item.entity_type, spec = entities[table];
+    if (!spec) { await client.query("rollback"); return res.status(400).json({ error: "Tipo de registro nÃ£o restaurÃ¡vel." }); }
+    const payload = typeof item.payload === "string" ? JSON.parse(item.payload) : item.payload || {};
+    const keys = ["id", ...spec.fields, "created_at", "updated_at"].filter((key, index, all) => all.indexOf(key) === index && payload[key] !== undefined);
+    const columns = ["organization_id", ...keys], values = [org, ...keys.map((key) => payload[key])];
+    await client.query(`insert into ${table} (${columns.join(",")}) values (${columns.map((_, index) => `$${index + 1}`).join(",")})`, values);
+    await client.query("delete from trash where id=$1 and organization_id=$2", [req.params.id, org]);
+    await client.query("commit");
+    res.status(201).json({ ok: true, entity_type: table, entity_id: payload.id || null });
+  } catch (error) { await client.query("rollback").catch(() => {}); const out = classifyDbError(error, "NÃ£o foi possÃ­vel restaurar o registro."); res.status(out.status).json({ error: out.error }); }
+  finally { client.release(); }
+});
 
 app.get("/api/dashboard", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const [tasks, leads, projects, revenue] = await Promise.all([pool.query("select count(*)::int total from tasks where organization_id=$1 and status <> 'done'", [org]), pool.query("select count(*)::int total from leads where organization_id=$1 and status <> 'won'", [org]), pool.query("select count(*)::int total from projects where organization_id=$1 and status='active'", [org]), pool.query("select coalesce(sum(amount),0) total from revenues where organization_id=$1 and paid_at >= date_trunc('month',current_date)", [org])]); res.json({ tasks: tasks.rows[0].total, leads: leads.rows[0].total, projects: projects.rows[0].total, revenue: revenue.rows[0].total }); } catch { res.status(503).json({ error: "Não foi possível carregar o dashboard." }); } });
 

@@ -118,3 +118,20 @@ const structuredMutationObserver = new MutationObserver(async () => {
   } catch {}
 });
 structuredMutationObserver.observe(dashboardGrid, { childList: true, subtree: true });
+
+const trashRestoreObserver = new MutationObserver(async () => {
+  if (location.hash.replace(/^#/, "") !== "lixeira") return;
+  const list = dashboardGrid.querySelector(".automation-list");
+  if (!list || list.dataset.restoreActions === "1") return;
+  list.dataset.restoreActions = "1";
+  try {
+    const rows = (await api("/api/trash")).trash || [];
+    list.querySelectorAll("article").forEach((article, index) => {
+      const item = rows[index]; if (!item) return;
+      const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = "Restaurar";
+      button.addEventListener("click", async () => { button.disabled = true; try { await api(`/api/trash/${item.id}/restore`, { method: "POST", body: {} }); toast("Registro restaurado.", "success"); renderEstrutura("lixeira"); } catch (error) { button.disabled = false; toast(error.message, "error"); } });
+      article.append(button);
+    });
+  } catch {}
+});
+trashRestoreObserver.observe(dashboardGrid, { childList: true, subtree: true });
