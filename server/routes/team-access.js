@@ -3,6 +3,16 @@ export function register(app, ctx) {
   const text = (value) => typeof value === "string" ? value.trim() : "";
   const roleOf = async (req, org) => (await pool.query("select role from users where id=$1 and organization_id=$2", [req.user?.id, org])).rows[0]?.role || null;
   const authorized = async (req, org) => ["owner", "admin"].includes(await roleOf(req, org));
+  app.post("/api/team/sessions/revoke-all", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    if (!(await authorized(req, org))) return res.status(403).json({ error: "Você não tem permissão para encerrar as sessões." });
+    try {
+      await pool.query("update organizations set sessions_revoked_at=now() where id=$1", [org]);
+      await pool.query("insert into audit_events (organization_id,actor_id,action,entity_type,changes) values ($1,$2,'revoke_all_sessions','organization',$3)", [org, req.user.id, JSON.stringify({ reason: "manual_team_action" })]);
+      res.setHeader("Set-Cookie", "focus_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0");
+      res.json({ revoked: true });
+    } catch { res.status(503).json({ error: "Não foi possível encerrar as sessões." }); }
+  });
   app.get("/api/team/access-status", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select id,name,email,role,access_status,created_at from users where organization_id=$1 order by created_at", [org]); res.json({ users: q.rows }); } catch { res.status(503).json({ error: "Não foi possível carregar a equipe." }); } });
   app.get("/api/team/dashboard", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
