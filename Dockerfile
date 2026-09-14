@@ -5,5 +5,7 @@ RUN npm ci --omit=dev
 COPY server ./server
 COPY index.html app.js styles.css manifest.webmanifest service-worker.js ./
 COPY assets ./assets
+COPY modules ./modules
+COPY scripts ./scripts
 EXPOSE 3000
 CMD ["npm", "start"]
