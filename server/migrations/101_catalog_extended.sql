@@ -1,0 +1,17 @@
+alter table catalog_items drop constraint if exists catalog_items_kind_check;
+alter table catalog_items add constraint catalog_items_kind_check check (kind in ('product','service','package','plan','subscription','addon'));
+alter table catalog_items add column if not exists term_days integer;
+alter table catalog_items add column if not exists features text;
+alter table catalog_items add column if not exists limits text;
+alter table catalog_items add column if not exists recurrence text;
+alter table catalog_items add column if not exists highlighted boolean default false;
+alter table catalog_items add column if not exists public_visible boolean default false;
+alter table catalog_items add column if not exists image_url text;
+alter table catalog_items add column if not exists benefits text;
+alter table catalog_items add column if not exists delivery_days integer;
+alter table catalog_items add column if not exists category text;
+alter table catalog_items add column if not exists proposal_template text;
+alter table catalog_items add column if not exists contract_template text;
+alter table catalog_items add column if not exists project_template text;
+alter table catalog_items add column if not exists checklist_template jsonb default '[]'::jsonb;
+create index if not exists idx_catalog_items_org_public on catalog_items(organization_id, public_visible, active);
