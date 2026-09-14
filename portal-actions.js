@@ -9,6 +9,9 @@
   card.hidden = true;
   card.innerHTML = "<h2>Aprovações pendentes</h2><div data-portal-approval-list></div>";
   document.querySelector("main")?.append(card);
+  const style = document.createElement("style");
+  style.textContent = ".portal-actions{margin-top:18px}.portal-approval-item{border-top:1px solid #334766;padding:18px 0}.portal-approval-item:first-child{border-top:0}.portal-approval-item p{margin:6px 0 12px;color:#94a3b8}.portal-approval-item label{display:block;margin:12px 0;color:#cbd5e1;font-weight:600}.portal-approval-item label span{display:block;margin-bottom:6px}.portal-approval-item input,.portal-approval-item textarea{box-sizing:border-box;width:100%;margin-top:6px;padding:11px 12px;border:1px solid #526887;border-radius:10px;background:#0d1424;color:#f8fafc;font:inherit}.portal-approval-item textarea{resize:vertical}.portal-approval-item output{display:block;margin-top:10px;color:#86efac}@media(max-width:600px){.portal-approval-item button{width:100%}}";
+  document.head.append(style);
   const list = card.querySelector("[data-portal-approval-list]");
   const text = (element, value) => { element.textContent = String(value ?? ""); return element; };
   const createApproval = (kind, item) => {
