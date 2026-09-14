@@ -4,8 +4,13 @@ import { sendEmail } from "./mailer.js";
 const SOURCE_TABLES = {
   lead_created: "leads",
   proposal_approved: "proposals",
+  proposal_sent: "proposals",
+  proposal_viewed: "proposals",
   contract_signed: "contracts",
+  meeting_scheduled: "events",
+  project_created: "projects",
   task_due_soon: "tasks",
+  receivable_due_soon: "receivables",
   task_overdue: "tasks",
   receivable_overdue: "receivables",
   ticket_created: "tickets",
@@ -24,8 +29,13 @@ const SOURCE_TABLES = {
 const sourceWhere = {
   lead_created: "created_at <= $2",
   proposal_approved: "status = 'accepted' and updated_at <= $2",
+  proposal_sent: "status = 'sent' and sent_at <= $2",
+  proposal_viewed: "status = 'viewed' and updated_at <= $2",
   contract_signed: "status in ('active','signed') and updated_at <= $2",
+  meeting_scheduled: "event_type = 'meeting' and created_at <= $2 and starts_at >= $2",
+  project_created: "created_at <= $2",
   task_due_soon: "status not in ('done','cancelled') and due_at is not null and due_at > $2 and due_at <= ($2 + interval '1 day')",
+  receivable_due_soon: "status = 'pending' and due_at >= $2::date and due_at <= ($2::date + 1)",
   task_overdue: "status <> 'done' and due_at is not null and due_at < $2",
   receivable_overdue: "status = 'pending' and due_at < $2::date",
   ticket_created: "created_at <= $2",
@@ -44,7 +54,12 @@ const sourceWhere = {
 const sourceMessage = (trigger, row) => {
   if (trigger === "lead_created") return `Novo lead: ${row.name}`;
   if (trigger === "proposal_approved") return `Proposta aprovada: ${row.title}`;
+  if (trigger === "proposal_sent") return `Proposta enviada: ${row.title}`;
+  if (trigger === "proposal_viewed") return `Proposta visualizada: ${row.title}`;
   if (trigger === "contract_signed") return `Contrato assinado: ${row.name}`;
+  if (trigger === "meeting_scheduled") return `Reunião agendada: ${row.title}`;
+  if (trigger === "project_created") return `Projeto criado: ${row.name}`;
+  if (trigger === "receivable_due_soon") return `Parcela próxima do vencimento: ${row.description}`;
   if (trigger === "task_due_soon") return `Tarefa próxima do prazo: ${row.title}`;
   if (trigger === "task_overdue") return `Tarefa atrasada: ${row.title}`;
   if (trigger === "receivable_overdue") return `Recebível vencido: ${row.description}`;
