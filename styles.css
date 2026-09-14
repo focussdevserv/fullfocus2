@@ -1266,10 +1266,9 @@ body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.da
 
 .app-sidebar {
   background-color: #050b18;
-  background-image: linear-gradient(180deg, rgb(3 8 18 / 98%) 0%, rgb(3 8 18 / 84%) 52%, rgb(3 8 18 / 42%) 100%), url("assets/menu-spider.png");
-  background-position: center, center bottom;
+  background-image: none;
   background-repeat: no-repeat;
-  background-size: cover, 94% auto;
+  background-size: auto;
 }
 
 /* Fundo compartilhado por Dashboard, Tarefas, Agenda e todas as telas internas */
@@ -1314,6 +1313,9 @@ body.dark-mode .task-count { border: 1px solid rgb(105 157 240 / 30%); backgroun
 body.dark-mode .priority-item,
 body.dark-mode .activity-item,
 body.dark-mode .agenda-item { border-color: rgb(145 180 230 / 18%); }
+body.dark-mode .activity-card .activity-list { gap: 8px; }
+body.dark-mode .activity-card .activity-item { min-height: 54px; padding: 9px 11px; border: 1px solid rgb(145 180 230 / 18%); border-radius: 11px; background: linear-gradient(135deg, rgb(29 51 84 / 68%), rgb(8 19 38 / 58%)); box-shadow: inset 0 1px rgb(255 255 255 / 7%); }
+body.dark-mode .activity-card .activity-dot { flex: 0 0 6px; background: #78aefb; box-shadow: 0 0 0 3px rgb(120 174 251 / 12%); }
 body.dark-mode .table-card th,
 body.dark-mode .table-card td { border-color: rgb(145 180 230 / 18%); }
 body.dark-mode .create-menu,
