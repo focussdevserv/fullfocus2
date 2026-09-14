@@ -3,6 +3,8 @@ import { sendEmail } from "./mailer.js";
 
 const SOURCE_TABLES = {
   lead_created: "leads",
+  proposal_approved: "proposals",
+  contract_signed: "contracts",
   task_due_soon: "tasks",
   task_overdue: "tasks",
   receivable_overdue: "receivables",
@@ -21,6 +23,8 @@ const SOURCE_TABLES = {
 
 const sourceWhere = {
   lead_created: "created_at <= $2",
+  proposal_approved: "status = 'accepted' and updated_at <= $2",
+  contract_signed: "status in ('active','signed') and updated_at <= $2",
   task_due_soon: "status not in ('done','cancelled') and due_at is not null and due_at > $2 and due_at <= ($2 + interval '1 day')",
   task_overdue: "status <> 'done' and due_at is not null and due_at < $2",
   receivable_overdue: "status = 'pending' and due_at < $2::date",
@@ -39,6 +43,8 @@ const sourceWhere = {
 
 const sourceMessage = (trigger, row) => {
   if (trigger === "lead_created") return `Novo lead: ${row.name}`;
+  if (trigger === "proposal_approved") return `Proposta aprovada: ${row.title}`;
+  if (trigger === "contract_signed") return `Contrato assinado: ${row.name}`;
   if (trigger === "task_due_soon") return `Tarefa próxima do prazo: ${row.title}`;
   if (trigger === "task_overdue") return `Tarefa atrasada: ${row.title}`;
   if (trigger === "receivable_overdue") return `Recebível vencido: ${row.description}`;
@@ -133,6 +139,24 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
       [automation.organization_id, clientId, projectId, contractId, String(config.description || message).slice(0, 240), amount, config.due_at || source.due_at || new Date().toISOString().slice(0, 10)],
     );
     return { action: "create_charge", receivable_id: charge.rows[0].id, amount };
+  }
+  if (automation.action === "generate_contract" && automation.trigger === "proposal_approved") {
+    if (!source.client_id) throw new Error("A proposta aprovada precisa estar vinculada a um cliente.");
+    await assertOrganizationRelation(client, "clients", source.client_id, automation.organization_id, "O cliente");
+    const contract = await client.query(
+      "insert into contracts (organization_id,client_id,opportunity_id,name,status,value) values ($1,$2,$3,$4,'draft',$5) returning id",
+      [automation.organization_id, source.client_id, source.opportunity_id || null, String(config.name || source.title || "Contrato de prestação de serviços").slice(0, 240), Number(source.final_amount ?? source.amount ?? 0)],
+    );
+    return { action: "generate_contract", contract_id: contract.rows[0].id, proposal_id: source.id };
+  }
+  if (automation.action === "create_project" && automation.trigger === "contract_signed") {
+    if (!source.client_id) throw new Error("O contrato assinado precisa estar vinculado a um cliente.");
+    await assertOrganizationRelation(client, "clients", source.client_id, automation.organization_id, "O cliente");
+    const project = await client.query(
+      "insert into projects (organization_id,contract_id,client_id,name,status,progress,total_value) values ($1,$2,$3,$4,'active',0,$5) returning id",
+      [automation.organization_id, source.id, source.client_id, String(config.name || source.name || "Novo projeto").slice(0, 240), Number(source.value || 0)],
+    );
+    return { action: "create_project", project_id: project.rows[0].id, contract_id: source.id };
   }
   if (automation.action === "update_status") {
     const tables = new Set(["leads", "opportunities", "proposals", "contracts", "projects", "tasks", "tickets", "clients", "receivables"]);
