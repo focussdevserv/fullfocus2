@@ -1279,3 +1279,32 @@ body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.da
 @media (max-width: 780px) {
   .app-shell { background-position: center, center bottom; background-size: cover, min(78vw, 420px) auto; }
 }
+
+/* Barra superior integrada ao novo fundo escuro */
+.app-topbar {
+  position: relative;
+  isolation: isolate;
+  border-bottom: 1px solid rgb(93 137 209 / 18%);
+  background: linear-gradient(90deg, rgb(3 8 18 / 94%), rgb(7 20 45 / 78%));
+  box-shadow: 0 12px 30px rgb(0 0 0 / 18%);
+}
+.app-topbar::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: repeating-radial-gradient(circle at 92% -80%, transparent 0 40px, rgb(255 255 255 / 5%) 41px 42px, transparent 43px 82px);
+  content: "";
+}
+.app-topbar h1, .app-topbar .eyebrow { color: #f5f8ff; }
+.app-topbar .eyebrow { opacity: .72; }
+.global-search, .notification-button, .theme-toggle, .topbar-profile .account-trigger {
+  border-color: rgb(137 174 230 / 30%);
+  background: rgb(9 24 52 / 86%);
+  color: #f5f8ff;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 16%);
+}
+.global-search input { color: #f5f8ff; }
+.global-search input::placeholder { color: rgb(221 232 249 / 62%); }
+.topbar-profile .account-name small, .topbar-profile .account-chevron { color: rgb(205 220 243 / 70%); }
+.notification-button span { border-color: #091832; }
