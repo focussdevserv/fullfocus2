@@ -61,6 +61,17 @@ app.post("/api/satisfaction/:token", async (req, res) => { const rating = Number
 app.use("/api", (req, res, next) => { if (req.path === "/health" || PUBLIC_API_PREFIXES.some((prefix) => req.path.startsWith(prefix))) return next(); return requireAuth(req, res, next); });
 
 app.use("/api", async (req, res, next) => { if (!req.user) return next(); try { const q = await pool.query("select u.access_status,u.access_revoked_at,o.sessions_revoked_at from users u join organizations o on o.id=u.organization_id where u.id=$1 and u.organization_id=$2", [req.user.id, req.user.organization_id]); const current = q.rows[0]; if (!current || ["inactive", "blocked"].includes(current.access_status) || (current.access_revoked_at && (!req.user.iat || new Date(req.user.iat) < new Date(current.access_revoked_at))) || (current.sessions_revoked_at && (!req.user.iat || new Date(req.user.iat) < new Date(current.sessions_revoked_at)))) return res.status(401).json({ error: "Seu acesso foi encerrado. Solicite a reativação ao administrador." }); return next(); } catch { return res.status(503).json({ error: "Não foi possível validar o acesso." }); } });
+// Registra automaticamente mutações bem-sucedidas sem copiar credenciais ou conteúdo sensível.
+app.use("/api", (req, res, next) => {
+  if (!["POST", "PATCH", "PUT", "DELETE"].includes(req.method) || req.path.startsWith("/auth/")) return next();
+  res.on("finish", () => {
+    if (res.statusCode < 200 || res.statusCode >= 300 || !req.user) return;
+    const parts = req.path.split("/").filter(Boolean), entityType = parts[0] || "api", entityId = /^\\d+$/.test(parts[1] || "") ? parts[1] : null;
+    const changes = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => !/(password|token|secret|api.?key|credential)/i.test(key)).map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 500) : value]));
+    pool.query("insert into audit_events (organization_id,actor_id,action,entity_type,entity_id,changes,ip_address,user_agent) values ($1,$2,$3,$4,$5,$6,$7,$8)", [req.user.organization_id, req.user.id, req.method.toLowerCase(), entityType, entityId, JSON.stringify(changes), req.ip || null, req.get("user-agent") || null]).catch(() => {});
+  });
+  next();
+});
 const entities = {
   contacts: { fields: ["name", "email", "phone", "role", "notes", "department", "document", "birth_date", "city", "state", "preferred_channel", "contact_type", "source", "owner", "tags", "is_primary", "company_id"], required: ["name"] }, companies: { fields: ["name", "document", "email", "phone", "website", "address", "legal_name", "trade_name", "state_registration", "municipal_registration", "status", "founded_on", "size", "segment", "primary_activity", "whatsapp", "zip_code", "street", "street_number", "city", "state", "country", "internal_owner", "source", "last_cnpj_lookup_at"], required: ["name"] },
   leads: { fields: ["name", "company", "company_id", "contact_id", "email", "phone", "source", "status", "notes", "value", "campaign_id", "owner_id", "tags"], required: ["name"] }, opportunities: { fields: ["name", "lead_id", "company_id", "contact_id", "stage", "amount", "expected_close", "notes", "probability", "owner_id", "tags"], required: ["name"] },
