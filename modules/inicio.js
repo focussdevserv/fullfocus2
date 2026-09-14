@@ -309,11 +309,22 @@ const ACTIVITY_KINDS = [
   ["receivables", "Recebível", "green", (x) => x.description, "#contas-a-receber"], ["tickets", "Ticket", "orange", (x) => x.title, "#tickets"], ["contacts", "Contato", "blue", (x) => x.name, "#contatos"], ["companies", "Empresa", "green", (x) => x.name, "#empresas"],
 ];
 
+const ACTIVITY_ROUTE = {
+  leads: "leads", opportunities: "oportunidades", proposals: "propostas", followups: "follow-ups",
+  contacts: "contatos", companies: "empresas", clients: "clientes", projects: "projetos",
+  tasks: "tarefas", events: "agenda", revenues: "receitas", expenses: "despesas",
+  receivables: "contas-a-receber", tickets: "tickets", contracts: "contratos", catalog: "catalogo",
+  "catalog-items": "catalogo", organization: "configuracoes", profile: "configuracoes",
+  team: "equipe", "team_roles": "equipe", integrations: "integracoes", templates: "templates",
+  automations: "automacoes", conversations: "conversas", audit_events: "auditoria",
+};
+const ACTIVITY_ACTION = { post: "criou", patch: "atualizou", put: "atualizou", delete: "removeu" };
+
 function renderActivity(data) {
   const card = dashboardGrid.querySelector(".activity-card");
   if (!card) return;
   const list = card.querySelector(".activity-list"), toggle = card.querySelector(".text-action");
-  const items = data.activity?.length ? data.activity.map((x) => ({ kind: x.entity_type || "Atividade", tone: x.action === "deleted" ? "orange" : "blue", hash: `#${x.entity_type || "inicio"}`, label: `${x.actor_name || "Workspace"} · ${x.action || "ação"}`, at: x.created_at })) : ACTIVITY_KINDS.flatMap(([key, kind, tone, label, hash]) => (data[key] || []).map((x) => ({ kind, tone, hash, label: label(x) || kind, at: x.updated_at || x.created_at }))).filter((x) => x.at).sort((a, b) => new Date(b.at) - new Date(a.at));
+  const items = data.activity?.length ? data.activity.map((x) => ({ kind: x.entity_type || "Atividade", tone: x.action === "delete" || x.action === "deleted" ? "orange" : "blue", hash: `#${ACTIVITY_ROUTE[x.entity_type] || "auditoria"}`, label: `${x.actor_name || "Workspace"} ${ACTIVITY_ACTION[x.action] || x.action || "registrou atividade em"} ${x.entity_type || "registro"}`, at: x.created_at })) : ACTIVITY_KINDS.flatMap(([key, kind, tone, label, hash]) => (data[key] || []).map((x) => ({ kind, tone, hash, label: label(x) || kind, at: x.updated_at || x.created_at }))).filter((x) => x.at).sort((a, b) => new Date(b.at) - new Date(a.at));
   let expanded = false;
   const draw = () => {
     const shown = items.slice(0, expanded ? 15 : 5);
