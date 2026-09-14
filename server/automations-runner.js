@@ -73,6 +73,33 @@ async function executeAction(client, automation, source) {
   throw new Error(`Ação não suportada: ${automation.action}`);
 }
 
+export async function runSubscriptionBillingCycle(pool, today = new Date()) {
+  const client = await pool.connect();
+  let created = 0;
+  try {
+    const due = await client.query("select * from subscriptions where status='active' and next_billing_on is not null and next_billing_on <= $1::date order by id", [today]);
+    for (const subscription of due.rows) {
+      await client.query("begin");
+      try {
+        const inserted = await client.query(
+          "insert into receivables (organization_id,client_id,description,amount,due_at,status,subscription_id,billing_period) values ($1,$2,$3,$4,$5,'pending',$6,$5) on conflict (subscription_id,billing_period) do nothing returning id",
+          [subscription.organization_id, subscription.client_id, `Assinatura · ${subscription.plan}`, subscription.amount, subscription.next_billing_on, subscription.id],
+        );
+        const step = subscription.interval === "yearly" ? "1 year" : "1 month";
+        await client.query(`update subscriptions set next_billing_on=(next_billing_on + interval '${step}')::date,updated_at=now() where id=$1 and organization_id=$2 and status='active'`, [subscription.id, subscription.organization_id]);
+        await client.query("commit");
+        created += inserted.rowCount;
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        console.error("Subscription billing error:", error.message);
+      }
+    }
+  } finally {
+    client.release();
+  }
+  return created;
+}
+
 export async function runAutomationCycle(pool, now = new Date()) {
   const client = await pool.connect();
   let processed = 0;
@@ -105,6 +132,7 @@ export async function runAutomationCycle(pool, now = new Date()) {
   } finally {
     client.release();
   }
+  await runSubscriptionBillingCycle(pool, now);
   return processed;
 }
 
