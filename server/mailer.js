@@ -10,7 +10,7 @@
 const RESEND_URL = "https://api.resend.com/emails";
 const TIMEOUT_MS = 10000;
 
-export const APP_URL = (process.env.APP_URL || "https://focussapp-focussapp-api.fcoipz.easypanel.host").replace(/\/+$/, "");
+export const APP_URL = (process.env.APP_URL || "https://focussdev.space").replace(/\/+$/, "");
 
 export function mailerStatus(env = process.env) {
   return { configured: Boolean(env.RESEND_API_KEY), from: env.MAIL_FROM || "FocusDev <onboarding@resend.dev>", provider: "resend" };

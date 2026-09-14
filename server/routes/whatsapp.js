@@ -96,7 +96,7 @@ export function register(app, ctx) {
   }
 
   // URL pública do app vem de configuração, nunca do cabeçalho Host (evita redirecionar webhooks para terceiros).
-  const PUBLIC_APP_URL = (process.env.APP_URL || "https://focussapp-focussapp-api.fcoipz.easypanel.host").replace(/\/+$/, "");
+    const PUBLIC_APP_URL = (process.env.APP_URL || "https://focussdev.space").replace(/\/+$/, "");
   function publicWebhookUrl(_req, org) {
     return `${PUBLIC_APP_URL}/api/whatsapp/webhook/${webhookTokenFor(org)}`;
   }
