@@ -25,6 +25,8 @@ const templateActionsObserver = new MutationObserver(() => {
     const actions = row.querySelector(".template-actions"); if (!actions || actions.querySelector("[data-template-duplicate]")) return;
     const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.templateDuplicate = row.querySelector("[data-template-edit]")?.dataset.templateEdit || ""; button.textContent = "Duplicar";
     button.addEventListener("click", async () => { button.disabled = true; try { await api(`/api/templates/${button.dataset.templateDuplicate}/duplicate`, { method: "POST", body: {} }); toast("Template duplicado.", "success"); renderTemplatesScreen(); } catch (error) { toast(error.message, "error"); button.disabled = false; } }); actions.append(button);
+    const defaultButton = document.createElement("button"); defaultButton.type = "button"; defaultButton.className = "compact-action"; defaultButton.dataset.templateDefault = button.dataset.templateDuplicate; defaultButton.textContent = "Definir padrão";
+    defaultButton.addEventListener("click", async () => { defaultButton.disabled = true; try { await api(`/api/templates/${defaultButton.dataset.templateDefault}/default`, { method: "PATCH", body: {} }); toast("Template padrão definido.", "success"); renderTemplatesScreen(); } catch (error) { toast(error.message, "error"); defaultButton.disabled = false; } }); actions.append(defaultButton);
   });
 });
 templateActionsObserver.observe(dashboardGrid, { childList: true, subtree: true });

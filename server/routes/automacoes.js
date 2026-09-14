@@ -128,6 +128,19 @@ export function register(app, ctx) {
       res.status(201).json({ template: copy.rows[0] });
     } catch (error) { fail(res, error, "Não foi possível duplicar o template."); }
   });
+  app.patch("/api/templates/:id/default", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const db = await pool.connect().catch(() => null); if (!db) return res.status(503).json({ error: "Serviço indisponível." });
+    try {
+      await db.query("begin");
+      const source = await db.query("select id,kind from templates where id=$1 and organization_id=$2", [req.params.id, org]);
+      if (!source.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Template não encontrado." }); }
+      const item = source.rows[0];
+      await db.query("update templates set is_default=false,updated_at=now() where organization_id=$1 and kind=$2", [org, item.kind]);
+      const updated = await db.query("update templates set is_default=true,updated_at=now() where id=$1 and organization_id=$2 returning *", [item.id, org]);
+      await db.query("commit"); res.json({ template: updated.rows[0] });
+    } catch (error) { await db.query("rollback").catch(() => {}); fail(res, error, "Não foi possível definir o template padrão."); } finally { db.release(); }
+  });
 
   app.get("/api/commissions", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
