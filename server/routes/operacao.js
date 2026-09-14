@@ -11,17 +11,39 @@ export function register(app, ctx) {
       const q = await pool.query(`select ${select} from ${table}${joins}${contractJoin}${projectJoin} where ${table}.organization_id=$1 order by ${table}.created_at desc`, [org]); res.json({ [table]: q.rows });
     } catch (e) { fail(res, e, `Não foi possível carregar ${table}.`); } });
     app.post(`/api/${table}`, async (req, res) => { const org = tenant(req, res); if (!org) return; const issue = validate(req.body || {}); if (issue) return res.status(400).json({ error: issue }); try {
+      if (table === "contracts") await validateContractLinks(req.body || {}, org);
       await validateRelations?.(Object.fromEntries(fields.filter((f) => f.endsWith("_id")).map((f) => [f, req.body[f] || null])), org);
       const defaults = table === "contracts" ? { status: "draft" } : table === "projects" ? { status: "active", progress: 0 } : table === "tickets" ? { priority: "medium", status: "open" } : {};
       if (table === "contracts" && !req.body.contract_number) { const seq = await pool.query("select count(*)::int total from contracts where organization_id=$1 and extract(year from created_at)=extract(year from current_date)", [org]); defaults.contract_number = `CONT-${new Date().getFullYear()}-${String(Number(seq.rows[0]?.total || 0) + 1).padStart(3, "0")}`; }
       const vals = fields.map((f) => req.body[f] === undefined || req.body[f] === "" ? (defaults[f] ?? null) : req.body[f]); const q = await pool.query(`insert into ${table} (organization_id,${fields.join(",")}) values ($1,${fields.map((_, i) => `$${i + 2}`).join(",")}) returning *`, [org, ...vals]); res.status(201).json({ [singular]: q.rows[0] });
     } catch (e) { if (e.code === "invalid_relation") return res.status(400).json({ error: e.message }); fail(res, e, `Não foi possível criar ${singular}.`); } });
     app.patch(`/api/${table}/:id`, async (req, res) => { const org = tenant(req, res); if (!org) return; const issue = validate(req.body || {}, true); if (issue) return res.status(400).json({ error: issue }); const update = fields.filter((f) => Object.prototype.hasOwnProperty.call(req.body || {}, f)); if (!update.length) return res.status(400).json({ error: "Informe ao menos um campo para atualizar." }); try {
+      if (table === "contracts" && (update.includes("proposal_id") || update.includes("project_id") || update.includes("client_id"))) { const current = await pool.query("select proposal_id,project_id,client_id from contracts where id=$1 and organization_id=$2", [req.params.id, org]); if (!current.rowCount) return res.status(404).json({ error: `${singular} nÃ£o encontrado.` }); await validateContractLinks(req.body || {}, org, current.rows[0]); }
       const vals = update.map((f) => req.body[f] === "" ? null : req.body[f]); const q = await pool.query(`update ${table} set ${update.map((f, i) => `${f}=$${i + 1}`).join(",")},updated_at=now() where id=$${update.length + 1} and organization_id=$${update.length + 2} returning *`, [...vals, req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: `${singular} não encontrado.` }); res.json({ [singular]: q.rows[0] });
     } catch (e) { fail(res, e, `Não foi possível atualizar ${singular}.`); } });
     app.delete(`/api/${table}/:id`, async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query(`delete from ${table} where id=$1 and organization_id=$2 returning id`, [req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: `${singular} não encontrado.` }); res.status(204).end(); } catch (e) { fail(res, e, `Não foi possível excluir ${singular}.`); } });
   };
   const oneOf = (key, values) => (body) => (body[key] !== undefined && body[key] !== "" && !values.includes(body[key]) ? `Valor inválido para ${key}.` : null);
+  const validateContractLinks = async (body, org, current = {}) => {
+    const proposalId = body.proposal_id ?? current.proposal_id;
+    const projectId = body.project_id ?? current.project_id;
+    const clientId = body.client_id ?? current.client_id;
+    let proposal = null;
+    if (proposalId) {
+      const result = await pool.query("select id,status,client_id,project_id from proposals where id=$1 and organization_id=$2", [proposalId, org]);
+      proposal = result.rows[0];
+      if (!proposal) { const error = new Error("A proposta não pertence a este workspace."); error.code = "invalid_relation"; throw error; }
+      if (proposal.status !== "accepted") { const error = new Error("A proposta precisa estar aprovada para gerar o contrato."); error.code = "invalid_relation"; throw error; }
+      if (clientId && proposal.client_id && String(clientId) !== String(proposal.client_id)) { const error = new Error("O cliente do contrato deve ser o mesmo da proposta."); error.code = "invalid_relation"; throw error; }
+    }
+    if (projectId) {
+      const result = await pool.query("select id,client_id from projects where id=$1 and organization_id=$2", [projectId, org]);
+      const project = result.rows[0];
+      if (!project) { const error = new Error("O projeto não pertence a este workspace."); error.code = "invalid_relation"; throw error; }
+      if (clientId && project.client_id && String(clientId) !== String(project.client_id)) { const error = new Error("O cliente do contrato deve ser o mesmo do projeto."); error.code = "invalid_relation"; throw error; }
+      if (proposal?.project_id && String(projectId) !== String(proposal.project_id)) { const error = new Error("O projeto do contrato deve ser o mesmo da proposta."); error.code = "invalid_relation"; throw error; }
+    }
+  };
   const contractFields = ["name", "client_id", "value", "starts_on", "ends_on", "status", "contract_number", "contract_type", "proposal_id", "project_id", "issued_on", "description", "scope_included", "scope_excluded", "deliverables", "technologies", "milestones", "client_approval_days", "client_responsibilities", "provider_responsibilities", "revisions_included", "change_policy", "additional_change_value", "total_value", "down_payment", "discount", "installments", "installment_value", "payment_method", "payment_due_dates", "late_fee", "late_interest", "payment_rules", "maintenance_monthly", "hosting_monthly", "server_monthly", "domain_monthly", "apis_monthly", "licenses_monthly", "recurring_due_on", "recurring_rules", "warranty_period", "support_period", "intellectual_property", "cancellation_terms", "data_protection_terms", "signature_data"];
   const contractStatuses = ["draft", "in_review", "sent", "viewed", "awaiting_signature", "signed", "active", "near_expiry", "closed", "cancelled", "expired"];
   run("contracts", "contract", contractFields, (b, p) => oneOf("status", contractStatuses)(b) || (!p && (!asText(b.name) || !b.client_id || !Number.isFinite(Number(b.value ?? b.total_value ?? 0)) || Number(b.value ?? b.total_value ?? 0) < 0) ? "Informe nome, cliente e valor válidos." : null));
