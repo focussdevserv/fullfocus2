@@ -695,7 +695,6 @@ function applyDashboardProfile(profile = localStorage.getItem(DASHBOARD_PROFILE_
 function renderWorkspaceView(hash, label) {
   if (!dashboardGrid) return;
   const key = hash?.replace("#", "");
-  const view = null;
   if (key === "inicio" && !routeRenderers.inicio) {
     dashboardGrid.innerHTML = initialDashboardMarkup;
     applyDashboardProfile();
