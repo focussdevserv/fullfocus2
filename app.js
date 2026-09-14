@@ -527,7 +527,11 @@ document.addEventListener("keydown", (event) => {
 });
 
 const navItemsByHash = new Map([...document.querySelectorAll(".nav-item")].map((item) => [item.getAttribute("href"), item]));
-let modulesLoading = document.readyState === "loading";
+// Scripts de módulo também são adiados, mas podem terminar de registrar as
+// rotas depois que este script observa document.readyState como "interactive".
+// Mantemos o hash original até o load para não redirecionar uma rota válida ao
+// Início durante a janela de inicialização.
+let modulesLoading = true;
 function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   let hash = requestedHash || "#inicio";
   let key = hash.replace(/^#/, "");
