@@ -81,10 +81,7 @@ window.setInterval(pollBrowserNotifications, 60000);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SESSION_KEY = "focusdev_session";
 let authTransition = 0;
-// Simula a latência da API enquanto o endpoint de autenticação não existe.
-const FAKE_REQUEST_MS = 650;
 
-const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 createAccount.addEventListener("click", showRegister);
 registerBack.addEventListener("click", showLogin);
@@ -368,10 +365,74 @@ resetForm.addEventListener("submit", async (event) => {
 
   setStatus(resetStatus, "");
   setLoading(resetSubmit, true);
-  await wait(FAKE_REQUEST_MS);
-  setLoading(resetSubmit, false);
+  try {
+    // Responde 202 sempre (não revela se o e-mail existe); o link chega por e-mail.
+    await api("/api/auth/reset-request", { method: "POST", body: { email: resetEmail.value.trim() } });
+    setStatus(resetStatus, `Se ${resetEmail.value.trim()} tiver uma conta, o link de redefinição chega em instantes. O link vale por 1 hora.`);
+  } catch (error) {
+    setStatus(resetStatus, error.message, "error");
+  } finally {
+    setLoading(resetSubmit, false);
+  }
+});
 
-  setStatus(resetStatus, `Link enviado para ${resetEmail.value.trim()}. Confira sua caixa de entrada.`);
+/* Nova senha a partir do link /#reset=<token> ------------------------------ */
+const newPasswordScreen = $("new-password-screen");
+const newPasswordForm = $("new-password-form");
+const newPasswordInput = $("new-password");
+const newPasswordConfirm = $("new-password-confirm");
+const newPasswordSubmit = $("new-password-submit");
+const newPasswordStatus = $("new-password-status");
+const newPasswordBack = $("new-password-back");
+let pendingResetToken = "";
+
+function readResetTokenFromHash() {
+  const match = /^#reset=([A-Za-z0-9_-]{16,})$/.exec(window.location.hash || "");
+  return match ? match[1] : "";
+}
+
+function showNewPassword(token) {
+  pendingResetToken = token;
+  appShell.hidden = true;
+  loginShell.hidden = false;
+  loginScreen.hidden = true;
+  resetScreen.hidden = true;
+  registerScreen.hidden = true;
+  newPasswordScreen.hidden = false;
+  hero.dataset.scene = "reset";
+  clearForm(newPasswordForm, newPasswordStatus);
+  newPasswordInput.focus();
+}
+
+newPasswordBack?.addEventListener("click", () => {
+  newPasswordScreen.hidden = true;
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+  showLogin();
+  emailInput.focus();
+});
+
+[newPasswordInput, newPasswordConfirm].forEach((input) => input?.addEventListener("input", () => { setFieldError(input, ""); setStatus(newPasswordStatus, ""); }));
+
+newPasswordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (newPasswordSubmit.disabled) return;
+  setFieldError(newPasswordInput, newPasswordInput.value.length >= 8 ? "" : "Use pelo menos 8 caracteres.");
+  setFieldError(newPasswordConfirm, newPasswordConfirm.value === newPasswordInput.value ? "" : "As senhas não coincidem.");
+  if (newPasswordForm.querySelector(".has-error")) { focusFirstError(newPasswordForm); return; }
+  setLoading(newPasswordSubmit, true);
+  try {
+    await api("/api/auth/reset-confirm", { method: "POST", body: { token: pendingResetToken, password: newPasswordInput.value } });
+    pendingResetToken = "";
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    newPasswordScreen.hidden = true;
+    showLogin();
+    setStatus(loginStatus, "Senha atualizada. Entre com a nova senha.");
+    emailInput.focus();
+  } catch (error) {
+    setStatus(newPasswordStatus, error.message, "error");
+  } finally {
+    setLoading(newPasswordSubmit, false);
+  }
 });
 
 /* ---------------------------------------------------------------------------
@@ -434,7 +495,7 @@ function openEditDialog(kind, item, endpoint) { openCreateDialog(kind); dialogTi
 function openSubtaskDialog(task) { openCreateDialog("tarefa"); dialogTitle.textContent = `Nova subtarefa · ${task.title}`; dialogFields.insertAdjacentHTML("beforeend", `<input type="hidden" name="parentId" value="${task.id}" />`); }
 document.querySelectorAll(".create-menu a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); createMenu.hidden = true; createMenuTrigger?.setAttribute("aria-expanded", "false"); const text = link.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
 document.querySelectorAll(".quick-actions button").forEach((button) => button.addEventListener("click", () => { const text = button.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
-dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); const config = createConfig[dialogForm.dataset.kind]; const payload = Object.fromEntries(new FormData(dialogForm)); if (payload.amount) payload.amount = payload.amount.replace(",", "."); const submit = dialogForm.querySelector("[type=submit]"); submit.disabled = true; dialogStatus.textContent = "Salvando..."; try { const method = dialogForm.dataset.method || "POST", endpoint = dialogForm.dataset.endpoint || config.endpoint; const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); const wasAgenda = dialogForm.dataset.kind === "evento", wasTasks = dialogForm.dataset.kind === "tarefa"; closeCreateDialog(); if (wasAgenda) await renderAgendaView(); else if (wasTasks) await renderTasksView(); else await syncDashboard(); } catch (error) { dialogStatus.textContent = error.message; } finally { submit.disabled = false; } });
+dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); const config = createConfig[dialogForm.dataset.kind]; const payload = Object.fromEntries(new FormData(dialogForm)); if (payload.amount) payload.amount = payload.amount.replace(",", "."); const submit = dialogForm.querySelector("[type=submit]"); submit.disabled = true; dialogStatus.textContent = "Salvando..."; try { const method = dialogForm.dataset.method || "POST", endpoint = dialogForm.dataset.endpoint || config.endpoint; const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); closeCreateDialog(); /* Re-renderiza a tela atual (qualquer módulo) e atualiza o painel inicial. */ renderHashRoute(window.location.hash); if (!window.location.hash || window.location.hash === "#inicio") await syncDashboard(); } catch (error) { dialogStatus.textContent = error.message; } finally { submit.disabled = false; } });
 dialogForm.querySelector(".dialog-close").addEventListener("click", closeCreateDialog); $("dialog-cancel").addEventListener("click", closeCreateDialog);
 
 document.addEventListener("click", (event) => {
@@ -526,337 +587,57 @@ const views = {
   receitas: { kicker: "Financeiro", title: "Receitas", intro: "Acompanhe entradas, vencimentos e recebimentos.", columns: ["Descrição", "Cliente", "Vencimento", "Valor"], rows: [["Mensalidade · Website", "Acme Inc.", "Hoje", "R$ 8.400"], ["Projeto · Aplicativo mobile", "Vértice", "22 Jun", "R$ 14.800"], ["Suporte mensal", "Nexum", "30 Jun", "R$ 5.200"], ["Consultoria", "Orbit", "05 Jul", "R$ 3.900"]] },
 };
 
-const operationsModules = {
-  contratos: { kicker: "Operação", title: "Contratos", intro: "Controle vigências, assinaturas e obrigações de cada parceria.", art: "spiderman-card-hero.png", action: "Novo contrato", metrics: [["Ativos", "18", "2 vencem este mês", "warning"], ["Em assinatura", "04", "Aguardando cliente", "neutral"], ["Valor anual", "R$ 428 mil", "↑ 12,8% no ciclo", "positive"]], columns: ["Contrato", "Cliente", "Vigência", "Status"], rows: [["Retainer de produto", "Acme Inc.", "30 set 2026", "Ativo"], ["Desenvolvimento mobile", "Vértice", "18 out 2026", "Em assinatura"], ["Suporte e evolução", "Nexum", "04 nov 2026", "Renovação"], ["Consultoria de dados", "Orbit", "12 dez 2026", "Ativo"]] },
-  projetos: { kicker: "Operação", title: "Projetos", intro: "Acompanhe entregas, marcos e a saúde do portfólio em um só lugar.", art: "spiderman-card-web.png", action: "Novo projeto", metrics: [["Em andamento", "12", "3 precisam de atenção", "warning"], ["Entregas no mês", "28", "↑ 18% vs. anterior", "positive"], ["Horas alocadas", "1.248h", "82% da capacidade", "neutral"]], columns: ["Projeto", "Cliente", "Progresso", "Saúde"], rows: [["Website institucional", "Acme Inc.", "78%", "No prazo"], ["Aplicativo mobile", "Vértice", "46%", "Atenção"], ["Campanha de lançamento", "Nexum", "92%", "No prazo"], ["Portal do cliente", "Orbit", "28%", "Bloqueado"]] },
-  arquivos: { kicker: "Biblioteca", title: "Arquivos", intro: "Encontre documentos, assets e entregáveis compartilhados pela equipe.", art: "spiderman-card-duo.png", action: "Enviar arquivo", metrics: [["Arquivos", "486", "34 adicionados hoje", "positive"], ["Armazenamento", "68%", "6,8 GB de 10 GB", "neutral"], ["Compartilhados", "124", "9 aguardam revisão", "warning"]], columns: ["Arquivo", "Pasta", "Atualizado", "Acesso"], rows: [["Briefing institucional.pdf", "Acme Inc.", "Hoje, 10:42", "Equipe"], ["Design system v3.fig", "Produto", "Ontem, 16:20", "Equipe"], ["Contrato-suporte.docx", "Contratos", "12 set 2026", "Restrito"], ["Fotos campanha.zip", "Marketing", "10 set 2026", "Cliente"]] },
-  tickets: { kicker: "Operação", title: "Tickets", intro: "Priorize solicitações e mantenha clientes informados até a resolução.", art: "spiderman-card-bg.png", action: "Abrir ticket", metrics: [["Em aberto", "24", "6 alta prioridade", "warning"], ["SLA cumprido", "94%", "↑ 3,4% esta semana", "positive"], ["Tempo médio", "3h 18m", "Dentro da meta de 4h", "neutral"]], columns: ["Ticket", "Solicitante", "Atualizado", "Status"], rows: [["#1048 · Ajuste no checkout", "Marina Lopes", "há 12 min", "Em atendimento"], ["#1045 · Acesso ao portal", "Acme Inc.", "há 1h", "Aguardando cliente"], ["#1041 · Exportação de dados", "Nexum", "há 3h", "Resolvido"], ["#1038 · Erro no relatório", "Orbit", "ontem", "Alta prioridade"]] },
-  relatorios: { kicker: "Visão financeira", title: "Relatórios", intro: "Transforme os dados do workspace em decisões mais rápidas.", art: "agenda-spider-split.png", action: "Criar relatório", metrics: [["Relatórios salvos", "16", "4 favoritos da equipe", "neutral"], ["Agendados", "07", "Próximo: segunda, 08:00", "positive"], ["Visualizações", "1.284", "↑ 22% no período", "positive"]], columns: ["Relatório", "Área", "Última execução", "Status"], rows: [["Receita por cliente", "Financeiro", "Hoje, 08:00", "Atualizado"], ["Performance de projetos", "Operação", "Ontem, 18:30", "Agendado"], ["Pipeline comercial", "CRM", "12 set 2026", "Atualizado"], ["SLA de atendimento", "Tickets", "10 set 2026", "Precisa revisão"]] },
-  catalogo: { kicker: "Catálogo", title: "Catálogo", intro: "Organize serviços, pacotes e itens que alimentam suas propostas.", art: "spiderman-card-hero.png", action: "Novo item", metrics: [["Itens ativos", "32", "5 categorias publicadas", "positive"], ["Mais vendido", "Sprint de produto", "14 vendas no trimestre", "neutral"], ["Rascunhos", "06", "Prontos para revisão", "warning"]], columns: ["Item", "Categoria", "Preço base", "Status"], rows: [["Sprint de produto", "Consultoria", "R$ 8.400", "Publicado"], ["Landing page premium", "Design", "R$ 4.800", "Publicado"], ["Suporte contínuo", "Operação", "R$ 2.200/mês", "Publicado"], ["Discovery workshop", "Estratégia", "R$ 3.600", "Rascunho"]] },
-  automacoes: { kicker: "Configuração", title: "Automações", intro: "Deixe o workspace cuidar das rotinas para sua equipe focar no que importa.", art: "spiderman-hanging.png", action: "Nova automação", metrics: [["Ativas", "14", "1.860 execuções no mês", "positive"], ["Economia", "42h", "Tempo poupado estimado", "neutral"], ["Alertas", "02", "Requerem atenção", "warning"]], columns: ["Automação", "Gatilho", "Última execução", "Status"], rows: [["Avisar contrato próximo do vencimento", "30 dias antes", "Hoje, 07:00", "Ativa"], ["Criar tarefa de onboarding", "Novo cliente", "Hoje, 09:14", "Ativa"], ["Resumo semanal de projetos", "Toda sexta", "12 set 2026", "Ativa"], ["Notificar SLA estourado", "Ticket vencido", "11 set 2026", "Pausada"]] },
-  templates: { kicker: "Configuração", title: "Templates", intro: "Crie uma base consistente para propostas, documentos e comunicações.", art: "agenda-spider-mask.png", action: "Novo template", metrics: [["Disponíveis", "28", "9 usados esta semana", "positive"], ["Favoritos", "08", "Compartilhados pela equipe", "neutral"], ["Em revisão", "03", "Aguardando aprovação", "warning"]], columns: ["Template", "Tipo", "Atualizado", "Uso"], rows: [["Proposta comercial 2026", "Proposta", "Hoje, 11:20", "18 usos"], ["Briefing de projeto", "Documento", "Ontem, 15:42", "12 usos"], ["E-mail de follow-up", "Comunicação", "10 set 2026", "34 usos"], ["Relatório executivo", "Relatório", "08 set 2026", "Em revisão"]] },
-  integracoes: { kicker: "Configuração", title: "Integrações", intro: "Conecte as ferramentas que sua operação já usa e mantenha tudo sincronizado.", art: "spiderman-card-web.png", action: "Conectar app", metrics: [["Conectadas", "09", "Todas operando normalmente", "positive"], ["Eventos hoje", "2.406", "Sincronizados automaticamente", "neutral"], ["Com atenção", "01", "Token expira em 7 dias", "warning"]], columns: ["Integração", "Categoria", "Última sincronização", "Status"], rows: [["Google Calendar", "Produtividade", "Agora", "Conectada"], ["Slack", "Comunicação", "há 2 min", "Conectada"], ["Stripe", "Financeiro", "há 8 min", "Conectada"], ["HubSpot", "CRM", "há 1 dia", "Reautorizar"]] },
-  equipe: { kicker: "Configuração", title: "Equipe", intro: "Dê visibilidade aos papéis, acessos e capacidade de quem faz o trabalho acontecer.", art: "spiderman-card-duo.png", action: "Convidar pessoa", metrics: [["Pessoas ativas", "24", "3 convites pendentes", "positive"], ["Times", "06", "Operação é o maior", "neutral"], ["Acessos para revisar", "04", "Próxima revisão em 5 dias", "warning"]], columns: ["Pessoa", "Time", "Última atividade", "Acesso"], rows: [["Marina Lopes", "Operação", "Agora", "Administrador"], ["Alex Martins", "Produto", "há 12 min", "Editor"], ["Joana Silva", "Financeiro", "há 1h", "Editor"], ["Rafael Costa", "Comercial", "ontem", "Colaborador"]] },
-  configuracoes: { kicker: "Configuração", title: "Configurações", intro: "Ajuste preferências, permissões e identidade do seu workspace.", art: "spiderman-card-bg.png", action: "Salvar alterações", metrics: [["Perfil do workspace", "100%", "Informações completas", "positive"], ["Preferências", "12", "Tudo sincronizado", "neutral"], ["Pendências", "02", "Revisar permissões", "warning"]], columns: ["Preferência", "Área", "Atualização", "Status"], rows: [["Identidade visual", "Workspace", "Hoje, 09:30", "Configurado"], ["Notificações", "Preferências", "12 set 2026", "Configurado"], ["Papéis e permissões", "Segurança", "11 set 2026", "Revisar"], ["Faturamento", "Conta", "01 set 2026", "Configurado"]] }
-};
-
-let agendaMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-let agendaSelectedDate = new Date();
-let agendaViewMode = "month";
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character]));
 
-let taskViewMode = "list";
-let taskPriorityFilter = "all";
-async function renderTasksView(filter = "all", mode = taskViewMode) {
-  let tasks = [];
-  try { const response = await fetch("/api/tasks"); if (response.ok) tasks = (await response.json()).tasks || []; } catch { /* mantém a tela utilizável sem a API */ }
-  const visible = tasks.filter((task) => (filter === "all" || task.status === filter) && (taskPriorityFilter === "all" || (task.priority || "medium") === taskPriorityFilter));
-  const open = tasks.filter((task) => task.status !== "done").length, done = tasks.length - open;
-  const tags = (task) => (task.tags || []).map((tag) => `<span class="task-tag">${escapeHtml(tag)}</span>`).join(""), progress = (task) => { const children = tasks.filter((item) => String(item.parent_id) === String(task.id)); return children.length ? `<small class="task-progress-label">${children.filter((item) => item.status === "done").length}/${children.length} subtarefas</small>` : ""; };
-  const card = (task) => { const priority = task.priority || "medium"; return `<article class="kanban-task" draggable="true" data-kanban-id="${task.id}"><strong>${escapeHtml(task.title)}</strong><small>${task.due_at ? new Date(task.due_at).toLocaleDateString("pt-BR") : "Sem prazo"}</small>${progress(task)}<div class="task-tags">${tags(task)}</div><span class="task-status priority-${priority}">${priority === "high" ? "Alta" : priority === "low" ? "Baixa" : "Média"}</span><div><button class="task-subtask" type="button" data-subtask-task="${task.id}">+</button><button class="task-edit" type="button" data-edit-task="${task.id}">✎</button><button class="task-delete" type="button" data-delete-task="${task.id}">×</button></div></article>`; };
-  const rows = visible.length ? visible.map((task) => { const due = task.due_at ? new Date(task.due_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Sem prazo"; const priority = task.priority || "medium"; return `<li class="task-row ${task.status === "done" ? "is-done" : ""}"><label class="task-check"><input type="checkbox" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} /><span></span></label><div><strong>${escapeHtml(task.title)}</strong><small>${due}</small>${progress(task)}<span class="task-tags">${tags(task)}</span></div><em class="task-status priority-${priority}">${priority === "high" ? "Alta" : priority === "low" ? "Baixa" : "Média"}</em><button class="task-subtask" type="button" data-subtask-task="${task.id}" aria-label="Adicionar subtarefa">+</button><button class="task-edit" type="button" data-edit-task="${task.id}" aria-label="Editar ${escapeHtml(task.title)}">✎</button><button class="task-delete" type="button" data-delete-task="${task.id}" aria-label="Excluir ${escapeHtml(task.title)}">×</button></li>`; }).join("") : '<li class="task-empty">Nenhuma tarefa encontrada.</li>';
-  const columns = [["todo", "A fazer"], ["doing", "Em andamento"], ["blocked", "Bloqueadas"], ["done", "Concluídas"]].map(([status, label]) => `<section class="kanban-column" data-kanban-status="${status}"><h3>${label}<span>${visible.filter((task) => task.status === status).length}</span></h3>${visible.filter((task) => task.status === status).map(card).join("") || '<p class="task-empty">Vazio</p>'}</section>`).join("");
-  dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Tarefas</h2><p>Organize prioridades e acompanhe o trabalho da equipe.</p></div><button class="button button-primary compact-action task-new" type="button">+ Nova tarefa</button></section><section class="task-summary"><article class="data-card"><span>Em aberto</span><strong>${open}</strong></article><article class="data-card"><span>Concluídas</span><strong>${done}</strong></article><article class="data-card"><span>Total</span><strong>${tasks.length}</strong></article></section><section class="data-card tasks-card"><div class="section-heading"><div><p class="card-kicker">Organização</p><h2>Minhas tarefas</h2></div><div class="task-toolbar"><select class="task-filter" aria-label="Filtrar tarefas"><option value="all" ${filter === "all" ? "selected" : ""}>Todas</option><option value="todo" ${filter === "todo" ? "selected" : ""}>A fazer</option><option value="doing" ${filter === "doing" ? "selected" : ""}>Em andamento</option><option value="blocked" ${filter === "blocked" ? "selected" : ""}>Bloqueadas</option><option value="done" ${filter === "done" ? "selected" : ""}>Concluídas</option></select><select class="task-priority-filter" aria-label="Filtrar prioridade"><option value="all" ${taskPriorityFilter === "all" ? "selected" : ""}>Todas prioridades</option><option value="high" ${taskPriorityFilter === "high" ? "selected" : ""}>Alta</option><option value="medium" ${taskPriorityFilter === "medium" ? "selected" : ""}>Média</option><option value="low" ${taskPriorityFilter === "low" ? "selected" : ""}>Baixa</option></select><button class="filter-button task-mode" type="button">${mode === "list" ? "Kanban" : "Lista"}</button></div></div>${mode === "list" ? `<ul class="task-list">${rows}</ul>` : `<div class="kanban-board">${columns}</div>`}</section>`;
-  dashboardGrid.querySelector(".task-new").addEventListener("click", () => openCreateDialog("tarefa"));
-  dashboardGrid.querySelector(".task-filter").addEventListener("change", (event) => renderTasksView(event.target.value, mode));
-  dashboardGrid.querySelector(".task-priority-filter").addEventListener("change", (event) => { taskPriorityFilter = event.target.value; renderTasksView(filter, mode); });
-  dashboardGrid.querySelector(".task-mode").addEventListener("click", () => { taskViewMode = mode === "list" ? "kanban" : "list"; renderTasksView(filter, taskViewMode); });
-  dashboardGrid.querySelectorAll("[data-task-id]").forEach((input) => input.addEventListener("change", async () => { input.disabled = true; try { const response = await fetch(`/api/tasks/${input.dataset.taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: input.checked ? "done" : "doing" }) }); if (!response.ok) throw new Error(); await renderTasksView(filter); } catch { input.disabled = false; input.checked = !input.checked; window.alert("Não foi possível atualizar a tarefa."); } }));
-  dashboardGrid.querySelectorAll("[data-delete-task]").forEach((button) => button.addEventListener("click", async () => { if (!window.confirm("Excluir esta tarefa?")) return; const response = await fetch(`/api/tasks/${button.dataset.deleteTask}`, { method: "DELETE" }); if (response.ok) renderTasksView(filter); }));
-  dashboardGrid.querySelectorAll("[data-edit-task]").forEach((button) => button.addEventListener("click", () => { const task = tasks.find((item) => String(item.id) === button.dataset.editTask); if (task) openEditDialog("tarefa", { title: task.title, priority: task.priority || "medium", tags: (task.tags || []).join(", "), dueAt: task.due_at }, `/api/tasks/${task.id}/details`); }));
-  dashboardGrid.querySelectorAll("[data-subtask-task]").forEach((button) => button.addEventListener("click", () => { const task = tasks.find((item) => String(item.id) === button.dataset.subtaskTask); if (task) openSubtaskDialog(task); }));
-  dashboardGrid.querySelectorAll("[data-kanban-status]").forEach((column) => { column.addEventListener("dragover", (event) => event.preventDefault()); column.addEventListener("drop", async (event) => { const id = event.dataTransfer.getData("text/plain"); if (!id) return; await fetch(`/api/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: column.dataset.kanbanStatus }) }); renderTasksView(filter, mode); }); });
-  dashboardGrid.querySelectorAll("[data-kanban-id]").forEach((task) => task.addEventListener("dragstart", (event) => event.dataTransfer.setData("text/plain", task.dataset.kanbanId)));
+/* ---------------------------------------------------------------------------
+   Registro de rotas dos módulos (modules/*.js)
+   Cada módulo chama registerRoutes({ "chave-do-hash": () => render() }).
+   Chaves duplicadas lançam erro para impedir que dois módulos disputem a
+   mesma tela.
+   --------------------------------------------------------------------------- */
+const routeRenderers = Object.create(null);
+function registerRoutes(map) {
+  for (const [key, render] of Object.entries(map)) {
+    if (routeRenderers[key]) throw new Error(`Rota "${key}" já registrada por outro módulo.`);
+    if (typeof render !== "function") throw new Error(`Rota "${key}" precisa de uma função de render.`);
+    routeRenderers[key] = render;
+  }
 }
 
-async function renderAgendaView() {
-  const now = new Date(), year = agendaMonth.getFullYear(), month = agendaMonth.getMonth();
-  let events = [];
-  try { const response = await fetch("/api/events"); if (response.ok) events = (await response.json()).events || []; } catch { /* permite usar a agenda vazia durante o desenvolvimento */ }
-  const monthEvents = events.filter((event) => { const date = new Date(event.starts_at); return date.getFullYear() === year && date.getMonth() === month; });
-  const eventsByDay = new Map(monthEvents.map((event) => [new Date(event.starts_at).getDate(), true]));
-  const firstDay = new Date(year, month, 1).getDay(), days = new Date(year, month + 1, 0).getDate();
-  const cells = Array.from({ length: 42 }, (_, index) => { const day = index - firstDay + 1; if (day < 1 || day > days) return '<span class="calendar-day is-empty"></span>'; const isToday = year === now.getFullYear() && month === now.getMonth() && day === now.getDate(); return `<button class="calendar-day${isToday ? " is-today" : ""}" type="button" data-day="${day}">${day}${eventsByDay.has(day) ? '<i></i>' : ""}</button>`; }).join("");
-  const weekStart = new Date(agendaSelectedDate); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  const weekCells = Array.from({ length: 7 }, (_, index) => { const date = new Date(weekStart); date.setDate(weekStart.getDate() + index); const isToday = date.toDateString() === now.toDateString(), hasEvents = events.some((event) => new Date(event.starts_at).toDateString() === date.toDateString()); return `<button class="calendar-day calendar-week-day${isToday ? " is-today" : ""}${date.toDateString() === agendaSelectedDate.toDateString() ? " is-selected" : ""}" type="button" data-date="${date.toISOString()}"><span>${date.toLocaleDateString("pt-BR", { weekday: "short" })}</span><strong>${date.getDate()}</strong>${hasEvents ? '<i></i>' : ""}</button>`; }).join("");
-  const selectedEvents = events.filter((event) => { const date = new Date(event.starts_at); return date.toDateString() === agendaSelectedDate.toDateString(); });
-  const eventMarkup = selectedEvents.length ? selectedEvents.map((event, index) => { const date = new Date(event.starts_at), recurrenceLabel = event.recurrence && event.recurrence !== "none" ? ` · ${event.recurrence === "daily" ? "Diário" : event.recurrence === "weekly" ? "Semanal" : "Mensal"}` : "", reminderLabel = Number(event.reminder_minutes) ? ` · Lembrete ${event.reminder_minutes} min` : ""; return `<article class="day-event" draggable="true" data-event-id="${event.id}"><time>${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time><div><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(event.description || "Compromisso da agenda")}${recurrenceLabel}${reminderLabel}</small></div><i class="event-dot ${["blue", "pink", "orange"][index % 3]}"></i><button class="event-edit" type="button" data-edit-event="${event.id}" aria-label="Editar evento">✎</button><button class="event-delete" type="button" data-delete-event="${event.id}" aria-label="Excluir evento">×</button></article>`; }).join("") : '<p class="agenda-empty">Nenhum evento neste dia.</p>';
-  const historyEvents = events.filter((event) => new Date(event.starts_at) < now).sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at)).slice(0, 8);
-  const historyMarkup = historyEvents.map((event) => { const date = new Date(event.starts_at); return `<article><span class="history-date">${date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}<strong>${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong></span><div><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(event.description || "Compromisso da agenda")}</small></div><span class="history-status">Concluído</span></article>`; }).join("") || '<p class="agenda-empty">Nenhum compromisso concluído.</p>';
-  dashboardGrid.innerHTML = `<section class="page-intro agenda-intro"><div><p class="card-kicker">Organização</p><h2>Agenda</h2><p>Planeje compromissos, reuniões e os próximos passos da equipe.</p></div><button class="button button-primary compact-action agenda-new" type="button">+ Novo evento</button></section><section class="agenda-layout"><section class="data-card calendar-card"><div class="calendar-toolbar"><button class="calendar-nav" type="button" data-agenda-shift="-1" aria-label="Período anterior">‹</button><h2>${agendaViewMode === "month" ? agendaMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "Semana de " + weekStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</h2><div><button class="calendar-nav" type="button" data-agenda-shift="1" aria-label="Próximo período">›</button><button class="filter-button agenda-view-toggle" type="button">${agendaViewMode === "month" ? "Semanal" : "Mensal"}</button></div></div><div class="calendar-weekdays" ${agendaViewMode === "week" ? "hidden" : ""}><span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span></div><div class="calendar-grid ${agendaViewMode === "week" ? "is-week-view" : ""}">${agendaViewMode === "month" ? cells : weekCells}</div></section><aside class="data-card day-agenda"><div class="section-heading"><div><p class="card-kicker">${agendaSelectedDate.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</p><h2>Agenda do dia</h2></div><span class="task-count">${selectedEvents.length} evento${selectedEvents.length === 1 ? "" : "s"}</span></div><div class="day-event-list">${eventMarkup}</div><button class="agenda-add-link" type="button">+ Adicionar compromisso</button></aside></section><section class="data-card agenda-upcoming"><div class="section-heading"><div><p class="card-kicker">Visão geral</p><h2>Próximos compromissos</h2></div><button class="filter-button agenda-export" type="button">Exportar .ics</button></div><div class="upcoming-list">${events.filter((event) => new Date(event.starts_at) >= now).slice(0, 5).map((event) => { const date = new Date(event.starts_at); return `<article><span class="upcoming-date">${date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}<strong>${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong></span><div><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(event.description || "Compromisso da agenda")}</small></div></article>`; }).join("") || '<p class="agenda-empty">Nenhum próximo compromisso.</p>'}</div></section>`;
-  const historyCard = document.createElement("section"); historyCard.className = "data-card agenda-history"; historyCard.innerHTML = `<div class="section-heading"><div><p class="card-kicker">Arquivo</p><h2>Histórico de compromissos</h2></div><span class="task-count">${historyEvents.length} registro${historyEvents.length === 1 ? "" : "s"}</span></div><div class="history-list">${historyMarkup}</div>`; dashboardGrid.append(historyCard);
-  dashboardGrid.querySelectorAll(".agenda-new, .agenda-add-link").forEach((button) => button.addEventListener("click", () => { openCreateDialog("evento"); const input = dialogFields.querySelector('[name="startsAt"]'); const date = new Date(agendaSelectedDate); date.setHours(9, 0, 0, 0); if (input) input.value = new Date(date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }));
-  dashboardGrid.querySelectorAll("[data-delete-event]").forEach((button) => button.addEventListener("click", async () => { if (!window.confirm("Excluir este evento?")) return; const response = await fetch(`/api/events/${button.dataset.deleteEvent}`, { method: "DELETE" }); if (response.ok) renderAgendaView(); }));
-  dashboardGrid.querySelectorAll("[data-edit-event]").forEach((button) => button.addEventListener("click", () => { const event = selectedEvents.find((item) => String(item.id) === button.dataset.editEvent); if (event) openEditDialog("evento", { title: event.title, startsAt: event.starts_at, description: event.description || "", recurrence: event.recurrence || "none", reminderMinutes: String(event.reminder_minutes || 0) }, `/api/events/${event.id}/schedule`); }));
-  dashboardGrid.querySelectorAll("[data-agenda-shift]").forEach((button) => button.addEventListener("click", () => { agendaMonth.setMonth(agendaMonth.getMonth() + Number(button.dataset.agendaShift)); renderAgendaView(); }));
-  dashboardGrid.querySelector(".agenda-view-toggle").addEventListener("click", () => { agendaViewMode = agendaViewMode === "month" ? "week" : "month"; renderAgendaView(); });
-  dashboardGrid.querySelector(".agenda-export").addEventListener("click", () => { const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//FocusDev//Agenda//PT-BR", ...events.map((event) => { const start = new Date(event.starts_at).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z"); return `BEGIN:VEVENT\nUID:${event.id}@focusdev\nDTSTART:${start}\nSUMMARY:${String(event.title).replace(/[\\,;]/g, "\\$&")}\nDESCRIPTION:${String(event.description || "").replace(/[\\,;]/g, "\\$&")}\nEND:VEVENT`; }), "END:VCALENDAR"].join("\n"); const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([lines], { type: "text/calendar" })); link.download = "focusdev-agenda.ics"; link.click(); URL.revokeObjectURL(link.href); });
-  dashboardGrid.querySelectorAll(".calendar-day:not(.is-empty):not(.calendar-week-day)").forEach((day) => day.addEventListener("click", () => { agendaSelectedDate = new Date(year, month, Number(day.dataset.day)); renderAgendaView(); }));
-  dashboardGrid.querySelectorAll(".calendar-week-day").forEach((day) => day.addEventListener("click", () => { agendaSelectedDate = new Date(day.dataset.date); renderAgendaView(); }));
-  dashboardGrid.querySelectorAll(".day-event").forEach((event) => event.addEventListener("dragstart", (drag) => { drag.dataTransfer.setData("text/plain", event.dataset.eventId); event.classList.add("is-dragging"); }));
-  dashboardGrid.querySelectorAll(".day-event").forEach((event) => event.addEventListener("dragend", () => event.classList.remove("is-dragging")));
-  dashboardGrid.querySelectorAll(".calendar-day:not(.is-empty):not(.calendar-week-day)").forEach((day) => {
-    day.addEventListener("dragover", (drag) => { drag.preventDefault(); day.classList.add("is-drop-target"); });
-    day.addEventListener("dragleave", () => day.classList.remove("is-drop-target"));
-    day.addEventListener("drop", async (drop) => {
-      drop.preventDefault(); day.classList.remove("is-drop-target");
-      const eventId = drop.dataTransfer.getData("text/plain"); if (!eventId) return;
-      const startsAt = new Date(year, month, Number(day.dataset.day), 9, 0);
-      try { const response = await fetch(`/api/events/${eventId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ startsAt: startsAt.toISOString() }) }); if (!response.ok) throw new Error(); await renderAgendaView(); } catch { window.alert("Não foi possível mover o evento."); }
-    });
+/* Chamada de API autenticada (cookie same-origin) com erro legível em pt-BR. */
+async function api(path, { method = "GET", body, headers } = {}) {
+  const response = await fetch(path, {
+    method,
+    credentials: "same-origin",
+    headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || (response.status === 401 ? "Sua sessão expirou. Entre novamente." : "Não foi possível concluir a operação."));
+    error.status = response.status;
+    throw error;
+  }
+  return data;
 }
 
-function renderInboxLegacyView() {
-  const messages = [
-    { sender: "Marina Lopes", subject: "Aprovacao do briefing", preview: "O cliente respondeu e pediu apenas dois ajustes no escopo.", time: "09:42", tag: "Cliente", unread: true },
-    { sender: "Equipe FocusDev", subject: "Resumo da semana", preview: "Confira os principais avanços e os proximos marcos do time.", time: "Ontem", tag: "Interno", unread: false },
-    { sender: "Alex Martins", subject: "Reuniao confirmada", preview: "Deixei o convite na agenda para quarta-feira as 14h.", time: "12 set", tag: "Agenda", unread: false },
-    { sender: "Nexum", subject: "Documentos do projeto", preview: "Os arquivos atualizados ja estao disponiveis para revisao.", time: "10 set", tag: "Projeto", unread: false }
-  ];
-  dashboardGrid.innerHTML = `<section class="page-intro inbox-intro"><div><p class="card-kicker">Comunicacao</p><h2>Caixa de entrada</h2><p>Centralize conversas, atualizacoes e avisos importantes do workspace.</p></div><button class="button button-primary compact-action inbox-compose" type="button">+ Nova mensagem</button></section><section class="inbox-layout"><aside class="data-card inbox-sidebar"><div class="section-heading"><div><p class="card-kicker">Pastas</p><h2>Mensagens</h2></div><span class="task-count">1 nova</span></div><button class="inbox-folder is-active" type="button"><span>Entrada</span><b>1</b></button><button class="inbox-folder" type="button"><span>Importantes</span><b>0</b></button><button class="inbox-folder" type="button"><span>Enviadas</span><b>0</b></button><button class="inbox-folder" type="button"><span>Arquivadas</span><b>0</b></button><div class="inbox-note"><strong>Foco do dia</strong><span>Responda as mensagens que desbloqueiam o proximo passo.</span></div></aside><section class="data-card inbox-card"><div class="section-heading"><div><p class="card-kicker">Atualizacoes recentes</p><h2>Sua conversa</h2></div><button class="filter-button inbox-filter" type="button">Filtrar <span>⌄</span></button></div><div class="inbox-list">${messages.map((message) => `<article class="inbox-message ${message.unread ? "is-unread" : ""}"><span class="inbox-avatar">${message.sender.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div class="inbox-message-body"><div><strong>${message.sender}</strong><time>${message.time}</time></div><h3>${message.subject}</h3><p>${message.preview}</p><span class="inbox-tag">${message.tag}</span></div><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section></section>`;
-  dashboardGrid.querySelectorAll(".inbox-folder").forEach((folder) => folder.addEventListener("click", () => { dashboardGrid.querySelector(".inbox-folder.is-active")?.classList.remove("is-active"); folder.classList.add("is-active"); }));
-}
+/* Blocos de estado compartilhados pelas telas (carregando / vazio / erro). */
+const stateBlock = {
+  loading: (label = "Carregando…") => `<section class="data-card state-card state-loading" aria-busy="true"><span class="state-spinner" aria-hidden="true"></span><p>${escapeHtml(label)}</p></section>`,
+  empty: (title, description = "", actionLabel = "", actionClass = "") => `<section class="data-card state-card state-empty"><h2>${escapeHtml(title)}</h2>${description ? `<p>${escapeHtml(description)}</p>` : ""}${actionLabel ? `<button class="button button-primary compact-action ${actionClass}" type="button">${escapeHtml(actionLabel)}</button>` : ""}</section>`,
+  error: (message = "Não foi possível carregar os dados.", retryClass = "state-retry") => `<section class="data-card state-card state-error" role="alert"><h2>Algo deu errado</h2><p>${escapeHtml(message)}</p><button class="button button-secondary compact-action ${retryClass}" type="button">Tentar novamente</button></section>`,
+};
 
-let inboxActiveFilter = "all";
-let inboxMessages = [
-  { sender: "Marina Lopes", subject: "Aprovacao do briefing", preview: "O cliente respondeu e pediu apenas dois ajustes no escopo.", time: "09:42", tag: "Cliente", unread: true, important: true },
-  { sender: "Equipe FocusDev", subject: "Resumo da semana", preview: "Confira os principais avanços e os proximos marcos do time.", time: "Ontem", tag: "Interno", unread: false, important: false },
-  { sender: "Alex Martins", subject: "Reuniao confirmada", preview: "Deixei o convite na agenda para quarta-feira as 14h.", time: "12 set", tag: "Agenda", unread: false, important: true },
-  { sender: "Nexum", subject: "Documentos do projeto", preview: "Os arquivos atualizados ja estao disponiveis para revisao.", time: "10 set", tag: "Projeto", unread: false, important: false }
-];
-function renderInboxView() {
-  const visible = inboxActiveFilter === "unread" ? inboxMessages.filter((message) => message.unread) : inboxActiveFilter === "important" ? inboxMessages.filter((message) => message.important) : inboxMessages;
-  const rows = visible.length ? visible.map((message) => { const index = inboxMessages.indexOf(message); return `<article class="inbox-message ${message.unread ? "is-unread" : ""}" data-inbox-index="${index}"><span class="inbox-avatar">${message.sender.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div class="inbox-message-body"><div><strong>${escapeHtml(message.sender)}</strong><time>${message.time}</time></div><h3>${escapeHtml(message.subject)}</h3><p>${escapeHtml(message.preview)}</p><span class="inbox-tag">${escapeHtml(message.tag)}</span></div><button class="inbox-more" type="button" data-inbox-read="${index}" aria-label="Marcar como lida">${message.unread ? "Nova" : "✓"}</button></article>`; }).join("") : '<p class="agenda-empty">Nenhuma mensagem nesta pasta.</p>';
-  const unreadCount = inboxMessages.filter((message) => message.unread).length;
-  dashboardGrid.innerHTML = `<section class="page-intro inbox-intro"><div><p class="card-kicker">Comunicacao</p><h2>Caixa de entrada</h2><p>Centralize conversas, atualizacoes e avisos importantes do workspace.</p></div><button class="button button-primary compact-action inbox-compose" type="button">+ Nova mensagem</button></section><section class="inbox-layout"><aside class="data-card inbox-sidebar"><div class="section-heading"><div><p class="card-kicker">Pastas</p><h2>Mensagens</h2></div><span class="task-count">${unreadCount} nova${unreadCount === 1 ? "" : "s"}</span></div><button class="inbox-folder ${inboxActiveFilter === "all" ? "is-active" : ""}" data-inbox-filter="all" type="button"><span>Entrada</span><b>${inboxMessages.length}</b></button><button class="inbox-folder ${inboxActiveFilter === "unread" ? "is-active" : ""}" data-inbox-filter="unread" type="button"><span>Nao lidas</span><b>${unreadCount}</b></button><button class="inbox-folder ${inboxActiveFilter === "important" ? "is-active" : ""}" data-inbox-filter="important" type="button"><span>Importantes</span><b>${inboxMessages.filter((message) => message.important).length}</b></button><div class="inbox-note"><strong>Foco do dia</strong><span>Abra uma mensagem para marcar como lida e acompanhar a conversa.</span></div></aside><section class="data-card inbox-card"><div class="section-heading"><div><p class="card-kicker">Atualizacoes recentes</p><h2>Sua conversa</h2></div><button class="filter-button inbox-filter" type="button">${inboxActiveFilter === "all" ? "Todas" : inboxActiveFilter === "unread" ? "Nao lidas" : "Importantes"}</button></div><div class="inbox-list">${rows}</div></section></section>`;
-  dashboardGrid.querySelectorAll("[data-inbox-filter]").forEach((folder) => folder.addEventListener("click", () => { inboxActiveFilter = folder.dataset.inboxFilter; renderInboxView(); }));
-  dashboardGrid.querySelectorAll("[data-inbox-read]").forEach((button) => button.addEventListener("click", (event) => { event.stopPropagation(); inboxMessages[Number(button.dataset.inboxRead)].unread = false; renderInboxView(); }));
-  dashboardGrid.querySelectorAll("[data-inbox-index]").forEach((row) => row.addEventListener("click", () => { const message = inboxMessages[Number(row.dataset.inboxIndex)]; message.unread = false; window.alert(`${message.subject}\n\n${message.preview}`); renderInboxView(); }));
-  dashboardGrid.querySelector(".inbox-compose")?.addEventListener("click", () => { const subject = window.prompt("Assunto da mensagem:"); if (!subject?.trim()) return; inboxMessages.unshift({ sender: "Gustavo", subject: subject.trim(), preview: "Rascunho criado agora. Adicione os detalhes da conversa.", time: "Agora", tag: "Rascunho", unread: false, important: false }); inboxActiveFilter = "all"; renderInboxView(); });
-}
-
-function renderLeadsView() {
-  const stageConfig = [["new", "Novo lead", "#3b82f6"], ["contacted", "Contato", "#8b5cf6"], ["qualified", "Qualificação", "#8b5cf6"], ["proposal", "Proposta", "#f59e0b"], ["won", "Ganho", "#22c55e"], ["lost", "Perdido", "#f3132d"]];
-  const stageLabels = Object.fromEntries(stageConfig.map(([status, label]) => [status, label]));
-  const renderShell = (leads, message = "") => {
-    const counts = leads.reduce((result, lead) => { result[lead.status] = (result[lead.status] || 0) + 1; return result; }, {});
-    const stages = stageConfig.slice(0, 4).map(([status, name, color]) => [name, String(counts[status] || 0), color]);
-    const rows = message ? `<p class="agenda-empty" role="${message.includes("Não foi") ? "alert" : "status"}">${escapeHtml(message)}</p>` : leads.length ? leads.map((lead) => {
-      const name = String(lead.name || "Sem nome"), initials = name.split(" ").map((part) => part[0]).join("").slice(0, 2);
-      const stage = stageLabels[lead.status] || lead.status || "Novo lead";
-      const value = lead.amount == null || lead.amount === "" ? "—" : `R$ ${Number(lead.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-      return `<article class="lead-row"><span class="lead-avatar">${escapeHtml(initials)}</span><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(lead.company || "Sem empresa")}</small></div><span class="lead-stage-name">${escapeHtml(stage)}</span><strong class="lead-value">${escapeHtml(value)}</strong><span class="inbox-tag">${escapeHtml(lead.source || "Sem origem")}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`;
-    }).join("") : '<p class="agenda-empty" role="status">Nenhum lead cadastrado.</p>';
-    dashboardGrid.innerHTML = `<section class="page-intro leads-intro"><div><p class="card-kicker">CRM</p><h2>Leads</h2><p>Transforme conversas em oportunidades e mantenha cada etapa sob controle.</p></div><button class="button button-primary compact-action lead-new" type="button">+ Novo lead</button></section><section class="lead-funnel">${stages.map(([name, count, color]) => `<article class="lead-stage" style="--stage-color:${color}"><span>${name}</span><strong>${count}</strong><small>oportunidades</small></article>`).join("")}</section><section class="data-card leads-card"><div class="section-heading"><div><p class="card-kicker">Pipeline comercial</p><h2>Oportunidades recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="lead-list">${rows}</div></section>`;
-    dashboardGrid.querySelector(".lead-new")?.addEventListener("click", () => openCreateDialog("lead"));
-  };
-  renderShell([], "Carregando leads...");
-  fetch("/api/leads", { credentials: "same-origin" }).then(async (response) => {
-    const data = response.ok ? await response.json() : {};
-    if (!response.ok) throw new Error(data.error || "Não foi possível carregar os leads.");
-    renderShell(Array.isArray(data.leads) ? data.leads : []);
-  }).catch((error) => renderShell([], error.message || "Não foi possível carregar os leads."));
-}
-
-function renderLeadsLegacyView() {
-  const leads = [
-  ];
-  const stages = [["Novo lead", "2", "#3b82f6"], ["Qualificacao", "4", "#8b5cf6"], ["Proposta", "2", "#f59e0b"], ["Negociacao", "1", "#f3132d"]];
-  dashboardGrid.innerHTML = `<section class="page-intro leads-intro"><div><p class="card-kicker">CRM</p><h2>Leads</h2><p>Transforme conversas em oportunidades e mantenha cada etapa sob controle.</p></div><button class="button button-primary compact-action lead-new" type="button">+ Novo lead</button></section><section class="lead-funnel">${stages.map(([name, count, color]) => `<article class="lead-stage" style="--stage-color:${color}"><span>${name}</span><strong>${count}</strong><small>oportunidades</small></article>`).join("")}</section><section class="data-card leads-card"><div class="section-heading"><div><p class="card-kicker">Pipeline comercial</p><h2>Oportunidades recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="lead-list">${leads.map(([name, company, stage, value, tag]) => `<article class="lead-row"><span class="lead-avatar">${name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div><strong>${name}</strong><small>${company}</small></div><span class="lead-stage-name">${stage}</span><strong class="lead-value">${value}</strong><span class="inbox-tag">${tag}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section>`;
-  dashboardGrid.querySelector(".lead-new")?.addEventListener("click", () => openCreateDialog("lead"));
-}
-
-function renderCampaignsView() {
-  const campaigns = [["Lançamento FocusDev", "Instagram · Meta Ads", "R$ 12.400", "24,8%", "Ativa", "spiderman-card-hero.png"], ["Retargeting Nexum", "Google · Display", "R$ 8.960", "18,2%", "Ativa", "spiderman-card-web.png"], ["Conteúdo de autoridade", "LinkedIn · Orgânico", "R$ 0", "11,4%", "Rascunho", "spiderman-card-duo.png"]];
-  dashboardGrid.innerHTML = `<section class="page-intro campaigns-intro"><div><p class="card-kicker">Marketing</p><h2>Campanhas</h2><p>Planeje, acompanhe e otimize suas ações em um só lugar.</p></div><button class="button button-primary compact-action campaign-new" type="button">+ Nova campanha</button></section><section class="campaign-metrics"><article class="data-card"><span>Investimento total</span><strong>R$ 21.360</strong><small class="positive">↑ 12,8% este mês</small></article><article class="data-card"><span>Conversões</span><strong>184</strong><small class="positive">↑ 8,4% contra o período anterior</small></article><article class="data-card"><span>ROI médio</span><strong>3,8x</strong><small class="neutral">Todas as campanhas</small></article></section><section class="data-card campaigns-card"><div class="section-heading"><div><p class="card-kicker">Visão geral</p><h2>Campanhas recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="campaign-list">${campaigns.map(([name, channel, spend, ctr, status, image]) => `<article class="campaign-row" style="--campaign-image:url('assets/${image}')"><div class="campaign-thumb"></div><div class="campaign-main"><strong>${name}</strong><small>${channel}</small><div class="campaign-progress"><span style="width:${status === "Rascunho" ? "32" : "78"}%"></span></div></div><div class="campaign-stat"><small>Investimento</small><strong>${spend}</strong></div><div class="campaign-stat"><small>CTR</small><strong>${ctr}</strong></div><span class="campaign-status ${status === "Ativa" ? "is-active" : "is-draft"}">${status}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section>`;
-}
-
-function renderFunnelView() {
-  const stages = [
-    ["Entrada", "12 leads", "R$ 86.400", "spiderman-card-web.png", [["Lucas Andrade", "Nexum", "R$ 12.000"], ["Marina Lopes", "Orbit", "R$ 8.400"]]],
-    ["Qualificacao", "8 leads", "R$ 64.800", "spiderman-card-duo.png", [["Bruno Almeida", "Acme Inc.", "R$ 24.000"], ["Fernanda Reis", "Vertice", "R$ 18.500"]]],
-    ["Proposta", "4 leads", "R$ 42.300", "spiderman-card-hero.png", [["Carolina Mendes", "Vértice", "R$ 18.500"], ["Diego Nunes", "Orbit", "R$ 23.800"]]],
-    ["Fechamento", "2 leads", "R$ 31.200", "agenda-spider-red-emblem.png", [["Rafael Costa", "Nexum", "R$ 17.200"], ["Joana Silva", "Acme Inc.", "R$ 14.000"]]]
-  ];
-  dashboardGrid.innerHTML = `<section class="page-intro funnel-intro"><div><p class="card-kicker">CRM</p><h2>Funil de vendas</h2><p>Visualize o caminho de cada oportunidade e saiba onde agir agora.</p></div><button class="button button-primary compact-action funnel-new" type="button">+ Nova oportunidade</button></section><section class="funnel-toolbar"><div><strong>Pipeline comercial</strong><span>26 oportunidades em andamento</span></div><div><button class="filter-button funnel-filter" type="button">Todos os responsáveis</button><button class="filter-button funnel-view" type="button">▦ Compacto</button></div></section><section class="funnel-board">${stages.map(([name, count, total, image, cards]) => `<section class="funnel-column" style="--funnel-image:url('assets/${image}')"><header><div><h3>${name}</h3><span>${count}</span></div><strong>${total}</strong></header><div class="funnel-column-list">${cards.map(([person, company, value]) => `<article class="funnel-opportunity"><div class="funnel-opportunity-top"><span class="lead-avatar">${person.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></div><strong>${person}</strong><small>${company}</small><div><b>${value}</b><span>Atualizado hoje</span></div></article>`).join("")}<button class="funnel-add" type="button">+ Adicionar oportunidade</button></div></section>`).join("")}</section>`;
-  dashboardGrid.querySelector(".funnel-new")?.addEventListener("click", () => openCreateDialog("lead"));
-  dashboardGrid.querySelectorAll(".funnel-add").forEach((button) => button.addEventListener("click", () => openCreateDialog("lead")));
-}
-
-function renderOpportunitiesView() {
-  const opportunities = [["Website institucional", "Acme Inc.", "R$ 24.000", "78%", "30 set", "Alta"], ["Aplicativo mobile", "Vertice", "R$ 42.800", "54%", "14 out", "Media"], ["Campanha de lancamento", "Nexum", "R$ 18.400", "32%", "22 out", "Baixa"], ["Portal do cliente", "Orbit", "R$ 31.200", "86%", "28 set", "Alta"]];
-  dashboardGrid.innerHTML = `<section class="page-intro opportunities-intro"><div><p class="card-kicker">CRM</p><h2>Oportunidades</h2><p>Priorize negociações pelo valor, probabilidade e próximo passo.</p></div><button class="button button-primary compact-action opportunity-new" type="button">+ Nova oportunidade</button></section><section class="opportunity-summary"><article class="data-card"><span>Pipeline total</span><strong>R$ 116.400</strong><small class="positive">↑ 18,4% no mês</small></article><article class="data-card"><span>Valor ponderado</span><strong>R$ 72.860</strong><small class="neutral">Por probabilidade de fechamento</small></article><article class="data-card"><span>Fechamento previsto</span><strong>3</strong><small class="warning">Precisam de atenção</small></article></section><section class="data-card opportunities-card"><div class="section-heading"><div><p class="card-kicker">Negociações abertas</p><h2>Carteira comercial</h2></div><div class="opportunity-actions"><button class="filter-button" type="button">Filtros</button><button class="filter-button" type="button">Exportar</button></div></div><div class="opportunity-list">${opportunities.map(([name, company, value, probability, due, priority]) => `<article class="opportunity-row"><span class="opportunity-icon">◈</span><div class="opportunity-name"><strong>${name}</strong><small>${company}</small></div><div><small>Valor</small><strong>${value}</strong></div><div><small>Chance</small><strong>${probability}</strong></div><div><small>Próximo passo</small><strong>${due}</strong></div><span class="priority-pill priority-${priority.toLowerCase()}">${priority}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section>`;
-  dashboardGrid.querySelector(".opportunity-new")?.addEventListener("click", () => openCreateDialog("lead"));
-}
-
-function renderProposalsView() {
-  const proposals = [["Proposta comercial · Website", "Acme Inc.", "R$ 24.000", "Enviada", "28 set", "spiderman-card-hero.png"], ["Escopo aplicativo mobile", "Vertice", "R$ 42.800", "Em revisao", "02 out", "spiderman-card-web.png"], ["Plano de crescimento Q4", "Nexum", "R$ 18.400", "Rascunho", "—", "spiderman-card-duo.png"]];
-  dashboardGrid.innerHTML = `<section class="page-intro proposals-intro"><div><p class="card-kicker">CRM</p><h2>Propostas</h2><p>Crie propostas claras, acompanhe respostas e acelere o fechamento.</p></div><button class="button button-primary compact-action proposal-new" type="button">+ Nova proposta</button></section><section class="proposal-stats"><article class="data-card"><span>Em aberto</span><strong>02</strong><small>R$ 66.800 em negociação</small></article><article class="data-card"><span>Taxa de aceite</span><strong>68%</strong><small class="positive">↑ 6,2% este mês</small></article><article class="data-card"><span>Tempo médio</span><strong>4,2 dias</strong><small>Da criação ao envio</small></article></section><section class="data-card proposals-card"><div class="section-heading"><div><p class="card-kicker">Documentos comerciais</p><h2>Propostas recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="proposal-list">${proposals.map(([name, client, value, status, due, image]) => `<article class="proposal-row"><div class="proposal-cover" style="--proposal-image:url('assets/${image}')"><span>PDF</span></div><div class="proposal-main"><strong>${name}</strong><small>${client}</small><div><span>${value}</span><em>${due === "—" ? "Sem prazo" : `Válida até ${due}`}</em></div></div><span class="proposal-status proposal-${status.toLowerCase().replace(" ", "-")}">${status}</span><button class="filter-button proposal-open" type="button">Abrir</button><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section>`;
-  dashboardGrid.querySelector(".proposal-new")?.addEventListener("click", () => openCreateDialog("projeto"));
-  dashboardGrid.querySelectorAll(".proposal-open").forEach((button) => button.addEventListener("click", () => window.alert("Visualização da proposta pronta para receber o documento comercial.")));
-}
-
-function renderFollowupsView() {
-  const followups = [["Ligar para Carolina Mendes", "Proposta do aplicativo mobile", "Hoje · 14:30", "Alta", "CM"], ["Enviar estudo de caso", "Bruno Almeida · Nexum", "Amanhã · 09:00", "Média", "BA"], ["Confirmar reunião de fechamento", "Diego Nunes · Orbit", "18 set · 16:00", "Alta", "DN"], ["Retomar contato", "Fernanda Reis · Acme Inc.", "20 set · 11:00", "Baixa", "FR"]];
-  dashboardGrid.innerHTML = `<section class="page-intro followups-intro"><div><p class="card-kicker">CRM</p><h2>Follow-ups</h2><p>Nunca perca o momento certo de retomar uma conversa comercial.</p></div><button class="button button-primary compact-action followup-new" type="button">+ Novo follow-up</button></section><section class="followup-summary"><article class="data-card"><span>Para hoje</span><strong>01</strong><small class="warning">Prioridade alta</small></article><article class="data-card"><span>Próximos 7 dias</span><strong>04</strong><small>Todos os responsáveis</small></article><article class="data-card"><span>Concluídos no mês</span><strong>18</strong><small class="positive">↑ 22% de produtividade</small></article></section><section class="data-card followups-card"><div class="section-heading"><div><p class="card-kicker">Minha fila</p><h2>Próximos contatos</h2></div><button class="filter-button" type="button">Todos os status</button></div><div class="followup-list">${followups.map(([title, detail, date, priority, initials]) => `<article class="followup-row"><label class="followup-check"><input type="checkbox" /><span></span></label><span class="followup-avatar">${initials}</span><div class="followup-main"><strong>${title}</strong><small>${detail}</small></div><div class="followup-date"><small>Retorno</small><strong>${date}</strong></div><span class="priority-pill priority-${priority.toLowerCase()}">${priority}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section>`;
-  dashboardGrid.querySelector(".followup-new")?.addEventListener("click", () => openCreateDialog("tarefa"));
-}
-
-function renderCRMView() {
-  const modules = [["leads", "Leads", "Organize contatos e novas oportunidades.", "spiderman-card-web.png"], ["campanhas", "Campanhas", "Acompanhe desempenho e investimento.", "spiderman-card-hero.png"], ["funil", "Funil", "Veja cada oportunidade avançar.", "spiderman-card-duo.png"], ["oportunidades", "Oportunidades", "Priorize negociações importantes.", "agenda-spider-red-emblem.png"], ["propostas", "Propostas", "Crie e acompanhe documentos comerciais.", "agenda-spider-mask.png"], ["follow-ups", "Follow-ups", "Controle todos os próximos contatos.", "spiderman-hanging.png"]];
-  dashboardGrid.innerHTML = `<section class="page-intro crm-intro"><div><p class="card-kicker">Workspace comercial</p><h2>CRM FocusDev</h2><p>Um centro único para controlar relacionamento, pipeline e fechamento.</p></div><button class="button button-primary compact-action" type="button" data-crm-module="leads">+ Novo lead</button></section><section class="crm-overview"><article class="data-card"><span>Pipeline total</span><strong>R$ 116.400</strong><small>26 oportunidades em andamento</small></article><article class="data-card"><span>Próximos contatos</span><strong>04</strong><small>1 prioridade para hoje</small></article><article class="data-card"><span>Propostas abertas</span><strong>02</strong><small>R$ 66.800 em negociação</small></article></section><section class="data-card crm-hub"><div class="section-heading"><div><p class="card-kicker">Módulos do CRM</p><h2>Escolha uma área para continuar</h2></div></div><div class="crm-module-grid">${modules.map(([key, title, description, image]) => `<button class="crm-module-card" type="button" data-crm-module="${key}" style="--crm-image:url('assets/${image}')"><span class="crm-module-icon">✦</span><strong>${title}</strong><small>${description}</small><b>Abrir →</b></button>`).join("")}</div></section>`;
-  const actions = { leads: renderLeadsView, campanhas: renderCampaignsView, funil: renderFunnelView, oportunidades: renderOpportunitiesView, propostas: renderProposalsView, "follow-ups": renderFollowupsView };
-  dashboardGrid.querySelectorAll("[data-crm-module]").forEach((button) => button.addEventListener("click", () => { const key = button.dataset.crmModule; history.replaceState({}, "", `#${key}`); actions[key]?.(); }));
-}
-
-function renderOperationsView(key) {
-  const view = operationsModules[key];
-  if (!view) return false;
+/* Renderizador genérico usado pelas telas ainda não conectadas à API. */
+function renderModulePage(key, view) {
   const makeRows = (query = "", status = "all") => view.rows.filter((row) => row.join(" ").toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR")) && (status === "all" || row[row.length - 1].toLocaleLowerCase("pt-BR").includes(status))).map((row) => `<tr>${row.map((cell, index) => `<td class="${index === row.length - 1 ? "status-cell" : ""}">${escapeHtml(cell)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${view.columns.length}" class="operations-empty">Nenhum registro encontrado.</td></tr>`;
+
   dashboardGrid.innerHTML = `<section class="page-intro operations-intro"><div><p class="card-kicker">${view.kicker}</p><h2>${view.title}</h2><p>${view.intro}</p></div><button class="button button-primary compact-action operations-new" type="button">+ ${view.action}</button></section><section class="operations-hero" style="--operations-art:url('assets/${view.art}')"><div><span class="operations-eyebrow">FocusDev workspace</span><strong>${key === "equipe" ? "Pessoas alinhadas, operação mais leve." : key === "relatorios" ? "Clareza para escolher o próximo passo." : "Tudo que você precisa para manter o ritmo."}</strong><small>Atualizado agora · dados sincronizados com seu workspace</small></div><span class="operations-art-label">SPIDER<br><b>FOCUS</b></span></section><section class="operations-metrics">${view.metrics.map(([label, value, note, tone]) => `<article class="data-card operations-metric"><span>${label}</span><strong>${value}</strong><small class="${tone}">${note}</small></article>`).join("")}</section><section class="data-card operations-table"><div class="section-heading"><div><p class="card-kicker">${key === "arquivos" ? "Biblioteca compartilhada" : "Visão geral"}</p><h2>${key === "equipe" ? "Pessoas e acessos" : key === "automacoes" ? "Fluxos configurados" : "Registros recentes"}</h2></div><div class="operations-toolbar"><label class="operations-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="Buscar ${view.title.toLocaleLowerCase("pt-BR")}..." aria-label="Buscar ${view.title}" /></label><select class="operations-filter" aria-label="Filtrar status"><option value="all">Todos os status</option><option value="ativo">Ativo</option><option value="publicado">Publicado</option><option value="conectada">Conectada</option><option value="revisar">Revisar</option><option value="rascunho">Rascunho</option></select><button class="filter-button operations-export" type="button">Exportar</button></div></div><div class="table-wrap"><table><thead><tr>${view.columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead><tbody class="operations-tbody">${makeRows()}</tbody></table></div></section>`;
   const search = dashboardGrid.querySelector(".operations-search input"), filter = dashboardGrid.querySelector(".operations-filter"), tbody = dashboardGrid.querySelector(".operations-tbody");
   const refresh = () => { tbody.innerHTML = makeRows(search.value, filter.value); };
   search.addEventListener("input", refresh); filter.addEventListener("change", refresh);
   dashboardGrid.querySelector(".operations-new").addEventListener("click", () => window.alert(`${view.action} · formulário pronto para receber os dados do workspace.`));
   dashboardGrid.querySelector(".operations-export").addEventListener("click", () => window.alert(`Exportação de ${view.title.toLocaleLowerCase("pt-BR")} iniciada.`));
-  return true;
-}
-const financeMoney = (value) => `R$ ${Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-const financeRows = {
-  receitas: [["Mensalidade · Website", "Acme Inc.", "Hoje", 8400, "Recebida"], ["Projeto · Aplicativo mobile", "Vértice", "22 Jun", 14800, "Pendente"], ["Suporte mensal", "Nexum", "30 Jun", 5200, "Agendada"], ["Consultoria estratégica", "Orbit", "05 Jul", 3900, "Pendente"], ["Implantação CRM", "Lumen", "12 Jul", 11200, "Agendada"]],
-  despesas: [["Mídia paga", "Marketing", "13 Jun", 3240, "Pago"], ["Software e ferramentas", "Operação", "15 Jun", 1860, "Pago"], ["Freelancers", "Projetos", "18 Jun", 4750, "Agendado"], ["Infraestrutura cloud", "Tecnologia", "20 Jun", 2280, "Pendente"], ["Impostos e taxas", "Administrativo", "25 Jun", 3960, "Pendente"]]
-};
-
-function financeIntro(kicker, title, description, action = "+ Nova movimentação") {
-  return `<section class="page-intro finance-intro"><div><p class="card-kicker">${kicker}</p><h2>${title}</h2><p>${description}</p></div><button class="button button-primary compact-action finance-action" type="button">${action}</button></section>`;
-}
-function financeMetric(label, value, detail, tone = "positive") { return `<article class="data-card finance-metric"><span>${label}</span><strong>${value}</strong><small class="${tone}">${detail}</small></article>`; }
-function financeTable(rows, headers = ["Descrição", "Categoria", "Vencimento", "Valor", "Status"]) {
-  return `<div class="table-wrap finance-table-wrap"><table class="finance-table"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell, i) => `<td class="${i === row.length - 1 ? "status-cell" : i === row.length - 2 ? "money-cell" : ""}">${i === row.length - 2 ? financeMoney(cell) : cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
-}
-
-function renderFinanceOverview() {
-  const bars = [["Jan", 61], ["Fev", 74], ["Mar", 57], ["Abr", 82], ["Mai", 69], ["Jun", 91]];
-  dashboardGrid.innerHTML = `${financeIntro("Financeiro", "Visão financeira", "Uma leitura rápida da saúde financeira, fluxo de caixa e previsões.", "Exportar relatório")}<section class="finance-metrics">${financeMetric("Saldo disponível", "R$ 84.620,00", "↑ 12,4% vs. mês anterior")} ${financeMetric("Receitas no mês", "R$ 42.300,00", "↑ 8,6% realizado")} ${financeMetric("Despesas no mês", "R$ 18.740,00", "↓ 4,2% sob controle", "neutral")} ${financeMetric("Resultado projetado", "R$ 23.560,00", "Margem de 55,7%", "warning")}</section><section class="finance-overview-grid"><article class="data-card finance-chart-card"><div class="section-heading"><div><p class="card-kicker">Fluxo de caixa</p><h2>Entradas x saídas</h2></div><span class="finance-period">Últimos 6 meses⌄</span></div><div class="finance-chart"><div class="chart-y"><span>50k</span><span>25k</span><span>0</span></div><div class="chart-bars">${bars.map(([month, height]) => `<div class="chart-column"><div class="chart-bar-stack"><i style="height:${height}%"></i><b style="height:${Math.max(18, height - 32)}%"></b></div><span>${month}</span></div>`).join("")}</div></div><div class="chart-legend"><span><i class="legend-income"></i> Receitas</span><span><i class="legend-expense"></i> Despesas</span></div></article><article class="data-card finance-health-card"><div class="section-heading"><div><p class="card-kicker">Saúde financeira</p><h2>Distribuição do mês</h2></div></div><div class="finance-donut"><div><strong>55,7%</strong><small>margem líquida</small></div></div><div class="finance-breakdown"><span><i class="dot blue"></i> Operação <b>42%</b></span><span><i class="dot pink"></i> Marketing <b>21%</b></span><span><i class="dot orange"></i> Pessoas <b>37%</b></span></div></article></section><section class="data-card finance-activity-card"><div class="section-heading"><div><p class="card-kicker">Movimentações</p><h2>Atividade financeira recente</h2></div><button class="filter-button" type="button">Ver tudo →</button></div>${financeTable(financeRows.receitas.slice(0, 4))}</section>`;
-}
-
-function renderReceitasView() {
-  const rows = financeRows.receitas;
-  dashboardGrid.innerHTML = `${financeIntro("Financeiro", "Receitas", "Acompanhe entradas, vencimentos e a previsibilidade do seu faturamento.", "+ Nova receita")}<section class="finance-metrics">${financeMetric("Faturado no mês", "R$ 42.300,00", "↑ 8,6% vs. mês anterior")} ${financeMetric("A receber", "R$ 38.940,00", "12 lançamentos pendentes", "warning")} ${financeMetric("Recebido", "R$ 31.600,00", "74,7% do faturado", "positive")}</section><section class="data-card revenue-forecast-card"><div class="section-heading"><div><p class="card-kicker">Previsibilidade</p><h2>Receita projetada</h2></div><span class="finance-badge">Próximos 90 dias</span></div><div class="revenue-forecast"><div><strong>R$ 126.800</strong><small>previsão acumulada</small></div><div class="forecast-line"><i style="height:34%"></i><i style="height:48%"></i><i style="height:43%"></i><i style="height:67%"></i><i style="height:61%"></i><i style="height:86%"></i><i style="height:76%"></i><i style="height:100%"></i></div></div></section><section class="data-card finance-activity-card"><div class="section-heading"><div><p class="card-kicker">Faturamento</p><h2>Receitas recentes</h2></div><div class="receivable-filters"><button class="filter-button is-active" type="button">Todas</button><button class="filter-button" type="button">Pendentes</button></div></div>${financeTable(rows)}</section>`;
-}
-
-function renderExpensesView() {
-  const categories = [["Pessoas", "R$ 8.240", 44, "blue"], ["Operação", "R$ 4.980", 27, "pink"], ["Marketing", "R$ 3.240", 17, "orange"], ["Tecnologia", "R$ 2.280", 12, "green"]];
-  dashboardGrid.innerHTML = `${financeIntro("Financeiro", "Despesas", "Controle custos, compromissos e o impacto de cada categoria no resultado.")}<section class="finance-metrics">${financeMetric("Total no mês", "R$ 18.740,00", "↓ 4,2% vs. mês anterior", "neutral")} ${financeMetric("Contas pendentes", "R$ 6.240,00", "3 vencem esta semana", "warning")} ${financeMetric("Orçamento utilizado", "68,4%", "Dentro do planejado", "positive")}</section><section class="finance-overview-grid expenses-overview"><article class="data-card expense-category-card"><div class="section-heading"><div><p class="card-kicker">Onde estamos investindo</p><h2>Por categoria</h2></div></div><div class="expense-categories">${categories.map(([name, value, percent, color]) => `<div class="expense-category"><div><span><i class="dot ${color}"></i>${name}</span><strong>${value}</strong></div><div class="expense-track"><i class="${color}" style="width:${percent}%"></i></div><small>${percent}% do total</small></div>`).join("")}</div></article><article class="data-card budget-card"><div class="section-heading"><div><p class="card-kicker">Planejamento</p><h2>Orçamento mensal</h2></div><span class="finance-badge">Junho</span></div><strong class="budget-value">R$ 27.400 <small>de R$ 40.000</small></strong><div class="budget-track"><i style="width:68%"></i></div><p>Você ainda pode investir <b>R$ 12.600</b> neste ciclo.</p><button class="filter-button" type="button">Ajustar orçamento</button></article></section><section class="data-card finance-activity-card"><div class="section-heading"><div><p class="card-kicker">Lançamentos</p><h2>Despesas recentes</h2></div><button class="filter-button" type="button">Filtrar</button></div>${financeTable(financeRows.despesas)}</section>`;
-}
-
-function renderReceivablesView() {
-  const timeline = [["Hoje", "Acme Inc.", "Mensalidade · Website", "R$ 8.400", "Recebido", "green"], ["22 Jun", "Vértice", "Parcela 2/4 · Aplicativo", "R$ 7.400", "Vence em 3 dias", "blue"], ["30 Jun", "Nexum", "Suporte mensal", "R$ 5.200", "Agendado", "orange"], ["05 Jul", "Orbit", "Consultoria estratégica", "R$ 3.900", "Agendado", "pink"]];
-  dashboardGrid.innerHTML = `${financeIntro("Financeiro", "Contas a receber", "Acompanhe vencimentos, recebimentos previstos e risco de inadimplência.", "+ Nova conta a receber")}<section class="finance-metrics">${financeMetric("Total a receber", "R$ 38.940,00", "↑ 14,8% no ciclo")} ${financeMetric("Em atraso", "R$ 4.280,00", "2 contas precisam de ação", "warning")} ${financeMetric("Recebido no mês", "R$ 31.600,00", "81,1% do previsto", "positive")} </section><section class="data-card receivables-card"><div class="section-heading"><div><p class="card-kicker">Agenda de recebimentos</p><h2>Próximos vencimentos</h2></div><div class="receivable-filters"><button class="filter-button is-active" type="button">Todos</button><button class="filter-button" type="button">Em atraso</button></div></div><div class="receivable-timeline">${timeline.map(([date, client, detail, value, status, tone]) => `<article class="receivable-item"><div class="timeline-date"><strong>${date}</strong><span>Jun · 2024</span></div><i class="timeline-dot ${tone}"></i><div class="receivable-main"><strong>${client}</strong><small>${detail}</small></div><strong class="receivable-value">${value}</strong><span class="finance-status ${tone}">${status}</span><button class="inbox-more" type="button" aria-label="Mais opções">•••</button></article>`).join("")}</div></section><section class="receivable-aging"><article class="data-card"><p class="card-kicker">Aging de recebíveis</p><h2>Por período</h2><div class="aging-grid"><span><b>R$ 31.600</b><small>A vencer</small></span><span><b>R$ 3.060</b><small>1–30 dias</small></span><span><b>R$ 1.220</b><small>31–60 dias</small></span></div></article></section>`;
-}
-
-function renderChargesView() {
-  const events = [["13 Jun · 09:42", "Lembrete enviado", "Acme Inc. recebeu o link de pagamento da mensalidade.", "Concluído", "green"], ["12 Jun · 16:18", "Pagamento confirmado", "Nexum confirmou o pagamento de R$ 5.200,00.", "Pago", "blue"], ["11 Jun · 10:05", "Cobrança criada", "Parcela 2/4 do projeto Aplicativo mobile.", "Aguardando", "orange"], ["09 Jun · 14:30", "Vencimento ultrapassado", "Orbit ainda não visualizou a cobrança de R$ 4.280,00.", "Ação necessária", "pink"]];
-  dashboardGrid.innerHTML = `${financeIntro("Financeiro", "Cobranças", "Centralize lembretes, links de pagamento e o histórico de cada cobrança.", "+ Nova cobrança")}<section class="finance-metrics">${financeMetric("Em aberto", "08", "R$ 14.860,00 em cobrança", "warning")} ${financeMetric("Taxa de recebimento", "92,4%", "↑ 3,1% este mês")} ${financeMetric("Tempo médio", "2,8 dias", "Até a confirmação", "neutral")}</section><section class="data-card charges-card"><div class="section-heading"><div><p class="card-kicker">Linha do tempo</p><h2>Atividade de cobranças</h2></div><button class="filter-button" type="button">Últimos 30 dias⌄</button></div><div class="charge-timeline">${events.map(([date, title, text, status, tone]) => `<article class="charge-event"><div class="charge-marker ${tone}"></div><div class="charge-event-body"><small>${date}</small><strong>${title}</strong><p>${text}</p></div><span class="finance-status ${tone}">${status}</span><button class="inbox-more" type="button" aria-label="Mais opções">•••</button></article>`).join("")}</div></section>`;
-}
-
-function renderSubscriptionsView() {
-  const subscriptions = [["Acme Inc.", "Plano Growth", "R$ 2.400,00", "18 Jun 2024", "Ativa", "blue"], ["Nexum", "Plano Scale", "R$ 1.800,00", "22 Jun 2024", "Ativa", "green"], ["Orbit", "Plano Starter", "R$ 890,00", "03 Jul 2024", "Trial", "orange"], ["Vértice", "Plano Growth", "R$ 2.400,00", "10 Jul 2024", "Ativa", "blue"], ["Lumen", "Plano Scale", "R$ 1.800,00", "15 Jul 2024", "Pausada", "pink"]];
-  dashboardGrid.innerHTML = `${financeIntro("Financeiro", "Assinaturas", "Gerencie receita recorrente, planos ativos e os próximos ciclos de cobrança.", "+ Nova assinatura")}<section class="finance-metrics">${financeMetric("MRR", "R$ 18.460,00", "↑ 9,8% no mês")} ${financeMetric("Assinaturas ativas", "42", "3 novas este mês")} ${financeMetric("Churn mensal", "2,4%", "↓ 0,8% vs. anterior", "positive")} ${financeMetric("Ticket médio", "R$ 439,00", "↑ 4,2% no período", "neutral")}</section><section class="data-card subscriptions-card"><div class="section-heading"><div><p class="card-kicker">Receita recorrente</p><h2>Carteira de assinaturas</h2></div><div class="receivable-filters"><button class="filter-button is-active" type="button">Todas</button><button class="filter-button" type="button">Ativas</button><button class="filter-button" type="button">Em risco</button></div></div><div class="subscription-list">${subscriptions.map(([client, plan, value, date, status, tone]) => `<article class="subscription-row"><span class="lead-avatar">${client.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span><div class="subscription-client"><strong>${client}</strong><small>${plan}</small></div><div><small>Valor mensal</small><strong>${value}</strong></div><div><small>Próxima cobrança</small><strong>${date}</strong></div><span class="finance-status ${tone}">${status}</span><button class="inbox-more" type="button" aria-label="Mais opções">•••</button></article>`).join("")}</div></section>`;
-}
-
-const customerModuleData = {
-  conversas: {
-    kicker: "Relacionamento",
-    title: "Conversas",
-    intro: "Acompanhe cada troca com clientes e mantenha o próximo passo sempre claro.",
-  },
-  contatos: {
-    kicker: "Base de relacionamento",
-    title: "Contatos",
-    intro: "Uma visão viva das pessoas que fazem os projetos da FocusDev avançarem.",
-  },
-  "consulta-cnpj": {
-    kicker: "Inteligência comercial",
-    title: "Consulta CNPJ",
-    intro: "Valide empresas, encontre contexto e transforme uma busca em uma conversa relevante.",
-  },
-  clientes: {
-    kicker: "Carteira",
-    title: "Clientes",
-    intro: "Saúde, relacionamento e próximos marcos da sua carteira em um único lugar.",
-  },
-  "portal-do-cliente": {
-    kicker: "Experiência externa",
-    title: "Portal do cliente",
-    intro: "Dê autonomia ao cliente para acompanhar entregas, documentos e aprovações.",
-  },
-  empresas: {
-    kicker: "Organização",
-    title: "Empresas",
-    intro: "Conecte contatos, projetos e decisões à estrutura certa de cada negócio.",
-  }
-};
-
-function renderCustomerModuleView(key) {
-  const d = customerModuleData[key];
-  const esc = escapeHtml;
-  const initials = (name) => name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-  const contactRows = [
-    ["Marina Lopes", "Acme Inc.", "Diretora de Marketing", "Ativa", "Agora"],
-    ["Bruno Almeida", "Nexum", "CEO", "Ativa", "Hoje, 09:18"],
-    ["Carolina Mendes", "Vértice", "Produto", "Em reunião", "Ontem"],
-    ["Diego Nunes", "Orbit", "Operações", "Aguardando", "12 set"]
-  ];
-  const clientRows = [
-    ["Acme Inc.", "Website institucional", "R$ 24.000", "Saudável", "78%"],
-    ["Vértice", "Aplicativo mobile", "R$ 42.800", "Atenção", "46%"],
-    ["Nexum", "Campanha de lançamento", "R$ 18.400", "Saudável", "92%"],
-    ["Orbit", "Portal do cliente", "R$ 31.200", "Novo", "28%"]
-  ];
-  const companyRows = [
-    ["Acme Inc.", "12.345.678/0001-90", "São Paulo, SP", "4 contatos", "Ativa"],
-    ["Nexum Tecnologia", "45.678.901/0001-22", "Curitiba, PR", "7 contatos", "Ativa"],
-    ["Vértice Saúde", "67.890.123/0001-44", "Belo Horizonte, MG", "3 contatos", "Ativa"],
-    ["Orbit Ventures", "89.012.345/0001-66", "Rio de Janeiro, RJ", "5 contatos", "Em implantação"]
-  ];
-  const stat = (label, value, note, tone = "blue") => `<article class="data-card customer-stat stat-${tone}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`;
-  const pageStart = `<section class="page-intro customer-intro"><div><p class="card-kicker">${d.kicker}</p><h2>${d.title}</h2><p>${d.intro}</p></div><div class="customer-hero-mark"><span>✦</span><small>FOCUSDEV / SPIDER</small></div></section>`;
-  let markup = pageStart;
-
-  if (key === "conversas") {
-    const conversations = [
-      ["Marina Lopes", "Aprovação do briefing", "O cliente respondeu e pediu dois ajustes no escopo.", "09:42", "ML", true],
-      ["Bruno Almeida", "Próximos passos do site", "Consegue me enviar a nova previsão de publicação?", "Ontem", "BA", false],
-      ["Carolina Mendes", "Aplicativo mobile", "Perfeito. Vou validar com o time de produto.", "12 set", "CM", false],
-      ["Diego Nunes", "Kickoff Portal", "Compartilhei os acessos no documento do projeto.", "11 set", "DN", false]
-    ];
-    markup += `<section class="customer-metrics">${stat("Conversas abertas", "18", "+4 nesta semana", "red")}${stat("Tempo de resposta", "1h 42", "média no mês", "blue")}${stat("Pendentes", "05", "2 prioritárias", "gold")}</section><section class="customer-split"><section class="data-card conversation-card"><div class="section-heading"><div><p class="card-kicker">Central de relacionamento</p><h2>Caixa de conversas</h2></div><div class="conversation-tabs"><button class="is-active" data-conversation-filter="Todas" type="button">Todas</button><button data-conversation-filter="Não lidas" type="button">Não lidas</button></div></div><div class="conversation-list">${conversations.map(([name, subject, preview, time, avatar, unread]) => `<button class="conversation-row ${unread ? "is-unread" : ""}" data-conversation="${unread ? "Não lidas" : "Todas"}" type="button"><span class="customer-avatar">${avatar}</span><span class="conversation-copy"><span><strong>${name}</strong><time>${time}</time></span><b>${subject}</b><small>${preview}</small></span>${unread ? '<i class="unread-dot"></i>' : ""}</button>`).join("")}</div></section><aside class="data-card customer-focus-card"><p class="card-kicker">Radar do time</p><h2>Próximas respostas</h2><div class="focus-line"><span class="focus-icon">!</span><div><strong>Marina Lopes</strong><small>Ajustes no briefing · há 18 min</small></div></div><div class="focus-line"><span class="focus-icon blue">↗</span><div><strong>Diego Nunes</strong><small>Enviar acesso ao portal · hoje</small></div></div><button class="button button-primary" type="button" data-toast="Conversa iniciada com sucesso.">+ Iniciar conversa</button></aside></section>`;
-  } else if (key === "contatos") {
-    markup += `<section class="customer-metrics">${stat("Contatos totais", "248", "+12 este mês", "blue")}${stat("Com interação recente", "184", "74% da base", "red")}${stat("Sem empresa", "09", "Precisam de vínculo", "gold")}</section><section class="data-card contacts-card"><div class="section-heading"><div><p class="card-kicker">Diretório inteligente</p><h2>Pessoas e vínculos</h2></div><div class="customer-actions"><label class="inline-search"><span>⌕</span><input data-contact-search placeholder="Buscar contato" /></label><button class="button button-primary compact-action" type="button" data-toast="Novo contato pronto para cadastro.">+ Novo contato</button></div></div><div class="contact-grid">${contactRows.map(([name, company, role, status, last]) => `<article class="contact-tile" data-contact-name="${name.toLowerCase()}"><div class="contact-tile-head"><span class="customer-avatar avatar-alt">${initials(name)}</span><span class="status-pill">${status}</span></div><h3>${name}</h3><p>${role}</p><strong>${company}</strong><small>Última interação <b>${last}</b></small><div class="contact-tile-actions"><button type="button" data-toast="Conversa aberta com ${name}.">Mensagem</button><button type="button" data-toast="Perfil de ${name} selecionado.">Ver perfil</button></div></article>`).join("")}</div></section>`;
-  } else if (key === "consulta-cnpj") {
-    markup += `<section class="cnpj-hero"><div><span class="cnpj-badge">BASE RECEITA + FOCUSDEV</span><h3>Descubra o contexto por trás de um CNPJ.</h3><p>Consulte dados cadastrais e salve empresas qualificadas para o seu próximo contato.</p></div><form class="cnpj-form"><label for="cnpj-input">CNPJ da empresa</label><div><input id="cnpj-input" inputmode="numeric" placeholder="00.000.000/0000-00" value="12.345.678/0001-90" /><button class="button button-primary" type="submit">Consultar</button></div><small>Exemplo: Acme Inc. · resposta simulada local</small></form></section><section class="data-card cnpj-result" aria-live="polite"><div class="cnpj-result-placeholder"><span>⌁</span><div><strong>Pronto para consultar</strong><p>Digite um CNPJ para visualizar os dados da empresa.</p></div></div></section><section class="customer-metrics">${stat("Consultas no mês", "42", "8 novas oportunidades", "blue")}${stat("Empresas salvas", "16", "3 com alta aderência", "red")}${stat("Dados atualizados", "Hoje", "Última sincronização 10:24", "gold")}</section>`;
-  } else if (key === "clientes") {
-    markup += `<section class="customer-metrics">${stat("Carteira ativa", "24", "R$ 318 mil recorrentes", "red")}${stat("NPS da carteira", "72", "+8 pts no trimestre", "blue")}${stat("Renovações", "03", "próximos 30 dias", "gold")}</section><section class="data-card clients-card"><div class="section-heading"><div><p class="card-kicker">Visão executiva</p><h2>Saúde dos clientes</h2></div><div class="client-filters"><button class="is-active" data-client-filter="Todos" type="button">Todos</button><button data-client-filter="Saudável" type="button">Saudáveis</button><button data-client-filter="Atenção" type="button">Atenção</button></div></div><div class="client-table">${clientRows.map(([company, project, value, health, progress]) => `<button class="client-row" data-client-health="${health}" type="button"><span class="company-logo">${company.slice(0, 1)}</span><span><strong>${company}</strong><small>${project}</small></span><b>${value}</b><span class="health health-${health.toLowerCase().replace("ã", "a")}">${health}</span><span class="client-progress"><i style="width:${progress}"></i></span><em>${progress}</em></button>`).join("")}</div></section>`;
-  } else if (key === "portal-do-cliente") {
-    markup += `<section class="portal-banner"><div class="portal-copy"><span class="portal-orbit">◉</span><div><p class="card-kicker">Área externa segura</p><h3>O cliente acompanha. Seu time entrega.</h3><p>Centralize aprovações, arquivos e atualizações em uma experiência com a marca da FocusDev.</p><button class="button button-primary" type="button" data-toast="Link de convite copiado para a área de transferência.">Copiar link de convite</button></div></div><div class="portal-preview"><span>PORTAL / ACME</span><strong>Olá, Marina</strong><small>Seu projeto está avançando</small><div><i></i><i></i><i></i></div></div></section><section class="customer-metrics">${stat("Portais ativos", "08", "2 aguardando convite", "blue")}${stat("Aprovações abertas", "04", "R$ 38 mil em projetos", "red")}${stat("Acessos este mês", "126", "+21% contra agosto", "gold")}</section><section class="data-card portal-list-card"><div class="section-heading"><div><p class="card-kicker">Espaços publicados</p><h2>Portais dos clientes</h2></div><button class="filter-button" type="button" data-toast="Novo portal iniciado.">+ Criar portal</button></div><div class="portal-list">${[["Acme Inc.", "marina@acme.com", "Ativo", "Hoje, 09:12"], ["Vértice", "carolina@vertice.com", "Ativo", "Ontem, 16:40"], ["Orbit", "diego@orbit.com", "Convite pendente", "Sem acesso"]].map(([company, email, status, last]) => `<article><span class="company-logo">${company[0]}</span><div><strong>${company}</strong><small>${email}</small></div><span class="portal-status ${status.includes("pendente") ? "pending" : ""}">${status}</span><small>${last}</small><button class="inbox-more" type="button" data-toast="Ações de ${company} abertas." aria-label="Mais opções">•••</button></article>`).join("")}</div></section>`;
-  } else {
-    markup += `<section class="company-overview"><div class="company-network"><span class="network-line"></span><div class="company-emblem">FD</div><div class="network-node node-a">AC</div><div class="network-node node-b">NX</div><div class="network-node node-c">VT</div><p><strong>FocusDev</strong><small>Empresa principal · São Paulo</small></p></div><div class="company-overview-copy"><p class="card-kicker">Mapa da operação</p><h3>Empresas conectadas ao seu workspace.</h3><p>Tenha uma visão única das unidades e dos vínculos que alimentam sua operação comercial.</p><button class="button button-primary" type="button" data-toast="Nova empresa pronta para cadastro.">+ Cadastrar empresa</button></div></section><section class="data-card companies-card"><div class="section-heading"><div><p class="card-kicker">Todas as organizações</p><h2>Empresas cadastradas</h2></div><label class="inline-search"><span>⌕</span><input data-company-search placeholder="Buscar empresa" /></label></div><div class="company-list">${companyRows.map(([company, cnpj, city, contacts, status]) => `<article data-company-name="${company.toLowerCase()}"><span class="company-logo">${company.slice(0, 1)}</span><div><strong>${company}</strong><small>${cnpj}</small></div><span><b>${city}</b><small>${contacts}</small></span><span class="status-pill">${status}</span><button class="filter-button" type="button" data-toast="Empresa ${company} selecionada.">Abrir</button></article>`).join("")}</div></section>`;
-  }
-  dashboardGrid.innerHTML = markup;
-  bindCustomerInteractions(key);
-}
-
-function bindCustomerInteractions(key) {
-  const toast = (message) => { let node = document.querySelector(".customer-toast"); if (!node) { node = document.createElement("div"); node.className = "customer-toast"; document.body.append(node); } node.textContent = message; node.classList.add("is-visible"); window.clearTimeout(node._timer); node._timer = window.setTimeout(() => node.classList.remove("is-visible"), 2400); };
-  dashboardGrid.querySelectorAll("[data-toast]").forEach((button) => button.addEventListener("click", () => toast(button.dataset.toast)));
-  dashboardGrid.querySelectorAll("[data-conversation-filter]").forEach((button) => button.addEventListener("click", () => { dashboardGrid.querySelectorAll("[data-conversation-filter]").forEach((item) => item.classList.toggle("is-active", item === button)); dashboardGrid.querySelectorAll("[data-conversation]").forEach((row) => { row.hidden = button.dataset.conversationFilter === "Não lidas" && row.dataset.conversation !== "Não lidas"; }); }));
-  const bindSearch = (input, selector, attribute) => input?.addEventListener("input", () => { const query = input.value.trim().toLowerCase(); dashboardGrid.querySelectorAll(selector).forEach((item) => { item.hidden = query && !item.dataset[attribute].includes(query); }); });
-  bindSearch(dashboardGrid.querySelector("[data-contact-search]"), "[data-contact-name]", "contactName");
-  bindSearch(dashboardGrid.querySelector("[data-company-search]"), "[data-company-name]", "companyName");
-  dashboardGrid.querySelectorAll("[data-client-filter]").forEach((button) => button.addEventListener("click", () => { dashboardGrid.querySelectorAll("[data-client-filter]").forEach((item) => item.classList.toggle("is-active", item === button)); dashboardGrid.querySelectorAll("[data-client-health]").forEach((row) => { row.hidden = button.dataset.clientFilter !== "Todos" && row.dataset.clientHealth !== button.dataset.clientFilter; }); }));
-  dashboardGrid.querySelector(".cnpj-form")?.addEventListener("submit", (event) => { event.preventDefault(); const input = dashboardGrid.querySelector("#cnpj-input"); const digits = input.value.replace(/\D/g, ""); const result = dashboardGrid.querySelector(".cnpj-result"); result.innerHTML = digits.length >= 14 ? `<div class="cnpj-company-result"><span class="company-logo">A</span><div><p class="card-kicker">Empresa encontrada</p><h2>Acme Inc.</h2><p>12.345.678/0001-90 · Comércio e serviços digitais</p></div><span class="status-pill">Ativa</span><button class="button button-secondary" type="button" data-toast="Acme Inc. salva na sua base de empresas.">Salvar empresa</button></div>` : `<div class="cnpj-error"><strong>CNPJ incompleto</strong><p>Confira os 14 dígitos e tente novamente.</p></div>`; bindCustomerInteractions(key); });
 }
 
 const DASHBOARD_PROFILE_KEY = "focusdev_dashboard_profile";
@@ -884,27 +665,21 @@ function renderWorkspaceView(hash, label) {
     applyDashboardProfile();
     return;
   }
-  if (key === "crm") { renderCRMView(); return; }
-  if (key === "agenda") { renderAgendaView(); return; }
-  if (key === "tarefas") { renderTasksView(); return; }
-  if (key === "caixa-de-entrada") { renderInboxView(); return; }
-  if (customerModuleData[key]) { renderCustomerModuleView(key); return; }
-  if (key === "leads") { renderLeadsView(); return; }
-  if (key === "campanhas") { renderCampaignsView(); return; }
-  if (key === "funil") { renderFunnelView(); return; }
-  if (key === "oportunidades") { renderOpportunitiesView(); return; }
-  if (key === "propostas") { renderProposalsView(); return; }
-  if (key === "follow-ups") { renderFollowupsView(); return; }
-  if (renderOperationsView(key)) return;
-  if (key === "visao-financeira") { renderFinanceOverview(); return; }
-  if (key === "despesas") { renderExpensesView(); return; }
-  if (key === "contas-a-receber") { renderReceivablesView(); return; }
-  if (key === "cobrancas") { renderChargesView(); return; }
-  if (key === "assinaturas") { renderSubscriptionsView(); return; }
-  if (key === "receitas") { renderReceitasView(); return; }
-  const view = views[key] || { kicker: document.querySelector(".eyebrow").textContent, title: label, intro: "Esta área está pronta para receber seus dados.", columns: ["Item", "Responsável", "Atualização", "Status"], rows: [["Nenhum registro carregado", "—", "Agora", "Aguardando dados"]] };
+  const render = routeRenderers[key];
+  if (render) {
+    try {
+      const result = render(key, label);
+      if (result && typeof result.catch === "function") result.catch((error) => { console.error(`Falha ao renderizar ${key}`, error); dashboardGrid.innerHTML = stateBlock.error(error?.message); });
+    } catch (error) {
+      console.error(`Falha ao renderizar ${key}`, error);
+      dashboardGrid.innerHTML = stateBlock.error(error?.message);
+    }
+    return;
+  }
+
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">${view.kicker}</p><h2>${view.title}</h2><p>${view.intro}</p></div><button class="button button-primary compact-action" type="button">+ Novo</button></section><section class="data-card table-card"><div class="section-heading"><div><p class="card-kicker">Visão geral</p><h2>Registros recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="table-wrap"><table><thead><tr>${view.columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead><tbody>${view.rows.map((row) => `<tr>${row.map((cell, index) => `<td class="${index === row.length - 1 ? "status-cell" : ""}">${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section><section class="quick-summary"><article class="data-card"><span class="metric-label">Total de registros</span><strong>${view.rows.length}</strong><small class="positive">↑ 4,2% este mês</small></article><article class="data-card"><span class="metric-label">Atualizados hoje</span><strong>08</strong><small class="neutral">Última atualização há 12 min</small></article><article class="data-card"><span class="metric-label">Precisam de atenção</span><strong>03</strong><small class="warning">Verificar pendências</small></article></section>`;
 }
+
 
 const searchableItems = [...document.querySelectorAll(".nav-item")];
 function renderSearchResults(query) {
@@ -958,6 +733,11 @@ topLogoutButton?.addEventListener("click", async () => {
   emailInput.focus();
 });
 
-restoreSession().then(() => {
-  renderHashRoute();
-});
+const bootResetToken = readResetTokenFromHash();
+if (bootResetToken) {
+  showNewPassword(bootResetToken);
+} else {
+  restoreSession().then(() => {
+    renderHashRoute();
+  });
+}

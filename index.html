@@ -17,8 +17,18 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=6" />
-    <script src="app.js?v=6" defer></script>
+    <link rel="stylesheet" href="styles.css?v=7" />
+    <!-- Núcleo primeiro; os módulos (um por área do menu) registram suas rotas depois. -->
+    <script src="app.js?v=7" defer></script>
+    <script src="modules/meu-dia.js?v=7" defer></script>
+    <script src="modules/inbox.js?v=7" defer></script>
+    <script src="modules/crm.js?v=7" defer></script>
+    <script src="modules/contas.js?v=7" defer></script>
+    <script src="modules/operacao.js?v=7" defer></script>
+    <script src="modules/financeiro.js?v=7" defer></script>
+    <script src="modules/catalogo.js?v=7" defer></script>
+    <script src="modules/automacoes.js?v=7" defer></script>
+    <script src="modules/configuracoes.js?v=7" defer></script>
     <script>if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));</script>
   </head>
   <body>
@@ -153,6 +163,29 @@
             <button class="button button-primary" id="register-submit" type="submit"><span class="button-label">Criar conta</span><span class="button-spinner" aria-hidden="true"></span></button>
             <p class="form-status" id="register-status" role="status" aria-live="polite"></p>
           </form>
+        </div>
+
+        <div class="auth-screen" id="new-password-screen" hidden>
+          <div class="brand" aria-label="FocusDev"><span class="brand-focus">Focus</span><span class="brand-dev">Dev</span></div>
+          <header class="auth-heading">
+            <h1>Crie uma nova senha</h1>
+            <p>Escolha uma senha com pelo menos 8 caracteres para voltar ao seu workspace.</p>
+          </header>
+          <form class="form" id="new-password-form" novalidate>
+            <div class="field">
+              <label for="new-password">Nova senha</label>
+              <div class="control"><input id="new-password" name="new-password" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" aria-describedby="new-password-error" required /></div>
+              <p class="field-error" id="new-password-error"></p>
+            </div>
+            <div class="field">
+              <label for="new-password-confirm">Confirmar nova senha</label>
+              <div class="control"><input id="new-password-confirm" name="new-password-confirm" type="password" placeholder="Repita a nova senha" autocomplete="new-password" aria-describedby="new-password-confirm-error" required /></div>
+              <p class="field-error" id="new-password-confirm-error"></p>
+            </div>
+            <button class="button button-primary" id="new-password-submit" type="submit"><span class="button-label">Salvar nova senha</span><span class="button-spinner" aria-hidden="true"></span></button>
+            <p class="form-status" id="new-password-status" role="status" aria-live="polite"></p>
+          </form>
+          <button class="link-button back-link" id="new-password-back" type="button" style="margin-top:20px">Voltar para o login</button>
         </div>
 
         <div class="auth-screen" id="reset-screen" hidden>
