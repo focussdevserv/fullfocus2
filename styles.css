@@ -1342,7 +1342,7 @@ body.dark-mode .calendar-card,
 body.dark-mode .day-agenda,
 body.dark-mode .agenda-upcoming {
   border-color: rgb(145 180 230 / 24%);
-  background: linear-gradient(135deg, rgb(26 47 78 / 72%), rgb(8 19 38 / 58%));
+  background-color: rgb(26 47 78 / 72%);
   box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 14px 30px rgb(0 0 0 / 20%);
 }
 body.dark-mode .calendar-toolbar h2,
