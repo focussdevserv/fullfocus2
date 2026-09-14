@@ -371,6 +371,9 @@ async function proposalDrawer(id, after) {
     const { proposal: p } = await api(`/api/proposals/${id}`);
     const catalog = await options("catalog");
     let items = (p.items || []).map((i) => ({ ...i }));
+    const pendingCatalogId = sessionStorage.getItem("focusdev.catalogItemId");
+    const pendingCatalogItem = catalog.find((item) => String(item.id) === pendingCatalogId);
+    if (pendingCatalogItem && !items.some((item) => String(item.catalog_item_id) === pendingCatalogId)) { items.push({ description: pendingCatalogItem.name, quantity: 1, unit_price: pendingCatalogItem.price, catalog_item_id: pendingCatalogItem.id }); sessionStorage.removeItem("focusdev.catalogItemId"); }
     const render = () => {
       const total = items.reduce((n, i) => n + Number(i.quantity || 0) * Number(i.unit_price || 0), 0);
       d.body.innerHTML = `
