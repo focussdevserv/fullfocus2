@@ -6,7 +6,7 @@ const tr = {
   project_overdue: "Projeto atrasado", receivable_due_soon: "Parcela próxima do vencimento", receivable_overdue: "Parcela vencida",
   payment_confirmed: "Pagamento confirmado", payment_overdue: "Pagamento atrasado", ticket_created: "Ticket aberto",
   ticket_no_response: "Ticket sem resposta", customer_message: "Cliente enviou mensagem", scheduled_datetime: "Data ou horário definido",
-  webhook_received: "Webhook recebido", freelancer_project_finished: "Freelancer finalizou projeto", sale_won: "Venda concluída", team_member_invited: "Novo membro convidado", member_added_to_project: "Membro adicionado a projeto", project_member_added: "Membro adicionado a projeto", task_assigned: "Tarefa atribuída", member_overloaded: "Membro sobrecarregado", absence_started: "Férias iniciadas",
+  webhook_received: "Webhook recebido", freelancer_project_finished: "Freelancer finalizou projeto", sale_won: "Venda concluída", team_member_invited: "Novo membro convidado", member_added_to_project: "Membro adicionado a projeto", project_member_added: "Membro adicionado a projeto", task_assigned: "Tarefa atribuída", member_overloaded: "Membro sobrecarregado", absence_started: "Férias iniciadas", user_deactivated: "Usuário desativado",
 };
 const act = {
   notify: "Notificar equipe", notify_responsible: "Lembrar responsável", create_task: "Criar tarefa", send_message: "Enviar WhatsApp", send_email: "Enviar e-mail", send_onboarding: "Enviar acesso e orientações",
@@ -14,7 +14,7 @@ const act = {
   update_status: "Alterar status", move_pipeline: "Mover no funil", assign_owner: "Atribuir responsável", add_tag: "Adicionar etiqueta",
   webhook: "Chamar webhook", n8n_flow: "Executar fluxo n8n", wait: "Aguardar período", end: "Encerrar automação",
   calculate_commission: "Calcular comissão", reassign_support: "Reatribuir atendimento", create_calendar_event: "Criar evento no calendário",
-  request_satisfaction: "Solicitar pesquisa de satisfação", generate_document: "Gerar e enviar documento", grant_project_access: "Liberar arquivos e tarefas",
+  request_satisfaction: "Solicitar pesquisa de satisfação", generate_document: "Gerar e enviar documento", grant_project_access: "Liberar arquivos e tarefas", revoke_access: "Encerrar acesso",
 };
 const tk = { proposal: "Proposta", contract: "Contrato", project: "Projeto", task: "Tarefa", checklist: "Checklist", charge: "Cobrança", followup: "Follow-up", support: "Atendimento", ticket: "Resposta de ticket", briefing: "Briefing", delivery_term: "Termo de entrega", report: "Relatório", notification: "Notificação", email: "E-mail", message: "Mensagem", whatsapp: "WhatsApp" };
 const providers = { whatsapp: "WhatsApp/Evolution API", email: "Gmail", smtp: "SMTP", google_calendar: "Google Calendar", google_drive: "Google Drive", github: "GitHub", n8n: "n8n", mercado_pago: "Mercado Pago", asaas: "Asaas", stripe: "Stripe", firebase: "Firebase", supabase: "Supabase", cnpj: "Consulta CNPJ", esign: "Assinatura eletrônica", webhook: "Webhook", api: "API própria" };

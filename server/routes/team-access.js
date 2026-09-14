@@ -39,6 +39,7 @@ export function register(app, ctx) {
       if (!target.rowCount) return res.status(404).json({ error: "Membro não encontrado." });
       if (target.rows[0].role === "owner" && (await roleOf(req, org)) !== "owner") return res.status(403).json({ error: "Apenas proprietários podem alterar o acesso de um proprietário." });
       const q = await pool.query("update users set access_status=$1,access_revoked_at=case when $1='active' then null else now() end,deactivated_at=case when $1='active' then null else now() end where id=$2 and organization_id=$3 returning id,name,email,role,access_status,created_at", [accessStatus, req.params.id, org]);
+      if (accessStatus !== "active") await pool.query("insert into team_access_events (organization_id,user_id,access_status) values ($1,$2,$3)", [org, req.params.id, accessStatus]);
       res.json({ user: q.rows[0] });
     } catch { res.status(503).json({ error: "Não foi possível atualizar o acesso." }); }
   });

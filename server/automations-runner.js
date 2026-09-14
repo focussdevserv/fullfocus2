@@ -16,6 +16,7 @@ const SOURCE_TABLES = {
   member_overloaded: "users",
   absence_started: "absences",
   sale_won: "opportunities",
+  user_deactivated: "team_access_events",
 };
 
 const sourceWhere = {
@@ -33,6 +34,7 @@ const sourceWhere = {
   member_overloaded: "coalesce(s.access_status,'active') = 'active' and (select count(*) from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) > 5",
   absence_started: "s.starts_on = $2::date and lower(s.kind) in ('vacation','ferias','férias')",
   sale_won: "s.stage in ('won','closed_won','sale_won')",
+  user_deactivated: "s.created_at <= $2",
 };
 
 const sourceMessage = (trigger, row) => {
@@ -46,6 +48,7 @@ const sourceMessage = (trigger, row) => {
   if (trigger === "task_assigned") return `Nova tarefa atribuída: ${row.title}`;
   if (trigger === "member_overloaded") return `Membro sobrecarregado: ${row.name} (${row.open_tasks} tarefas abertas)`;
   if (trigger === "absence_started") return `Férias iniciadas: ${row.member_name || row.user_id}`;
+  if (trigger === "user_deactivated") return `Usuário desativado: ${row.member_name || row.user_id}`;
   return `Novo ticket: ${row.title}`;
 };
 
@@ -53,8 +56,8 @@ async function findSources(client, automation, now) {
   const table = SOURCE_TABLES[automation.trigger];
   const where = sourceWhere[automation.trigger];
   if (!table || !where) return [];
-  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : automation.trigger === "task_assigned" ? "select s.*,u.name member_name,u.email" : automation.trigger === "member_overloaded" ? "select s.*,(select count(*)::int from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) open_tasks" : automation.trigger === "absence_started" ? "select s.*,u.name member_name,u.manager_id" : automation.trigger === "sale_won" ? "select s.*,(select c.id from clients c where c.organization_id=s.organization_id and ((s.contact_id is not null and c.contact_id=s.contact_id) or (s.company_id is not null and c.company_id=s.company_id)) order by c.id limit 1) client_id" : "select s.*";
-  const joins = table === "project_members" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id join projects p on p.id=s.project_id and p.organization_id=s.organization_id" : automation.trigger === "task_assigned" ? " join users u on u.id=s.assignee_id and u.organization_id=s.organization_id" : automation.trigger === "absence_started" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : "";
+  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : automation.trigger === "task_assigned" ? "select s.*,u.name member_name,u.email" : automation.trigger === "member_overloaded" ? "select s.*,(select count(*)::int from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) open_tasks" : automation.trigger === "absence_started" ? "select s.*,u.name member_name,u.manager_id" : automation.trigger === "sale_won" ? "select s.*,(select c.id from clients c where c.organization_id=s.organization_id and ((s.contact_id is not null and c.contact_id=s.contact_id) or (s.company_id is not null and c.company_id=s.company_id)) order by c.id limit 1) client_id" : automation.trigger === "user_deactivated" ? "select s.*,u.name member_name,u.manager_id,u.email" : "select s.*";
+  const joins = table === "project_members" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id join projects p on p.id=s.project_id and p.organization_id=s.organization_id" : automation.trigger === "task_assigned" ? " join users u on u.id=s.assignee_id and u.organization_id=s.organization_id" : automation.trigger === "absence_started" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : automation.trigger === "user_deactivated" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : "";
   const query = `${select} from ${table} s${joins} where s.organization_id=$1 and ${where}
     and not exists (select 1 from automation_runs r where r.automation_id=$3 and r.source_type=$4 and r.source_id=s.id)
     order by s.id limit 100`;
@@ -145,6 +148,12 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     if (!source.client_id) return { action: "reassign_support", user_id: targetId, tickets: 0 };
     const updated = await client.query("update tickets set assignee_id=$1,updated_at=now() where organization_id=$2 and client_id=$3 and status not in ('done','cancelled')", [targetId, automation.organization_id, source.client_id]);
     return { action: "reassign_support", user_id: targetId, tickets: updated.rowCount || 0, client_id: source.client_id };
+  }
+  if (automation.action === "revoke_access") {
+    if (!source.user_id) throw new Error("O evento de desativação não possui usuário vinculado.");
+    const revoked = await client.query("update users set access_status='inactive',access_revoked_at=coalesce(access_revoked_at,now()),deactivated_at=coalesce(deactivated_at,now()) where id=$1 and organization_id=$2 returning id", [source.user_id, automation.organization_id]);
+    if (!revoked.rowCount) throw new Error("Usuário desativado não pertence ao workspace.");
+    return { action: "revoke_access", user_id: source.user_id };
   }
   if (automation.action === "calculate_commission") {
     const baseAmount = Math.max(0, Number(source.total_value || source.value || config.base_amount || 0));
