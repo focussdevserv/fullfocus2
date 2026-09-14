@@ -149,7 +149,14 @@ Achados representativos:
 - Observabilidade (logs estruturados, métricas, tracing, alertas), backups/restore, migrações no CI/CD, CSP, DAST e testes de carga.
 - Remover dados fake, validar todas as telas/ações, revisar licença dos assets Spider-Man e fazer aceite funcional ponta a ponta.
 
+## Achados da validação real no Chrome — 14/09/2026
+
+- Corrigido/P0: Alterações de escopo quebrava ao carregar por referenciar `changeData` fora do escopo; agora usa a paginação da resposta recebida.
+- Corrigido/P0: o helper de campos do módulo de Contas marcava todo campo sem `required: false` como obrigatório; campos agora são opcionais por padrão.
+- Validado: Tarefas (criar/concluir), Agenda (criar/excluir), Leads (criar/editar/excluir) e navegação de Tickets, Receitas, Automações, Templates, Integrações e Formulários.
+- Pendente/P1: executar CRUD visual completo nas demais áreas e cobrir upload, exportação, integrações externas e permissões com usuários distintos.
+- Pendente/P1: revisar mensagens/toasts que podem permanecer visíveis durante a troca rápida de telas.
+
 ## Critério de pronto sugerido
 
 Nenhuma rota de domínio responde sem contexto autorizado; cada botão de criação/edição/exclusão tem API persistente, feedback de erro e teste; dashboard e todas as listagens são filtrados por workspace; migrations são reproduzíveis; CI executa sintaxe, unitários, integração, autorização e smoke; uma reinstalação limpa não depende de seed global nem de estado local do browser.
-

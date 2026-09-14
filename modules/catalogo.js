@@ -1,7 +1,7 @@
 const types = { product: "Produto", service: "Serviço", package: "Pacote", plan: "Plano", subscription: "Assinatura", addon: "Serviço adicional" };
 const esc = (value) => escapeHtml(value ?? "");
 const catalogFilter = { search: "", kind: "", active: "" };
-const cfg = { title: "Novo item", endpoint: "/api/catalog-items", fields: [{ name: "name", label: "Nome" }, { name: "kind", label: "Tipo", type: "select", options: Object.entries(types) }, { name: "price", label: "Preço", type: "number" }, { name: "unit", label: "Unidade", required: false }, { name: "description", label: "Descrição", required: false }] };
+const cfg = { title: "Novo item", endpoint: "/api/catalog-items", fields: [{ name: "name", label: "Nome", required: true, help: "Obrigatório" }, { name: "kind", label: "Tipo", type: "select", options: Object.entries(types), required: true }, { name: "price", label: "Preço", type: "number", required: true, help: "Obrigatório" }, { name: "unit", label: "Unidade", required: false }, { name: "description", label: "Descrição", required: false }] };
 Object.assign(createConfig, { item: cfg });
 cfg.fields.push(
   { name: "category", label: "Categoria", required: false }, { name: "short_description", label: "Descrição curta", required: false }, { name: "full_description", label: "Descrição completa", type: "textarea", required: false },
@@ -25,10 +25,10 @@ async function renderCatalog() {
     let timer; search.oninput = () => { clearTimeout(timer); catalogFilter.search = search.value.trim(); timer = setTimeout(renderCatalog, 250); };
     kind.onchange = () => { catalogFilter.kind = kind.value; renderCatalog(); }; active.onchange = () => { catalogFilter.active = active.value; renderCatalog(); };
     dashboardGrid.querySelector("[data-new]").onclick = () => openCreateDialog("item");
-    dashboardGrid.querySelector("[data-public-catalog]")?.addEventListener("click", async () => { const link = `${location.origin}/catalog/${me.user.organization_id}`; await navigator.clipboard?.writeText(link); window.open(link, "_blank", "noopener"); toast("Catálogo público aberto e link copiado.", "success"); });
+    dashboardGrid.querySelector("[data-public-catalog]")?.addEventListener("click", async () => { const link = `${location.origin}/catalog/${me.user.organization_id}`; await navigator.clipboard?.writeText(link); window.open(link, "_blank", "noopener"); ui.toast("Catálogo público aberto e link copiado.", "success"); });
     dashboardGrid.querySelectorAll("[data-use]").forEach((button) => button.onclick = () => { sessionStorage.setItem("focusdev.catalogItemId", String(button.dataset.use)); location.hash = "#propostas"; });
-    dashboardGrid.querySelectorAll("[data-toggle]").forEach((button) => button.onclick = async () => { const item = rows.find((row) => String(row.id) === button.dataset.toggle); if (!item) return; try { await api(`/api/catalog-items/${button.dataset.toggle}`, { method: "PATCH", body: { active: !item.active } }); toast("Status atualizado.", "success"); renderCatalog(); } catch (error) { toast(error.message, "error"); } });
-    dashboardGrid.querySelectorAll("[data-delete]").forEach((button) => button.onclick = () => ui.confirmInline(button, { text: "Excluir item?", onConfirm: async () => { try { await api(`/api/catalog-items/${button.dataset.delete}`, { method: "DELETE" }); toast("Item excluído.", "success"); renderCatalog(); } catch (error) { toast(error.message, "error"); } } }));
+    dashboardGrid.querySelectorAll("[data-toggle]").forEach((button) => button.onclick = async () => { const item = rows.find((row) => String(row.id) === button.dataset.toggle); if (!item) return; try { await api(`/api/catalog-items/${button.dataset.toggle}`, { method: "PATCH", body: { active: !item.active } }); ui.toast("Status atualizado.", "success"); renderCatalog(); } catch (error) { ui.toast(error.message, "error"); } });
+    dashboardGrid.querySelectorAll("[data-delete]").forEach((button) => button.onclick = () => ui.confirmInline(button, { text: "Excluir item?", onConfirm: async () => { try { await api(`/api/catalog-items/${button.dataset.delete}`, { method: "DELETE" }); ui.toast("Item excluído.", "success"); renderCatalog(); } catch (error) { ui.toast(error.message, "error"); } } }));
   } catch (error) { dashboardGrid.innerHTML = stateBlock.error(error.message, "catalog-retry"); }
 }
 

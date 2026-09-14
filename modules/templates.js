@@ -1,4 +1,5 @@
 const templateEsc = (value) => escapeHtml(value ?? "");
+const toast = (...args) => ui.toast(...args);
 const templateTypes = { proposal: "Proposta", contract: "Contrato", project: "Projeto", task: "Tarefa", checklist: "Checklist", charge: "Cobrança", followup: "Follow-up", support: "Atendimento", ticket: "Resposta de ticket", briefing: "Briefing", delivery_term: "Termo de entrega", report: "Relatório", notification: "Notificação", email: "E-mail", message: "Mensagem", whatsapp: "WhatsApp" };
 const templateFilter = { search: "", kind: "" };
 const templateMetric = (label, value) => `<article class="data-card finance-metric"><span>${templateEsc(label)}</span><strong>${templateEsc(value)}</strong></article>`;

@@ -1,4 +1,5 @@
 const ticketEsc = (value) => escapeHtml(value ?? "");
+const toast = (...args) => ui.toast(...args);
 const ticketLabels = { new: "Novo", open: "Aberto", in_analysis: "Em análise", in_progress: "Em atendimento", waiting_client: "Aguardando cliente", waiting_third_party: "Aguardando terceiro", resolved: "Resolvido", closed: "Fechado", reopened: "Reaberto", cancelled: "Cancelado" };
 const ticketPriorities = { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" };
 const ticketFilter = { search: "", status: "", priority: "" };

@@ -1,4 +1,5 @@
 const fileEsc = (value) => escapeHtml(value ?? "");
+const toast = (...args) => ui.toast(...args);
 const fileKind = { document: "Documento", image: "Imagem", video: "Vídeo", code: "Código", backup: "Backup", other: "Outro" };
 const fileFilter = { search: "", project_id: "", kind: "" };
 function fileDetails(item) { if (!item) return; const hidden = new Set(["id", "organization_id"]); const value = (entry) => entry === null || entry === undefined || entry === "" ? "—" : typeof entry === "object" ? JSON.stringify(entry) : String(entry); const html = Object.entries(item).filter(([key]) => !hidden.has(key) && key !== "url").map(([key, entry]) => `<dt>${fileEsc(key.replaceAll("_", " "))}</dt><dd>${fileEsc(value(entry))}</dd>`).join(""); ui.drawer({ title: item.name || "Arquivo", subtitle: fileKind[item.kind] || item.kind || "Arquivo", html: `${html ? `<dl>${html}</dl>` : "<p>Sem detalhes disponiveis.</p>"}${item.url ? `<p><a class="compact-action" href="${fileEsc(item.url)}" target="_blank" rel="noopener">Abrir arquivo</a></p>` : ""}` }); }

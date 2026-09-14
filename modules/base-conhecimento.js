@@ -1,4 +1,5 @@
 /* Biblioteca de conhecimento com leitura, busca e manutenção dos artigos reais. */
+const toast = (...args) => ui.toast(...args);
 const kbEsc = (value) => escapeHtml(value ?? "");
 const kbFilterState = { search: "", status: "", category: "" };
 const kbStatus = { draft: "Rascunho", published: "Publicado", archived: "Arquivado", active: "Ativo", inactive: "Inativo" };

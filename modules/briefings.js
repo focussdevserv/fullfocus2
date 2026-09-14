@@ -1,4 +1,5 @@
 /* Workspace de briefings: cadastro, leitura de respostas e link público real. */
+const toast = (...args) => ui.toast(...args);
 const briefingEsc = (value) => escapeHtml(value ?? "");
 const briefingStatus = { draft: "Rascunho", published: "Publicado", sent: "Enviado", answered: "Respondido", approved: "Aprovado", archived: "Arquivado" };
 const briefingFilter = { search: "", status: "" };

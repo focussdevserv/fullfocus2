@@ -5,7 +5,8 @@ const contaStatus = { active: "Ativo", inactive: "Inativo", churned: "Cancelado"
 const contaState = (kind, text) => `<div class="conta-state">${stateBlock[kind](text)}</div>`;
 const contaIntro = (title, text, kind) => `<section class="page-intro contas-intro"><div><p class="card-kicker">Contas</p><h2>${contaEsc(title)}</h2><p>${contaEsc(text)}</p></div>${kind ? `<button class="button button-primary compact-action" data-create="${kind}" type="button">+ Novo</button>` : ""}</section>`;
 const records = async (path, key) => (await api(path))[key] || [];
-const field = (name, label, type = "text", extra = {}) => ({ name, label, type, ...extra });
+// Campos são opcionais por padrão; cada fluxo marca explicitamente seus obrigatórios.
+const field = (name, label, type = "text", extra = {}) => ({ name, label, type, required: false, ...extra });
 createConfig.contato = { title: "Novo contato", endpoint: "/api/contacts", fields: [field("name", "Nome", "text", { required: true }), field("email", "E-mail", "email"), field("phone", "Telefone"), field("role", "Cargo"), field("notes", "Observações"), field("company_id", "Empresa", "select", { options: [] })] };
 createConfig.empresa = { title: "Nova empresa", endpoint: "/api/companies", fields: [field("name", "Nome", "text", { required: true }), field("document", "CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone"), field("website", "Website", "url"), field("address", "Endereço")] };
 createConfig.contato.fields.push(field("department", "Departamento"), field("document", "CPF"), field("birth_date", "Data de nascimento", "date", { required: false }), field("city", "Cidade"), field("state", "Estado"), field("preferred_channel", "Canal preferido"), field("contact_type", "Tipo de contato"), field("source", "Origem"), field("owner", "Responsável interno"), field("tags", "Etiquetas"), field("is_primary", "Contato principal", "checkbox"));
@@ -81,7 +82,8 @@ const relatedList = (items = [], label, render) => `<section><h3>${contaEsc(labe
 openDetails = async function openRelatedDetails(record, type) {
   if (!record || !["contact", "company"].includes(type)) return contaOpenRelatedDetails(record, type);
   const panel = document.createElement("aside"); panel.className = "conta-drawer conta-drawer-wide";
-  panel.innerHTML = `<button class="conta-close" type="button">&times;</button><p class="card-kicker">Visão relacionada</p><h2>${contaEsc(record.name)}</h2><div data-related-overview>${contaState("loading", "Carregando relacionamentos...")}</div>`;
+  const basicFields = Object.entries(record).filter(([key]) => !["id", "organization_id"].includes(key)).slice(0, 12).map(([key, value]) => `<dt>${contaEsc(key.replaceAll("_", " "))}</dt><dd>${contaEsc(contaStatus[value] || value || "—")}</dd>`).join("");
+  panel.innerHTML = `<button class="conta-close" type="button">&times;</button><p class="card-kicker">Visão relacionada</p><h2>${contaEsc(record.name)}</h2><section><h3>Dados principais</h3><dl>${basicFields}</dl></section><div data-related-overview>${contaState("loading", "Carregando relacionamentos...")}</div>`;
   document.body.append(panel); panel.querySelector(".conta-close").onclick = () => panel.remove();
   try {
     const data = await api(`/api/${type === "contact" ? "contacts" : "companies"}/${record.id}/overview`);
@@ -90,5 +92,5 @@ openDetails = async function openRelatedDetails(record, type) {
       ? `${relatedList(data.clients, "Clientes", (item) => renderItem(item, ["name", "status"]))}${relatedList(data.leads, "Leads", (item) => renderItem(item, ["name", "status"]))}${relatedList(data.opportunities, "Oportunidades", (item) => renderItem(item, ["name", "stage"]))}${relatedList(data.conversations, "Conversas", (item) => renderItem(item, ["subject", "channel"]))}${relatedList(data.activities, "Histórico", (item) => renderItem(item, ["action", "entity_type"]))}`
       : `${relatedList(data.contacts, "Contatos", (item) => renderItem(item, ["name", "role"]))}${relatedList(data.opportunities, "Oportunidades", (item) => renderItem(item, ["name", "stage"]))}${relatedList(data.proposals, "Propostas", (item) => renderItem(item, ["title", "status"]))}${relatedList(data.contracts, "Contratos", (item) => renderItem(item, ["name", "status"]))}${relatedList(data.projects, "Projetos", (item) => renderItem(item, ["name", "status"]))}${relatedList(data.activities, "Histórico", (item) => renderItem(item, ["action", "entity_type"]))}`;
     panel.querySelector("[data-related-overview]").innerHTML = body;
-  } catch (error) { panel.querySelector("[data-related-overview]").innerHTML = contaState("error", error.message); }
+  } catch (error) { panel.querySelector("[data-related-overview]").innerHTML = `<section><h3>Relacionamentos</h3><p class="conta-muted">Não foi possível carregar os vínculos agora.</p><small>${contaEsc(error.message || "Tente novamente mais tarde.")}</small></section>`; }
 };

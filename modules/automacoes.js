@@ -1,3 +1,4 @@
+const toast = (...args) => ui.toast(...args);
 const tr = {
   lead_created: "Novo lead", lead_stage_changed: "Lead mudou de etapa", lead_no_response: "Lead sem resposta",
   meeting_scheduled: "Reunião agendada", proposal_created: "Proposta criada", proposal_sent: "Proposta enviada",

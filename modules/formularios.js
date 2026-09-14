@@ -1,4 +1,5 @@
 /* Biblioteca de formulários com manutenção e acesso público real. */
+const toast = (...args) => ui.toast(...args);
 const formEsc = (value) => escapeHtml(value ?? "");
 const formFilterState = { search: "", status: "" };
 const formStatus = { draft: "Rascunho", published: "Publicado", active: "Ativo", inactive: "Inativo", archived: "Arquivado" };
