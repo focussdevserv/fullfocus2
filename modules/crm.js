@@ -182,8 +182,9 @@ function convertLead(lead, after) {
 function convertLeadToClient(lead, after) {
   if (!lead) return;
   const proceed = async () => {
+    action.disabled = true; action.textContent = "Convertendo...";
     try { await api(`/api/leads/${lead.id}/convert-to-client`, { method: "POST", body: {} }); invalidate(); toast("Cliente criado e histórico preservado.", "success"); after(); }
-    catch (error) { toast(error.message, "error"); }
+    catch (error) { action.disabled = false; action.textContent = "Converter em cliente"; toast(error.message, "error"); }
   };
   const action = document.createElement("button"); action.type = "button"; action.className = "ui-button"; action.textContent = "Converter em cliente"; action.addEventListener("click", proceed);
   drawer({ title: "Converter lead", subtitle: lead.name, html: `<p>O lead será vinculado a um contato, empresa e cliente existentes quando possível.</p>`, onOpen: (body, close) => { body.append(action); action.addEventListener("click", close, { once: true }); } });
