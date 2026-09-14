@@ -1,0 +1,17 @@
+/* Lixeira recuperável: exibe prazo e usa a restauração transacional do backend. */
+const trashEsc = (value) => escapeHtml(value ?? "");
+const trashDate = (value) => value ? new Date(value).toLocaleString("pt-BR") : "Sem prazo";
+
+async function renderTrashScreen() {
+  const title = "Lixeira", description = "Registros excluídos ficam recuperáveis por até 30 dias.";
+  dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Configurações</p><h2>${title}</h2><p>${description}</p></div></section>${stateBlock.loading("Carregando lixeira...")}`;
+  try {
+    const items = (await api("/api/trash")).trash || [];
+    dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Configurações</p><h2>${title}</h2><p>${description}</p></div></section><section class="data-card automation-list"><div class="finance-toolbar"><input type="search" data-trash-search placeholder="Buscar tipo ou registro" aria-label="Buscar na lixeira"><select data-trash-filter aria-label="Filtrar tipo"><option value="">Todos os tipos</option>${[...new Set(items.map((item) => item.entity_type).filter(Boolean))].sort().map((type) => `<option value="${trashEsc(type)}">${trashEsc(type)}</option>`).join("")}</select></div>${items.length ? `<div class="template-grid">${items.map((item) => { const expires = item.restore_until ? new Date(item.restore_until) : null; const remaining = expires ? Math.max(0, Math.ceil((expires - Date.now()) / 864e5)) : null; return `<article class="data-card template-card" data-trash-row data-type="${trashEsc(item.entity_type || "")}"><div class="section-heading"><div><h3>${trashEsc(item.entity_type || "Registro")}</h3><small>ID original: ${trashEsc(item.entity_id)}</small></div><span class="finance-status ${remaining !== null && remaining < 7 ? "warning" : "neutral"}">${remaining === null ? "Sem prazo" : `${remaining} dia(s)`}</span></div><p>Excluído em: ${trashEsc(trashDate(item.created_at))}</p><p>Recuperável até: ${trashEsc(trashDate(item.restore_until))}</p><button class="compact-action" data-trash-restore="${item.id}" type="button">Restaurar registro</button></article>`; }).join("")}</div>` : stateBlock.empty("Lixeira vazia", "Registros excluídos aparecerão aqui para recuperação.")}</section>`;
+    const filter = () => { const query = dashboardGrid.querySelector("[data-trash-search]").value.toLocaleLowerCase("pt-BR"), type = dashboardGrid.querySelector("[data-trash-filter]").value; dashboardGrid.querySelectorAll("[data-trash-row]").forEach((row) => { row.hidden = (query && !row.textContent.toLocaleLowerCase("pt-BR").includes(query)) || (type && row.dataset.type !== type); }); };
+    dashboardGrid.querySelector("[data-trash-search]")?.addEventListener("input", filter); dashboardGrid.querySelector("[data-trash-filter]")?.addEventListener("change", filter);
+    dashboardGrid.querySelectorAll("[data-trash-restore]").forEach((button) => button.addEventListener("click", () => ui.confirmInline(button, { text: "Restaurar este registro?", onConfirm: async () => { await api(`/api/trash/${button.dataset.trashRestore}/restore`, { method: "POST", body: {} }); toast("Registro restaurado.", "success"); renderTrashScreen(); } })));
+  } catch (error) { dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Configurações</p><h2>${title}</h2></div></section>${stateBlock.error(error.message, "trash-retry")}`; dashboardGrid.querySelector(".state-retry")?.addEventListener("click", renderTrashScreen); }
+}
+
+registerRoutes({ lixeira: renderTrashScreen });
