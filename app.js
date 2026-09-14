@@ -808,6 +808,16 @@ openCreateDialog = function openCreateDialogWithCep(kind) {
   button.addEventListener("click", async () => { if (!zip.value) { zip.focus(); return; } button.disabled = true; button.textContent = "Consultando..."; try { const response = await fetch(`/api/cep/${encodeURIComponent(zip.value)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível consultar o CEP."); Object.entries(data).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value) field.value = value; }); dialogStatus.textContent = "Endereço preenchido pelo CEP. Revise antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Consultar CEP"; } });
 };
 
+const companyDialog = openCreateDialog;
+openCreateDialog = function openCreateDialogWithCnpj(kind) {
+  companyDialog(kind);
+  if (kind !== "empresa") return;
+  const documentInput = dialogFields.querySelector('[name="document"]');
+  if (!documentInput || dialogFields.querySelector("[data-cnpj-fill]")) return;
+  const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.cnpjFill = "true"; button.textContent = "Consultar CNPJ"; documentInput.insertAdjacentElement("afterend", button);
+  button.addEventListener("click", async () => { if (!documentInput.value) { documentInput.focus(); return; } button.disabled = true; button.textContent = "Consultando..."; try { const response = await fetch(`/api/cnpj/${encodeURIComponent(documentInput.value)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível consultar o CNPJ."); const values = { name: data.razao_social || data.nome_fantasia, legal_name: data.razao_social, trade_name: data.nome_fantasia, document: data.cnpj, status: data.situacao, founded_on: data.abertura, primary_activity: data.cnae, zip_code: data.cep, street: data.logradouro, street_number: data.numero, city: data.municipio, state: data.uf, country: "Brasil", phone: data.telefone, email: data.email }; Object.entries(values).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value !== undefined && value !== null && value !== "") field.value = value; }); dialogStatus.textContent = "Dados da empresa preenchidos. Revise antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Consultar CNPJ"; } });
+};
+
 const contractDialog = openCreateDialog;
 openCreateDialog = function openCreateDialogWithContractAutofill(kind) {
   contractDialog(kind);
