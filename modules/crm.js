@@ -215,7 +215,7 @@ async function renderFunnel() {
 const oppState = { query: "", stage: "open", sort: "amount" };
 async function renderOpportunities() {
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Oportunidades", description: "Carregando…" }) + stateBlock.loading("Carregando oportunidades…");
-  await wrap("Oportunidades", "CRM", (async () => { const opps = (await api("/api/opportunities")).opportunities || []; cache.opportunities = opps; drawOpportunities(opps); })());
+  await wrap("Oportunidades", "CRM", (async () => { const params = new URLSearchParams(); if (oppState.query.trim()) params.set("search", oppState.query.trim()); if (oppState.stage !== "all") params.set("stage", oppState.stage); const opps = (await api(`/api/opportunities?${params}`)).opportunities || []; cache.opportunities = opps; drawOpportunities(opps); })());
 }
 
 function drawOpportunities(opps) {
@@ -245,8 +245,8 @@ function drawOpportunities(opps) {
     ], rows: list, rowClass: () => "is-clickable", rowAttr: (o) => `data-open="${esc(o.id)}"` }) : empty({ title: opps.length ? "Nada com esses filtros." : "Nenhuma oportunidade.", text: opps.length ? "" : "Converta um lead ou crie uma oportunidade direto aqui.", cta: opps.length ? "" : "Criar oportunidade", attr: "data-new" })}
     </section>`;
   const refocus = keepSearchFocus(dashboardGrid), redraw = () => drawOpportunities(opps);
-  dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { s.query = e.target.value; redraw(); refocus(); });
-  dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { s[el.dataset.filter] = el.value; redraw(); }));
+  dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { s.query = e.target.value; clearTimeout(s.timer); s.timer = setTimeout(() => renderOpportunities(), 250); });
+  dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { s[el.dataset.filter] = el.value; renderOpportunities(); }));
   dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => opportunityForm(null, renderOpportunities)));
   dashboardGrid.querySelector("[data-export]")?.addEventListener("click", () => downloadCsv("oportunidades.csv", ["Nome", "Estágio", "Valor", "Probabilidade", "Previsão", "Criado em"], list.map((o) => [o.name, label(STAGES, o.stage), o.amount, o.probability ?? "", o.expected_close || "", dateTime(o.created_at)])));
   dashboardGrid.querySelectorAll("[data-stage]").forEach((sel) => sel.addEventListener("change", async () => { try { await api(`/api/opportunities/${sel.dataset.stage}`, { method: "PATCH", body: { stage: sel.value } }); const o = opps.find((x) => String(x.id) === sel.dataset.stage); if (o) o.stage = sel.value; toast("Estágio atualizado.", "success"); redraw(); } catch (error) { toast(error.message, "error"); redraw(); } }));
