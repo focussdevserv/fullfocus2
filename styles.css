@@ -1899,3 +1899,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   line-height: 18px;
   text-align: center;
 }
+
+/* Textura original de teia: sem personagens, logos ou assets de terceiros. */
+:root {
+  --focus-web-surface: radial-gradient(circle at 86% 16%, rgb(56 189 248 / 14%), transparent 28%), repeating-radial-gradient(circle at 100% 0, transparent 0 34px, rgb(56 189 248 / 9%) 35px 36px, transparent 37px 72px), linear-gradient(145deg, rgb(16 33 61 / 96%), rgb(7 11 20 / 98%));
+}
+.metric-pink, .metric-purple, .metric-blue, .metric-orange, .metric-green, .metric-red, .metric-cyan, .metric-gold, .pulse-card, .task-summary .data-card, .tasks-card, .inbox-sidebar, .inbox-card, .leads-card, .campaigns-card, .opportunities-card, .proposals-card, .followups-card, .crm-hub, .stat-red, .stat-blue, .stat-gold, .customer-focus-card, .cnpj-hero, .portal-banner, .company-overview, .calendar-card, .day-agenda, .agenda-upcoming, .agenda-history, .agenda-card {
+  background-image: var(--focus-web-surface) !important;
+  background-position: center !important;
+  background-size: auto, auto, cover !important;
+}
+img[src*="spider" i] { display: none !important; }
+.dashboard-hero, .hero { background-image: var(--focus-web-surface) !important; }
+.dashboard-hero::after, .hero::after { position: absolute; inset: 0; z-index: 0; background: repeating-radial-gradient(circle at 100% 0, transparent 0 40px, rgb(56 189 248 / 10%) 41px 42px, transparent 43px 84px); content: ""; pointer-events: none; }
+.dashboard-hero > *, .hero > * { position: relative; z-index: 1; }
