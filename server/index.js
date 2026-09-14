@@ -380,6 +380,15 @@ app.get("/api/infrastructure_assets", async (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select i.*,c.name as client_name,p.name as project_name from infrastructure_assets i left join clients c on c.id=i.client_id and c.organization_id=i.organization_id left join projects p on p.id=i.project_id and p.organization_id=i.organization_id where ${where.join(" and ")} order by i.expires_on nulls last,i.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ infrastructure_assets: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar a infraestrutura." }); }
 });
+const managementSearch = { team_goals: ["name", "category", "notes"], commissions: ["description", "responsible", "status"], absences: ["kind", "notes"], time_entries: ["notes"] };
+Object.entries(managementSearch).forEach(([table, fields]) => app.get(`/api/${table}`, async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = [`m.organization_id=$1`], search = String(req.query?.search || "").trim();
+  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(${fields.map((field) => `coalesce(cast(m.${field} as text),'') ilike '%' || ${p} || '%'`).join(" or ")})`); }
+  if (req.query?.status) { values.push(String(req.query.status)); where.push(`m.status=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select m.* from ${table} m where ${where.join(" and ")} order by m.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ [table]: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar os registros de gestão." }); }
+}));
 app.get("/api/trash", async (req, res) => {
   const org = tenant(req, res); if (!org) return;
   const values = [org], where = ["t.organization_id=$1"], search = String(req.query?.search || "").trim();
