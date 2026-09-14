@@ -27,3 +27,48 @@ const rolePanelObserver = new MutationObserver(() => {
   });
 });
 rolePanelObserver.observe(dashboardGrid, { childList: true });
+
+const profileButtonObserver = new MutationObserver(() => {
+  if (location.hash !== "#equipe") return;
+  dashboardGrid.querySelectorAll(".config-member").forEach((member) => {
+    if (member.querySelector("[data-profile]") || !member.querySelector("[data-access]")) return;
+    const access = member.querySelector("[data-access]");
+    const button = document.createElement("button");
+    button.className = "compact-action";
+    button.type = "button";
+    button.dataset.profile = access.dataset.access;
+    button.textContent = "Editar perfil";
+    member.append(button);
+  });
+});
+profileButtonObserver.observe(dashboardGrid, { childList: true, subtree: true });
+dashboardGrid.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-profile]");
+  if (!button) return;
+  api("/api/team/access-status").then((data) => {
+    const member = (data.users || []).find((item) => String(item.id) === String(button.dataset.profile));
+    if (!member) return;
+    ui.form({
+      title: `Perfil de ${member.name}`,
+      subtitle: "Dados profissionais e disponibilidade",
+      values: member,
+      fields: [
+        { name: "job_title", label: "Cargo", required: false },
+        { name: "department", label: "Departamento", required: false },
+        { name: "phone", label: "Telefone", required: false, type: "tel", half: true },
+        { name: "whatsapp", label: "WhatsApp", required: false, type: "tel", half: true },
+        { name: "employment_type", label: "Tipo de vínculo", required: false },
+        { name: "started_on", label: "Data de entrada", required: false, type: "date", half: true },
+        { name: "access_expires_on", label: "Expiração do acesso", required: false, type: "date", half: true },
+        { name: "hourly_rate", label: "Valor por hora", required: false, type: "number", min: 0, half: true },
+        { name: "monthly_rate", label: "Valor mensal", required: false, type: "number", min: 0, half: true },
+        { name: "commission_rate", label: "Comissão (%)", required: false, type: "number", min: 0, max: 100, half: true },
+        { name: "experience_level", label: "Nível de experiência", required: false },
+        { name: "availability", label: "Disponibilidade", required: false, type: "select", options: [["", "Não informado"], ["online", "Online"], ["available", "Disponível"], ["busy", "Ocupado"], ["offline", "Offline"]] },
+        { name: "skills", label: "Habilidades", required: false, type: "textarea", rows: 3 },
+        { name: "two_factor_enabled", label: "Autenticação em duas etapas", required: false, type: "checkbox", text: "Ativada" },
+      ],
+      onSubmit: async (values) => { await api(`/api/team/${button.dataset.profile}/profile`, { method: "PATCH", body: values }); ui.toast("Perfil atualizado.", "success"); renderTeamAccess(); },
+    });
+  }).catch((error) => ui.toast(error.message, "error"));
+});
