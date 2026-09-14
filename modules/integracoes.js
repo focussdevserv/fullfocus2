@@ -1,6 +1,6 @@
 /* Integrações: configuração explícita e estado separado de teste de conectividade. */
 const integrationEsc = (value) => escapeHtml(value ?? "");
-const integrationLabel = { whatsapp: "WhatsApp / Evolution API", email: "Gmail", smtp: "SMTP", google_calendar: "Google Calendar", google_drive: "Google Drive", github: "GitHub", n8n: "n8n", mercado_pago: "Mercado Pago", asaas: "Asaas", stripe: "Stripe", firebase: "Firebase", supabase: "Supabase", cnpj: "Consulta CNPJ", esign: "Assinatura eletrônica", webhook: "Webhook", api: "API própria" };
+const integrationLabel = { whatsapp: "WhatsApp / Evolution API", email: "Gmail", smtp: "SMTP", google_calendar: "Google Calendar", google_drive: "Google Drive", github: "GitHub", n8n: "n8n", asaas: "Asaas", stripe: "Stripe", firebase: "Firebase", supabase: "Supabase", cnpj: "Consulta CNPJ", esign: "Assinatura eletrônica", webhook: "Webhook", api: "API própria" };
 const integrationState = { search: "", status: "", offset: 0 };
 let integrationTimer;
 

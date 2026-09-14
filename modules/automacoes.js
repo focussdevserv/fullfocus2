@@ -17,7 +17,7 @@ const act = {
   request_satisfaction: "Solicitar pesquisa de satisfação", generate_document: "Gerar e enviar documento", grant_project_access: "Liberar arquivos e tarefas", revoke_access: "Encerrar acesso",
 };
 const tk = { proposal: "Proposta", contract: "Contrato", project: "Projeto", task: "Tarefa", checklist: "Checklist", charge: "Cobrança", followup: "Follow-up", support: "Atendimento", ticket: "Resposta de ticket", briefing: "Briefing", delivery_term: "Termo de entrega", report: "Relatório", notification: "Notificação", email: "E-mail", message: "Mensagem", whatsapp: "WhatsApp" };
-const providers = { whatsapp: "WhatsApp/Evolution API", email: "Gmail", smtp: "SMTP", google_calendar: "Google Calendar", google_drive: "Google Drive", github: "GitHub", n8n: "n8n", mercado_pago: "Mercado Pago", asaas: "Asaas", stripe: "Stripe", firebase: "Firebase", supabase: "Supabase", cnpj: "Consulta CNPJ", esign: "Assinatura eletrônica", webhook: "Webhook", api: "API própria" };
+const providers = { whatsapp: "WhatsApp/Evolution API", email: "Gmail", smtp: "SMTP", google_calendar: "Google Calendar", google_drive: "Google Drive", github: "GitHub", n8n: "n8n", asaas: "Asaas", stripe: "Stripe", firebase: "Firebase", supabase: "Supabase", cnpj: "Consulta CNPJ", esign: "Assinatura eletrônica", webhook: "Webhook", api: "API própria" };
 const e = (value) => escapeHtml(value ?? "");
 const optionFields = (options) => ({ type: "select", options: Object.entries(options) });
 

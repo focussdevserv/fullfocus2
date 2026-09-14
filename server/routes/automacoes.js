@@ -22,7 +22,7 @@ const TEMPLATE_KINDS = [
 ];
 const INTEGRATION_PROVIDERS = [
   "whatsapp", "email", "smtp", "google_calendar", "google_drive", "github", "n8n",
-  "mercado_pago", "asaas", "stripe", "firebase", "supabase", "cnpj", "esign",
+  "asaas", "stripe", "firebase", "supabase", "cnpj", "esign",
   "webhook", "api",
 ];
 
