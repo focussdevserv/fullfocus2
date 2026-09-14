@@ -36,6 +36,14 @@ export function isValidAmount(table, column, value) {
   return ZERO_ALLOWED.has(`${table}.${column}`) ? number >= 0 : number > 0;
 }
 
+export function normalizeIdentity(field, value) {
+  if (value === undefined || value === null) return value;
+  const text = String(value).trim();
+  if (field === "email") return text.toLowerCase();
+  if (field === "document" || field === "phone") return text.replace(/\D/g, "");
+  return value;
+}
+
 /* Converte erros do PostgreSQL em { status, error } legíveis.
    Erros de entrada do cliente viram 400; o resto continua 503 com a mensagem padrão da rota. */
 const DB_ERROR_MESSAGES = {

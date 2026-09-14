@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expandRecurringEvents } from "./recurrence.js";
-import { singular, classifyDbError, isValidAmount, TABLES_WITH_UPDATED_AT } from "./http-helpers.js";
+import { singular, classifyDbError, isValidAmount, TABLES_WITH_UPDATED_AT, normalizeIdentity } from "./http-helpers.js";
 import { attachResetRoutes } from "./auth-reset.js";
 import { runMigrations } from "./migrate.js";
 import { registerDomainRoutes } from "./routes/index.js";
@@ -66,7 +66,7 @@ const entities = {
   revenues: { fields: ["description", "contract_id", "amount", "due_at", "paid_at"], required: ["description", "amount"] }, expenses: { fields: ["description", "project_id", "amount", "due_at", "paid_at"], required: ["description", "amount"] },
   receivables: { fields: ["description", "client_id", "contract_id", "amount", "due_at", "status", "paid_at"], required: ["description", "amount", "due_at"] }, charges: { fields: ["receivable_id", "provider", "external_id", "status", "amount", "due_at"], required: ["amount"] }, payments: { fields: ["receivable_id", "charge_id", "amount", "paid_at", "method", "external_id"], required: ["amount"] }
 };
-const normalize = (table, body) => { const spec = entities[table]; const values = {}; for (const key of spec.fields) if (body?.[key] !== undefined) values[key] = body[key]; if (table === "tasks" && typeof values.tags === "string") values.tags = values.tags.split(",").map(asText).filter(Boolean).slice(0, 8); if (!["amount", "value"].every((k) => values[k] === undefined || isValidAmount(table, k, values[k]))) throw new Error("amount must be a positive number"); return values; };
+const normalize = (table, body) => { const spec = entities[table]; const values = {}; for (const key of spec.fields) if (body?.[key] !== undefined) values[key] = body[key]; for (const key of ["email", "document", "phone"]) if (values[key] !== undefined) values[key] = normalizeIdentity(key, values[key]); if (table === "tasks" && typeof values.tags === "string") values.tags = values.tags.split(",").map(asText).filter(Boolean).slice(0, 8); if (!["amount", "value"].every((k) => values[k] === undefined || isValidAmount(table, k, values[k]))) throw new Error("amount must be a positive number"); return values; };
 const relations = { company_id: "companies", contact_id: "contacts", lead_id: "leads", opportunity_id: "opportunities", client_id: "clients", contract_id: "contracts", project_id: "projects", parent_id: "tasks", receivable_id: "receivables", charge_id: "charges" };
 async function validateRelations(values, org) { for (const [field, table] of Object.entries(relations)) { if (values[field] === undefined || values[field] === null || values[field] === "") continue; const result = await pool.query(`select 1 from ${table} where id=$1 and organization_id=$2`, [values[field], org]); if (!result.rowCount) { const error = new Error(`${field} does not belong to this organization.`); error.code = "invalid_relation"; throw error; } } }
 const createCrud = (table) => {

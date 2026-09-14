@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { singular, SINGULAR, classifyDbError, isValidAmount, TABLES_WITH_UPDATED_AT } from "./http-helpers.js";
+import { singular, SINGULAR, classifyDbError, isValidAmount, TABLES_WITH_UPDATED_AT, normalizeIdentity } from "./http-helpers.js";
+
+test("normaliza identidades antes da deduplicação", () => {
+  assert.equal(normalizeIdentity("email", "  Pessoa@EXEMPLO.COM "), "pessoa@exemplo.com");
+  assert.equal(normalizeIdentity("phone", "+55 (11) 99999-0000"), "5511999990000");
+  assert.equal(normalizeIdentity("document", "11.222.333/0001-81"), "11222333000181");
+});
 
 test("singular cobre todas as tabelas com plural irregular", () => {
   assert.equal(singular("companies"), "company");
