@@ -236,6 +236,9 @@ function bind() {
 }
 
 /* Contador para o sino do núcleo. */
-window.FocusInbox = { unreadCount: async () => { const data = await api("/api/conversations?status=open"); return (data.conversations || []).reduce((n, c) => n + Number(c.unread_count || 0), 0); } };
+window.FocusInbox = {
+  unreadCount: async () => { const data = await api("/api/conversations?status=open"); return (data.conversations || []).reduce((n, c) => n + Number(c.unread_count || 0), 0); },
+  openNumber: async (number) => { box.filter = "whatsapp"; box.query = String(number || "").replace(/\D/g, ""); box.selected = null; await renderInbox("caixa-de-entrada"); },
+};
 
 registerRoutes({ "caixa-de-entrada": () => renderInbox("caixa-de-entrada"), conversas: () => renderInbox("conversas") });

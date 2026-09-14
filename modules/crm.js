@@ -154,12 +154,13 @@ function leadDrawer(lead, campaigns, after) {
     <div class="crm-drawer-head">${badge(label(LEAD_STATUS, lead.status), tone(LEAD_STATUS, lead.status))}${lead.value ? `<strong>${money(lead.value)}</strong>` : ""}</div>
     ${facts([["Empresa", lead.company], ["E-mail", lead.email], ["Telefone", lead.phone], ["Origem", SOURCES.find(([k]) => k === lead.source)?.[1] || lead.source], ["Campanha", campaign?.name], ["Criado em", dateTime(lead.created_at)], ["Atualizado", relative(lead.updated_at)]])}
     ${lead.notes ? `<div><h3>Observações</h3><p class="crm-notes">${esc(lead.notes)}</p></div>` : ""}
-    <div class="crm-drawer-actions">${button({ label: "Converter em oportunidade", attr: "data-convert" })}${button({ label: "Agendar follow-up", kind: "secondary", attr: "data-followup" })}${button({ label: "Editar", kind: "secondary", attr: "data-edit" })}${lead.phone ? `<a class="button button-secondary compact-action" href="#caixa-de-entrada">Conversar</a>` : ""}</div>
+    <div class="crm-drawer-actions">${button({ label: "Converter em oportunidade", attr: "data-convert" })}${button({ label: "Agendar follow-up", kind: "secondary", attr: "data-followup" })}${button({ label: "Editar", kind: "secondary", attr: "data-edit" })}${lead.phone ? button({ label: "WhatsApp", kind: "secondary", attr: "data-whatsapp" }) : ""}</div>
     <div><h3>Follow-ups</h3><div data-followups>${stateBlock.loading("Carregando…")}</div></div>`,
     onOpen: async (body, close) => {
       body.querySelector("[data-convert]").addEventListener("click", () => { close(); convertLead(lead, after); });
       body.querySelector("[data-followup]").addEventListener("click", () => { close(); followupForm({ lead_id: lead.id }, after); });
       body.querySelector("[data-edit]").addEventListener("click", () => { close(); leadForm(lead, after); });
+      body.querySelector("[data-whatsapp]")?.addEventListener("click", async () => { close(); location.hash = "#caixa-de-entrada"; try { await window.FocusInbox?.openNumber(lead.phone); } catch (error) { toast(error.message, "error"); } });
       try { const all = (await api("/api/followups")).followups || []; const mine = all.filter((f) => String(f.lead_id) === String(lead.id)); body.querySelector("[data-followups]").innerHTML = mine.length ? `<div class="crm-followup-list">${mine.map((f) => `<div class="crm-followup ${f.done_at ? "is-done" : new Date(f.due_at) < new Date() ? "is-late" : ""}"><time>${esc(dateTime(f.due_at))}</time><div><strong>${esc(f.channel || "Contato")}</strong><small>${esc(f.note || "")}</small></div><span>${f.done_at ? badge("Feito", "green") : badge("Pendente", "orange")}</span></div>`).join("")}</div>` : `<p class="crm-hint">Nenhum follow-up para este lead.</p>`; } catch (error) { body.querySelector("[data-followups]").innerHTML = `<p class="crm-hint">${esc(error.message)}</p>`; }
     } });
   void d;
