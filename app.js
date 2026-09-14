@@ -815,3 +815,13 @@ openCreateDialog = function openCreateDialogWithGithub(kind) {
     finally { button.disabled = false; button.textContent = "Preencher pelo GitHub"; }
   });
 };
+
+const projectAndClientDialog = openCreateDialog;
+openCreateDialog = function openCreateDialogWithCep(kind) {
+  projectAndClientDialog(kind);
+  if (kind !== "cliente") return;
+  const zip = dialogFields.querySelector('[name="zip_code"]');
+  if (!zip || dialogFields.querySelector("[data-cep-fill]")) return;
+  const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.cepFill = "true"; button.textContent = "Consultar CEP"; zip.insertAdjacentElement("afterend", button);
+  button.addEventListener("click", async () => { if (!zip.value) { zip.focus(); return; } button.disabled = true; button.textContent = "Consultando..."; try { const response = await fetch(`/api/cep/${encodeURIComponent(zip.value)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível consultar o CEP."); Object.entries(data).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value) field.value = value; }); dialogStatus.textContent = "Endereço preenchido pelo CEP. Revise antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Consultar CEP"; } });
+};
