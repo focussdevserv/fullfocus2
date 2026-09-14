@@ -80,7 +80,8 @@ const leadsState = { query: "", status: "open", source: "all", sort: "recent" };
 async function renderLeads() {
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Leads", description: "Carregando…" }) + stateBlock.loading("Carregando leads…");
   await wrap("Leads", "CRM", (async () => {
-    const [leadsRes, campaignsRes] = await Promise.allSettled([api("/api/leads"), api("/api/campaigns")]);
+    const params = new URLSearchParams(); if (leadsState.query.trim()) params.set("search", leadsState.query.trim()); if (leadsState.status !== "all") params.set("status", leadsState.status); if (leadsState.source !== "all") params.set("source", leadsState.source);
+    const [leadsRes, campaignsRes] = await Promise.allSettled([api(`/api/leads?${params}`), api("/api/campaigns")]);
     if (leadsRes.status === "rejected") throw leadsRes.reason;
     const leads = leadsRes.value.leads || [], campaigns = campaignsRes.status === "fulfilled" ? campaignsRes.value.campaigns || [] : [];
     cache.campaigns = campaigns; cache.leads = leads;
@@ -118,8 +119,8 @@ function drawLeads(leads, campaigns) {
     </section>`;
   const refocus = keepSearchFocus(dashboardGrid);
   const redraw = () => { drawLeads(leads, campaigns); };
-  dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { s.query = e.target.value; redraw(); refocus(); });
-  dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { s[el.dataset.filter] = el.value; redraw(); }));
+  dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { s.query = e.target.value; clearTimeout(s.timer); s.timer = setTimeout(() => renderLeads(), 250); });
+  dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { s[el.dataset.filter] = el.value; renderLeads(); }));
   dashboardGrid.querySelectorAll("[data-quick]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.quick; if (k === "new") { s.status = "all"; s.sort = "recent"; } else s.status = k; redraw(); }));
   dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => leadForm(null, renderLeads)));
   dashboardGrid.querySelector("[data-export]")?.addEventListener("click", () => downloadCsv("leads.csv", ["Nome", "Empresa", "E-mail", "Telefone", "Origem", "Situação", "Valor", "Criado em"], list.map((l) => [l.name, l.company || "", l.email || "", l.phone || "", l.source || "", label(LEAD_STATUS, l.status), l.value || "", dateTime(l.created_at)])));
