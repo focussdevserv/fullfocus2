@@ -10,6 +10,7 @@ import { singular, classifyDbError, isValidAmount, TABLES_WITH_UPDATED_AT } from
 import { attachResetRoutes } from "./auth-reset.js";
 import { runMigrations } from "./migrate.js";
 import { registerDomainRoutes } from "./routes/index.js";
+import { startAutomationRunner } from "./automations-runner.js";
 
 const { Pool } = pg;
 export const app = express();
@@ -84,5 +85,5 @@ app.delete("/api/events/:id", async (req, res) => { const org = tenant(req, res)
 
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 
-async function start() { try { await runMigrations(pool); app.listen(port, "0.0.0.0", () => console.log(`FocusApp API listening on ${port}`)); } catch (e) { console.error("FocusApp API could not connect to PostgreSQL:", e.message); process.exitCode = 1; } }
+async function start() { try { await runMigrations(pool); app.listen(port, "0.0.0.0", () => { console.log(`FocusApp API listening on ${port}`); startAutomationRunner(pool); }); } catch (e) { console.error("FocusApp API could not connect to PostgreSQL:", e.message); process.exitCode = 1; } }
 if (process.env.NODE_ENV !== "test") start();
