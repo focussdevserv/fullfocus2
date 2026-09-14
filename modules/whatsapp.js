@@ -45,8 +45,6 @@ function draw(status, qr = null) {
           <div><dt>Instância</dt><dd>${escapeHtml(status.instance || "—")}</dd></div>
           <div><dt>Número</dt><dd>${status.number ? `+${escapeHtml(status.number)}` : "—"}</dd></div>
           <div><dt>Perfil</dt><dd>${escapeHtml(status.profileName || "—")}</dd></div>
-          <div><dt>Servidor</dt><dd class="wa-mono">${escapeHtml(status.baseUrl || "—")}</dd></div>
-          <div><dt>Chave da API</dt><dd class="wa-mono">${status.configured ? `${escapeHtml(status.apiKeyMasked)} <small>(${status.source === "environment" ? "variável de ambiente" : "salva na organização"})</small>` : "não informada"}</dd></div>
         </dl>
         <div class="wa-qr" data-wa-qr ${qr?.base64 ? "" : "hidden"}>
           ${qr?.base64 ? `<img src="${escapeHtml(qr.base64.startsWith("data:") ? qr.base64 : `data:image/png;base64,${qr.base64}`)}" alt="QR code para conectar o WhatsApp" />` : ""}
@@ -69,6 +67,7 @@ function draw(status, qr = null) {
 
       ${status.canManage && !status.configured ? `<article class="data-card wa-config-card">
         <div class="section-heading"><div><p class="card-kicker">Configuração</p><h2>Evolution API</h2></div></div>
+        <p class="wa-config-note">A conexão deste workspace ainda não foi habilitada. Informe a configuração uma única vez; depois disso, a operação será feita somente pelo botão de conexão.</p>
         <form class="wa-form" data-wa-config>
           <label>URL do servidor<input name="baseUrl" type="url" value="${escapeHtml(status.baseUrl || "")}" placeholder="https://sua-evolution.exemplo.com" required /></label>
           <label>Chave da API (apikey)<input name="apiKey" type="password" autocomplete="off" placeholder="${status.configured ? "Manter a chave atual" : "Cole a chave global da Evolution"}" /></label>
@@ -78,7 +77,7 @@ function draw(status, qr = null) {
       </article>` : ""}
     </section>`;
   bind(status);
-  if (pending && qr) startPolling();
+  if (pending) startPolling();
 }
 
 function bind(status) {
@@ -90,7 +89,7 @@ function bind(status) {
     try {
       const result = await api("/api/whatsapp/connect", { method: "POST", body: {} });
       if (result.state === "open") { renderWhatsapp(); return; }
-      draw({ ...status, state: result.state || "connecting" }, result.qr);
+      draw({ ...status, state: result.state || "connecting" }, result.qr || null);
     } catch (error) { say(feedback, error.message, true); button.disabled = false; }
   });
 

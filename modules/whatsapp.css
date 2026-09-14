@@ -66,6 +66,7 @@
 .wa-connected a { color: inherit; font-weight: 700; }
 
 .wa-form { display: grid; gap: 14px; margin-top: 16px; }
+.wa-config-note { margin: 14px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .wa-form label { display: grid; gap: 6px; font-size: 13.5px; font-weight: 600; }
 .wa-form input, .wa-form textarea {
   padding: 12px 14px;
