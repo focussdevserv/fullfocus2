@@ -354,13 +354,21 @@ async function renderProposals() {
 }
 
 async function proposalForm(p, after) {
-  const [opps, leads] = await Promise.all([options("opportunities"), options("leads")]);
-  form({ title: p?.id ? "Editar proposta" : "Nova proposta", subtitle: "CRM", submitLabel: p?.id ? "Salvar" : "Criar", values: p ? { ...p, opportunity_id: p.opportunity_id ? String(p.opportunity_id) : "", lead_id: p.lead_id ? String(p.lead_id) : "" } : {}, fields: [
+  const [opps, leads, clients, projects] = await Promise.all([options("opportunities"), options("leads"), options("clients"), options("projects")]);
+  form({ title: p?.id ? "Editar proposta" : "Nova proposta", subtitle: "CRM", submitLabel: p?.id ? "Salvar" : "Criar", values: p ? { ...p, opportunity_id: p.opportunity_id ? String(p.opportunity_id) : "", lead_id: p.lead_id ? String(p.lead_id) : "", client_id: p.client_id ? String(p.client_id) : "", project_id: p.project_id ? String(p.project_id) : "" } : {}, fields: [
     { name: "title", label: "Título" },
     { name: "opportunity_id", label: "Oportunidade", type: "select", required: false, options: [["", "Sem oportunidade"], ...opps.map((o) => [String(o.id), `${o.name} · ${money(o.amount)}`])], half: true },
     { name: "lead_id", label: "Lead", type: "select", required: false, options: [["", "Sem lead"], ...leads.map((l) => [String(l.id), l.name])], half: true },
+    { name: "client_id", label: "Cliente", type: "select", required: false, options: [["", "Sem cliente"], ...clients.map((c) => [String(c.id), c.name])], half: true },
+    { name: "project_id", label: "Projeto", type: "select", required: false, options: [["", "Sem projeto"], ...projects.map((project) => [String(project.id), project.name])], half: true },
     { name: "amount", label: "Valor (R$)", type: "number", required: false, half: true, help: "Com itens, o valor é a soma deles." },
     { name: "valid_until", label: "Válida até", type: "date", required: false, half: true },
+    { name: "payment_method", label: "Forma de pagamento", required: false, half: true },
+    { name: "down_payment", label: "Entrada (R$)", type: "number", min: 0, required: false, half: true },
+    { name: "installments", label: "Quantidade de parcelas", type: "number", min: 1, step: 1, required: false, half: true },
+    { name: "service_type", label: "Tipo de serviço", required: false, half: true },
+    { name: "scope_included", label: "Escopo incluído", type: "textarea", required: false, rows: 3 },
+    { name: "proposal_terms", label: "Termos comerciais", type: "textarea", required: false, rows: 3 },
     { name: "notes", label: "Condições / observações", type: "textarea", required: false, rows: 4 },
   ], onSubmit: async (values) => { if (values.amount === null) values.amount = 0; if (p?.id) await api(`/api/proposals/${p.id}`, { method: "PATCH", body: values }); else { const { proposal } = await api("/api/proposals", { method: "POST", body: values }); toast("Proposta criada. Adicione os itens.", "success"); after(); proposalDrawer(proposal.id, after); return; } toast("Proposta atualizada.", "success"); after(); } });
 }
