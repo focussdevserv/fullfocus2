@@ -328,15 +328,21 @@ function campaignForm(c, after) {
    Propostas
    ========================================================================== */
 
+const proposalState = { query: "", status: "all" };
 async function renderProposals() {
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Propostas", description: "Carregando…" }) + stateBlock.loading("Carregando propostas…");
   await wrap("Propostas", "CRM", (async () => {
-    const proposals = (await api("/api/proposals")).proposals || [];
+    const params = new URLSearchParams();
+    if (proposalState.query.trim()) params.set("search", proposalState.query.trim());
+    if (proposalState.status !== "all") params.set("status", proposalState.status);
+    const proposals = (await api(`/api/proposals?${params}`)).proposals || [];
     const sent = proposals.filter((p) => p.status === "sent"), accepted = proposals.filter((p) => p.status === "accepted");
     const rate = proposals.filter((p) => ["accepted", "rejected"].includes(p.status)).length ? Math.round((accepted.length / proposals.filter((p) => ["accepted", "rejected"].includes(p.status)).length) * 100) : null;
     dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Propostas", description: `${sent.length} aguardando resposta · ${money(sent.reduce((n, p) => n + Number(p.amount || 0), 0))}`, actions: button({ label: "+ Nova proposta", attr: "data-new" }) })
       + stats([{ label: "Enviadas", value: String(sent.length), note: money(sent.reduce((n, p) => n + Number(p.amount || 0), 0)) }, { label: "Aceitas", value: String(accepted.length), note: money(accepted.reduce((n, p) => n + Number(p.amount || 0), 0)), tone: "green" }, { label: "Taxa de aceite", value: rate === null ? "—" : `${rate}%` }, { label: "Rascunhos", value: String(proposals.filter((p) => p.status === "draft").length) }])
-      + `<section class="data-card crm-card">${proposals.length ? table({ columns: [
+      + `<section class="data-card crm-card">${toolbar({ search: { value: proposalState.query, placeholder: "Buscar proposta..." }, filters: [
+        { key: "status", value: proposalState.status, options: [["all", "Todas"], ...Object.entries(PROPOSAL_STATUS).map(([k, [v]]) => [k, v])] },
+      ] })}${proposals.length ? table({ columns: [
         { key: "title", label: "Proposta", render: (p) => `<strong>${esc(p.title)}</strong><small>${esc(p.opportunity_name || p.lead_name || "Sem vínculo")}${p.items_count ? ` · ${esc(p.items_count)} ${p.items_count === 1 ? "item" : "itens"}` : ""}</small>` },
         { key: "status", label: "Situação", render: (p) => badge(label(PROPOSAL_STATUS, p.status), tone(PROPOSAL_STATUS, p.status)) },
         { key: "amount", label: "Valor", align: "right", render: (p) => `<strong>${money(p.amount)}</strong>` },
@@ -344,6 +350,8 @@ async function renderProposals() {
         { key: "sent_at", label: "Enviada", hideOnNarrow: true, render: (p) => esc(p.sent_at ? relative(p.sent_at) : "—") },
         { key: "actions", label: "", align: "right", render: (p) => rowActions([{ label: "🧾", title: "Itens e detalhes", attr: `data-open="${esc(p.id)}"` }, ...(p.status === "draft" ? [{ label: "📤", title: "Marcar como enviada", attr: `data-set="${esc(p.id)}:sent"` }] : []), ...(p.status === "sent" ? [{ label: "✔", title: "Aceita", attr: `data-set="${esc(p.id)}:accepted"` }, { label: "✖", title: "Recusada", attr: `data-set="${esc(p.id)}:rejected"` }] : []), { label: "✎", title: "Editar", attr: `data-edit="${esc(p.id)}"` }, { label: "×", title: "Excluir", danger: true, attr: `data-delete="${esc(p.id)}"` }]) },
       ], rows: proposals }) : empty({ title: "Nenhuma proposta.", text: "Monte propostas com itens do catálogo a partir de uma oportunidade.", cta: "Criar proposta", attr: "data-new" })}</section>`;
+    dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { proposalState.query = e.target.value; clearTimeout(proposalState.timer); proposalState.timer = setTimeout(() => renderProposals(), 250); });
+    dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { proposalState[el.dataset.filter] = el.value; renderProposals(); }));
     dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => proposalForm(null, renderProposals)));
     dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => proposalForm(proposals.find((p) => String(p.id) === b.dataset.edit), renderProposals)));
     dashboardGrid.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => proposalDrawer(b.dataset.open, renderProposals)));
