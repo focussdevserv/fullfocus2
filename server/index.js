@@ -17,6 +17,7 @@ import { registerPortalPublicRoute } from "./routes/portal-public.js";
 import { registerPortalAuthRoutes } from "./routes/portal-auth.js";
 import { registerPortalAdminRoutes } from "./routes/portal-admin.js";
 import { registerCrmFollowupRoutes } from "./routes/crm-followups.js";
+import { registerFinanceOverviewRoutes } from "./routes/finance-overview.js";
 import { startAutomationRunner } from "./automations-runner.js";
 const { Pool } = pg;
 export const app = express();
@@ -301,6 +302,7 @@ app.patch("/api/events/:id", async (req, res) => { const org = tenant(req, res);
 app.delete("/api/events/:id", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("delete from events where id=$1 and organization_id=$2 returning id", [req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.status(204).end(); } catch { res.status(503).json({ error: "Não foi possível excluir o evento." }); } });
 
 registerCrmFollowupRoutes(app, { pool, tenant, validateRelations, classifyDbError });
+registerFinanceOverviewRoutes(app, { pool, tenant, classifyDbError });
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 registerPortalAdminRoutes(app, { pool, tenant, hashPassword });
 
