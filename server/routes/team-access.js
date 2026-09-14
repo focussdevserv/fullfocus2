@@ -14,7 +14,6 @@ export function register(app, ctx) {
       res.json({ revoked: true });
     } catch { res.status(503).json({ error: "Não foi possível encerrar as sessões." }); }
   });
-  app.get("/api/team/access-status", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select id,name,email,role,access_status,created_at from users where organization_id=$1 order by created_at", [org]); res.json({ users: q.rows }); } catch { res.status(503).json({ error: "Não foi possível carregar a equipe." }); } });
   app.get("/api/team/dashboard", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const query = (sql, params = [org]) => pool.query(sql, params).catch(() => ({ rows: [{ total: 0 }] }));
