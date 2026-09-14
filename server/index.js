@@ -362,6 +362,14 @@ app.get("/api/forms", async (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select f.* from forms f where ${where.join(" and ")} order by f.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ forms: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os formularios." }); }
 });
+app.get("/api/knowledge_articles", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["k.organization_id=$1"], search = String(req.query?.search || "").trim();
+  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(k.title ilike '%' || ${p} || '%' or coalesce(k.category,'') ilike '%' || ${p} || '%' or coalesce(k.body,'') ilike '%' || ${p} || '%')`); }
+  for (const field of ["status", "category"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`k.${field}=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select k.* from knowledge_articles k where ${where.join(" and ")} order by k.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ knowledge_articles: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os artigos." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
