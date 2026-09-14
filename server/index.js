@@ -407,6 +407,25 @@ app.get("/api/trash", async (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select t.id,t.entity_type,t.entity_id,t.deleted_by,t.restore_until,t.created_at,u.name as deleted_by_name from trash t left join users u on u.id=t.deleted_by and u.organization_id=t.organization_id where ${where.join(" and ")} order by t.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ trash: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar a lixeira." }); }
 });
+const genericListSearch = {
+  approvals: ["title", "target_type", "status"], briefings: ["name", "status"],
+  change_requests: ["title", "status"], deliveries: ["version", "environment", "status"],
+  infrastructure_assets: ["name", "kind", "provider", "status"], knowledge_articles: ["title", "category", "status"],
+  forms: ["name", "kind", "status"], payables: ["description", "supplier", "status"],
+  bank_accounts: ["name", "kind", "status"], invoices: ["number", "status"],
+  team_goals: ["name", "status"], commissions: ["description", "responsible", "status"],
+  absences: ["kind", "status"], time_entries: ["notes", "status"],
+};
+app.get("/api/:table", async (req, res, next) => {
+  const table = req.params.table, fields = genericListSearch[table];
+  if (!fields) return next();
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["organization_id=$1"], search = String(req.query.search || "").trim().slice(0, 100);
+  if (search) { values.push(`%${search}%`); const p = `$${values.length}`; where.push(`(${fields.map((field) => `coalesce(${field}::text,'') ilike ${p}`).join(" or ")})`); }
+  if (req.query.status && fields.includes("status")) { values.push(String(req.query.status).slice(0, 40)); where.push(`status=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 250), offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select * from ${table} where ${where.join(" and ")} order by created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ [table]: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar os registros." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
