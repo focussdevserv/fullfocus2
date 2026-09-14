@@ -534,6 +534,17 @@ async function renderAgendaView() {
   });
 }
 
+function renderInboxView() {
+  const messages = [
+    { sender: "Marina Lopes", subject: "Aprovacao do briefing", preview: "O cliente respondeu e pediu apenas dois ajustes no escopo.", time: "09:42", tag: "Cliente", unread: true },
+    { sender: "Equipe FocusDev", subject: "Resumo da semana", preview: "Confira os principais avanços e os proximos marcos do time.", time: "Ontem", tag: "Interno", unread: false },
+    { sender: "Alex Martins", subject: "Reuniao confirmada", preview: "Deixei o convite na agenda para quarta-feira as 14h.", time: "12 set", tag: "Agenda", unread: false },
+    { sender: "Nexum", subject: "Documentos do projeto", preview: "Os arquivos atualizados ja estao disponiveis para revisao.", time: "10 set", tag: "Projeto", unread: false }
+  ];
+  dashboardGrid.innerHTML = `<section class="page-intro inbox-intro"><div><p class="card-kicker">Comunicacao</p><h2>Caixa de entrada</h2><p>Centralize conversas, atualizacoes e avisos importantes do workspace.</p></div><button class="button button-primary compact-action inbox-compose" type="button">+ Nova mensagem</button></section><section class="inbox-layout"><aside class="data-card inbox-sidebar"><div class="section-heading"><div><p class="card-kicker">Pastas</p><h2>Mensagens</h2></div><span class="task-count">1 nova</span></div><button class="inbox-folder is-active" type="button"><span>Entrada</span><b>1</b></button><button class="inbox-folder" type="button"><span>Importantes</span><b>0</b></button><button class="inbox-folder" type="button"><span>Enviadas</span><b>0</b></button><button class="inbox-folder" type="button"><span>Arquivadas</span><b>0</b></button><div class="inbox-note"><strong>Foco do dia</strong><span>Responda as mensagens que desbloqueiam o proximo passo.</span></div></aside><section class="data-card inbox-card"><div class="section-heading"><div><p class="card-kicker">Atualizacoes recentes</p><h2>Sua conversa</h2></div><button class="filter-button inbox-filter" type="button">Filtrar <span>⌄</span></button></div><div class="inbox-list">${messages.map((message) => `<article class="inbox-message ${message.unread ? "is-unread" : ""}"><span class="inbox-avatar">${message.sender.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div class="inbox-message-body"><div><strong>${message.sender}</strong><time>${message.time}</time></div><h3>${message.subject}</h3><p>${message.preview}</p><span class="inbox-tag">${message.tag}</span></div><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section></section>`;
+  dashboardGrid.querySelectorAll(".inbox-folder").forEach((folder) => folder.addEventListener("click", () => { dashboardGrid.querySelector(".inbox-folder.is-active")?.classList.remove("is-active"); folder.classList.add("is-active"); }));
+}
+
 function renderWorkspaceView(hash, label) {
   if (!dashboardGrid) return;
   const key = hash?.replace("#", "");
@@ -543,6 +554,7 @@ function renderWorkspaceView(hash, label) {
   }
   if (key === "agenda") { renderAgendaView(); return; }
   if (key === "tarefas") { renderTasksView(); return; }
+  if (key === "caixa-de-entrada") { renderInboxView(); return; }
   const view = views[key] || { kicker: document.querySelector(".eyebrow").textContent, title: label, intro: "Esta área está pronta para receber seus dados.", columns: ["Item", "Responsável", "Atualização", "Status"], rows: [["Nenhum registro carregado", "—", "Agora", "Aguardando dados"]] };
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">${view.kicker}</p><h2>${view.title}</h2><p>${view.intro}</p></div><button class="button button-primary compact-action" type="button">+ Novo</button></section><section class="data-card table-card"><div class="section-heading"><div><p class="card-kicker">Visão geral</p><h2>Registros recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="table-wrap"><table><thead><tr>${view.columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead><tbody>${view.rows.map((row) => `<tr>${row.map((cell, index) => `<td class="${index === row.length - 1 ? "status-cell" : ""}">${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section><section class="quick-summary"><article class="data-card"><span class="metric-label">Total de registros</span><strong>${view.rows.length}</strong><small class="positive">↑ 4,2% este mês</small></article><article class="data-card"><span class="metric-label">Atualizados hoje</span><strong>08</strong><small class="neutral">Última atualização há 12 min</small></article><article class="data-card"><span class="metric-label">Precisam de atenção</span><strong>03</strong><small class="warning">Verificar pendências</small></article></section>`;
 }

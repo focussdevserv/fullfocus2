@@ -1460,6 +1460,32 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .kanban-task strong { color: #eff5ff; }
 .kanban-task small { color: #91a4bf; }
 
+/* Caixa de entrada: comunicacao em vidro */
+.inbox-layout { display: grid; grid-template-columns: minmax(210px, .28fr) minmax(0, 1fr); gap: 18px; }
+.inbox-sidebar, .inbox-card { border-color: rgb(56 117 219 / 42%); background-color: rgb(14 31 57 / 78%); }
+.inbox-sidebar { background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 78%)), url("assets/spiderman-card-bg.png"); background-position: center, 80% center; background-size: cover; }
+.inbox-card { background-image: linear-gradient(135deg, rgb(3 8 18 / 88%), rgb(8 19 38 / 76%)), url("assets/spiderman-hanging.png"); background-position: center, 90% 28%; background-size: cover; }
+.inbox-folder { display: flex; width: 100%; align-items: center; justify-content: space-between; margin: 5px 0; padding: 12px 13px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #aebed4; font: inherit; text-align: left; cursor: pointer; transition: border-color .2s ease, background-color .2s ease, color .2s ease; }
+.inbox-folder:hover, .inbox-folder.is-active { border-color: rgb(120 174 251 / 35%); background: rgb(37 99 235 / 22%); color: #fff; }
+.inbox-folder b { min-width: 22px; padding: 2px 6px; border-radius: 999px; background: rgb(55 93 151 / 34%); color: #b9d4ff; font-size: 11px; text-align: center; }
+.inbox-note { display: grid; gap: 5px; margin-top: 28px; padding: 14px; border: 1px solid rgb(243 19 45 / 26%); border-radius: 12px; background: rgb(243 19 45 / 12%); }
+.inbox-note strong { color: #ffb4bd; font-size: 12px; }
+.inbox-note span { color: #aebed4; font-size: 11px; line-height: 1.5; }
+.inbox-list { display: grid; gap: 8px; }
+.inbox-message { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 14px; border: 1px solid rgb(145 180 230 / 18%); border-radius: 13px; background: rgb(8 19 38 / 64%); box-shadow: inset 0 1px rgb(255 255 255 / 6%); }
+.inbox-message.is-unread { border-color: rgb(120 174 251 / 45%); background: rgb(31 53 86 / 65%); }
+.inbox-avatar { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 12px; background: linear-gradient(145deg, #e9f1ff, #78aefb); color: #102342; font-size: 11px; font-weight: 800; }
+.inbox-message-body { min-width: 0; }
+.inbox-message-body > div { display: flex; justify-content: space-between; gap: 12px; }
+.inbox-message-body strong, .inbox-message-body h3 { color: #eff5ff; }
+.inbox-message-body strong { font-size: 13px; }
+.inbox-message-body time, .inbox-message-body p { color: #91a4bf; font-size: 11px; }
+.inbox-message-body h3 { margin: 6px 0 4px; font-size: 13px; }
+.inbox-message-body p { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-tag { display: inline-flex; padding: 3px 7px; border: 1px solid rgb(120 174 251 / 24%); border-radius: 999px; color: #b9d4ff; font-size: 10px; }
+.inbox-more { border: 0; background: transparent; color: #7893b6; font: inherit; cursor: pointer; }
+@media (max-width: 780px) { .inbox-layout { grid-template-columns: 1fr; } .inbox-sidebar { display: none; } .inbox-message { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 11px; } .inbox-avatar { width: 34px; height: 34px; } }
+
 /* Barra superior integrada ao novo fundo escuro */
 .app-topbar {
   position: relative;
