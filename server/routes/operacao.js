@@ -52,6 +52,17 @@ export function register(app, ctx) {
   const projectFields = ["name", "client_id", "contract_id", "status", "progress", "internal_code", "project_type", "description", "responsible", "team", "priority", "current_stage", "starts_on", "due_on", "completed_on", "block_reason", "next_action", "next_action_at", "objective", "audience", "features", "modules", "integrations", "visual_identity", "technologies", "requirements", "out_of_scope", "technical_notes", "completion_criteria", "domain", "domain_provider", "hosting_provider", "repository_url", "development_url", "staging_url", "production_url", "database_provider", "external_apis", "access_storage_reference", "total_value", "down_payment", "payment_status", "payment_method", "installments", "installment_value", "payment_due_dates", "discount", "additional_costs", "server_monthly_cost", "maintenance_monthly_value", "api_service_costs", "financial_notes", "pending_items", "observations", "published_at", "delivered", "acceptance_signed", "training_done", "warranty_until", "support_period", "maintenance_plan", "recurring_value", "next_renewal_on", "backup_done", "source_delivered", "accesses_transferred", "final_notes"];
   const projectStatuses = ["lead", "quote", "awaiting_approval", "planning", "active", "in_review", "awaiting_client", "testing", "done", "published", "maintenance", "cancelled", "paused"];
   const projectPriorities = ["low", "medium", "high", "urgent"];
+  app.get("/api/projects", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const values = [org], where = ["p.organization_id=$1"];
+    const add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
+    const search = String(req.query?.search || "").trim(); if (search) { values.push(search); const param = `$${values.length}`; where.push(`(p.name ilike '%' || ${param} || '%' or p.description ilike '%' || ${param} || '%' or c.name ilike '%' || ${param} || '%')`); }
+    if (req.query?.status) add("p.status=$VALUE", String(req.query.status));
+    if (req.query?.client_id) add("p.client_id=$VALUE", String(req.query.client_id));
+    if (req.query?.contract_id) add("p.contract_id=$VALUE", String(req.query.contract_id));
+    const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+    try { const q = await pool.query(`select p.*,c.name client_name,co.name contract_name from projects p left join clients c on c.id=p.client_id and c.organization_id=p.organization_id left join contracts co on co.id=p.contract_id and co.organization_id=p.organization_id where ${where.join(" and ")} order by p.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ projects: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "Não foi possível carregar projetos."); }
+  });
   run("projects", "project", projectFields, (b, p) => {
     const statusIssue = oneOf("status", projectStatuses)(b);
     const priorityIssue = oneOf("priority", projectPriorities)(b);
