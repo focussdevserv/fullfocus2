@@ -1,0 +1,13 @@
+alter table contracts drop constraint if exists contracts_status_check;
+alter table contracts add constraint contracts_status_check check (status in ('draft','in_review','sent','viewed','awaiting_signature','signed','active','near_expiry','paused','completed','closed','cancelled','expired'));
+alter table tickets drop constraint if exists tickets_status_check;
+alter table tickets add constraint tickets_status_check check (status in ('new','open','in_analysis','in_progress','waiting','waiting_client','waiting_third_party','resolved','closed','reopened','done','cancelled'));
+alter table tickets add column if not exists contract_id bigint references contracts(id) on delete set null;
+alter table tickets add column if not exists project_id bigint references projects(id) on delete set null;
+alter table tickets add column if not exists requester text;
+alter table tickets add column if not exists category text;
+alter table tickets add column if not exists source_channel text;
+alter table tickets add column if not exists first_response_at timestamptz;
+alter table tickets add column if not exists resolved_at timestamptz;
+alter table tickets add column if not exists paused_minutes integer default 0;
+create index if not exists idx_tickets_org_sla on tickets(organization_id, status, due_at);
