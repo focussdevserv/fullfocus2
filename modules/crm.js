@@ -431,10 +431,15 @@ function printProposal(p, items) {
    Follow-ups
    ========================================================================== */
 
+const followupState = { query: "", status: "open", channel: "all" };
 async function renderFollowups() {
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Follow-ups", description: "Carregando…" }) + stateBlock.loading("Carregando follow-ups…");
   await wrap("Follow-ups", "CRM", (async () => {
-    const items = (await api("/api/followups")).followups || [];
+    const params = new URLSearchParams();
+    if (followupState.query.trim()) params.set("search", followupState.query.trim());
+    if (followupState.status !== "all") params.set("status", followupState.status);
+    if (followupState.channel !== "all") params.set("channel", followupState.channel);
+    const items = (await api(`/api/followups?${params}`)).followups || [];
     const now = new Date(), today = now.toDateString();
     const pending = items.filter((f) => !f.done_at), done = items.filter((f) => f.done_at);
     const groups = [["late", "Atrasados", pending.filter((f) => new Date(f.due_at) < now && new Date(f.due_at).toDateString() !== today)], ["today", "Hoje", pending.filter((f) => new Date(f.due_at).toDateString() === today)], ["next", "Próximos", pending.filter((f) => new Date(f.due_at) > now && new Date(f.due_at).toDateString() !== today)], ["done", "Concluídos", done.slice(0, 15)]];
@@ -442,6 +447,14 @@ async function renderFollowups() {
     dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Follow-ups", description: `${pending.length} pendentes${groups[0][2].length ? ` · <span class="crm-error">${groups[0][2].length} atrasados</span>` : ""}`, actions: button({ label: "+ Novo follow-up", attr: "data-new" }) })
       + stats([{ label: "Atrasados", value: String(groups[0][2].length), tone: groups[0][2].length ? "red" : undefined }, { label: "Hoje", value: String(groups[1][2].length), tone: "orange" }, { label: "Próximos", value: String(groups[2][2].length) }, { label: "Concluídos", value: String(done.length), tone: "green" }])
       + `<section class="data-card crm-card">${pending.length || done.length ? groups.filter(([, , list]) => list.length).map(([k, name, list]) => `<section class="crm-group crm-group-${k}"><h3>${name} <span>${list.length}</span></h3><div class="crm-followup-list">${list.map((f) => row(f, k === "done")).join("")}</div></section>`).join("") : empty({ title: "Nenhum follow-up.", text: "Agende o próximo contato com cada lead e acompanhe por aqui.", cta: "Agendar follow-up", attr: "data-new" })}</section>`;
+    const followupCard = dashboardGrid.querySelector(".crm-card");
+    const followupToolbar = toolbar({ search: { value: followupState.query, placeholder: "Buscar follow-up..." }, filters: [{ key: "status", value: followupState.status, options: [["open", "Pendentes"], ["all", "Todos"], ["late", "Atrasados"], ["today", "Hoje"], ["done", "Concluídos"]] }, { key: "channel", value: followupState.channel, options: [["all", "Todos os canais"], ["whatsapp", "WhatsApp"], ["ligacao", "Ligação"], ["email", "E-mail"], ["reuniao", "Reunião"]] }] });
+    if (followupCard) followupCard.insertAdjacentHTML("afterbegin", followupToolbar);
+    /*
+    if (followupCard) followupCard.insertAdjacentHTML("afterbegin", toolbar({ search: { value: followupState.query, placeholder: "Buscar contato ou observação..." }, filters: [{ key: "status", value: followupState.status, options: [["open", "Pendentes"], ["all", "Todos"], ["late", "Atrasados"], ["today", "Hoje"], ["done", "Concluídos"]] }, { key: "channel", value: followupState.channel, options: [["all", "Todos os canais"], ["whatsapp", "WhatsApp"], ["ligacao", "Ligação"], ["email", "E-mail"], ["reuniao", "Reunião"] }] }));
+    */
+    dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { followupState.query = e.target.value; clearTimeout(followupState.timer); followupState.timer = setTimeout(() => renderFollowups(), 250); });
+    dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { followupState[el.dataset.filter] = el.value; renderFollowups(); }));
     dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => followupForm(null, renderFollowups)));
     dashboardGrid.querySelectorAll("[data-toggle]").forEach((input) => input.addEventListener("change", async () => { try { await api(`/api/followups/${input.dataset.toggle}`, { method: "PATCH", body: { done: input.checked } }); toast(input.checked ? "Follow-up concluído." : "Reaberto.", "success"); renderFollowups(); } catch (error) { toast(error.message, "error"); input.checked = !input.checked; } }));
     dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => followupForm(items.find((f) => String(f.id) === b.dataset.edit), renderFollowups)));
