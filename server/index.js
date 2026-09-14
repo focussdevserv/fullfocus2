@@ -389,6 +389,14 @@ Object.entries(managementSearch).forEach(([table, fields]) => app.get(`/api/${ta
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select m.* from ${table} m where ${where.join(" and ")} order by m.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ [table]: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar os registros de gestão." }); }
 }));
+app.get("/api/payables", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["p.organization_id=$1"], search = String(req.query?.search || "").trim();
+  if (search) { values.push(search); const q = `$${values.length}`; where.push(`(p.description ilike '%' || ${q} || '%' or coalesce(p.supplier,'') ilike '%' || ${q} || '%' or coalesce(c.name,'') ilike '%' || ${q} || '%' or coalesce(pr.name,'') ilike '%' || ${q} || '%')`); }
+  for (const field of ["status", "client_id", "project_id"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`p.${field}=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select p.*,c.name as client_name,pr.name as project_name from payables p left join clients c on c.id=p.client_id and c.organization_id=p.organization_id left join projects pr on pr.id=p.project_id and pr.organization_id=p.organization_id where ${where.join(" and ")} order by p.due_at nulls last,p.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ payables: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar as contas a pagar." }); }
+});
 app.get("/api/trash", async (req, res) => {
   const org = tenant(req, res); if (!org) return;
   const values = [org], where = ["t.organization_id=$1"], search = String(req.query?.search || "").trim();
