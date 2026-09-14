@@ -162,9 +162,14 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
   if (automation.action === "generate_contract" && automation.trigger === "proposal_approved") {
     if (!source.client_id) throw new Error("A proposta aprovada precisa estar vinculada a um cliente.");
     await assertOrganizationRelation(client, "clients", source.client_id, automation.organization_id, "O cliente");
+    const existing = await client.query(
+      "select id from contracts where proposal_id=$1 and organization_id=$2 order by id limit 1",
+      [source.id, automation.organization_id],
+    );
+    if (existing.rows[0]?.id) return { action: "generate_contract", contract_id: existing.rows[0].id, proposal_id: source.id, reused: true };
     const contract = await client.query(
-      "insert into contracts (organization_id,client_id,opportunity_id,name,status,value) values ($1,$2,$3,$4,'draft',$5) returning id",
-      [automation.organization_id, source.client_id, source.opportunity_id || null, String(config.name || source.title || "Contrato de prestação de serviços").slice(0, 240), Number(source.final_amount ?? source.amount ?? 0)],
+      "insert into contracts (organization_id,client_id,opportunity_id,proposal_id,name,status,value) values ($1,$2,$3,$4,$5,'draft',$6) returning id",
+      [automation.organization_id, source.client_id, source.opportunity_id || null, source.id, String(config.name || source.title || "Contrato de prestação de serviços").slice(0, 240), Number(source.final_amount ?? source.amount ?? 0)],
     );
     return { action: "generate_contract", contract_id: contract.rows[0].id, proposal_id: source.id };
   }
