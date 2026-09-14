@@ -21,6 +21,7 @@ import { registerFinanceOverviewRoutes } from "./routes/finance-overview.js";
 import { registerDeliveryWorkflowRoutes } from "./routes/delivery-workflow.js";
 import { registerAutomationRunRoutes } from "./routes/automation-runs.js";
 import { register as registerEventRoutes } from "./routes/events.js";
+import { registerMercadoPagoWebhookRoutes } from "./routes/mercadopago-webhook.js";
 import { startAutomationRunner } from "./automations-runner.js";
 const { Pool } = pg;
 export const app = express();
@@ -96,7 +97,7 @@ app.post("/api/auth/logout", (_req, res) => { res.setHeader("Set-Cookie", sessio
 attachResetRoutes(app, { pool, hashPassword });
 app.get("/api/health", async (_req, res) => { try { const q = await pool.query("select now() as time"); res.json({ ok: true, database: "connected", time: q.rows[0].time }); } catch { res.status(503).json({ ok: false, database: "unavailable", error: "Database unavailable." }); } });
 /* Rotas públicas (sem sessão): autenticação, health, portal do cliente (token) e webhook do WhatsApp (token). */
-const PUBLIC_API_PREFIXES = ["/auth/", "/portal/", "/satisfaction/", "/whatsapp/webhook/", "/public/catalog/", "/forms/public/", "/contracts/public/", "/proposals/public/", "/deliveries/public/"];
+const PUBLIC_API_PREFIXES = ["/auth/", "/portal/", "/satisfaction/", "/whatsapp/webhook/", "/webhooks/mercadopago", "/public/catalog/", "/forms/public/", "/contracts/public/", "/proposals/public/", "/deliveries/public/"];
 registerContractPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
 registerProposalPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
 registerDeliveryPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
@@ -294,6 +295,7 @@ app.use("/api/tasks", async (req, res, next) => {
 });
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 registerEventRoutes(app, { pool, tenant, classifyDbError, validateRelations });
+registerMercadoPagoWebhookRoutes(app, { pool, defaultOrganizationId: DEFAULT_ORGANIZATION_ID, classifyDbError });
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
