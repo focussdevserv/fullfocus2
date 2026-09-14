@@ -1437,6 +1437,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .agenda-history { background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 72%)), url("assets/agenda-spider-mask.png"); background-position: center, 64% center; }
 .agenda-card { background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 72%)), url("assets/agenda-spider-split.png"); background-position: center, center; }
 
+/* Identidade Spider-Man da tela de Tarefas */
+.task-summary .data-card, .tasks-card { border-color: rgb(56 117 219 / 42%); background-position: center; background-size: cover; }
+.task-summary .data-card:nth-child(1) { background-image: linear-gradient(135deg, rgb(3 8 18 / 82%), rgb(18 30 61 / 66%)), url("assets/spiderman-card-web.png"); background-position: center, 72% center; }
+.task-summary .data-card:nth-child(2) { background-image: linear-gradient(135deg, rgb(3 8 18 / 82%), rgb(31 18 60 / 66%)), url("assets/spiderman-card-duo.png"); background-position: center, center; }
+.task-summary .data-card:nth-child(3) { background-image: linear-gradient(135deg, rgb(3 8 18 / 82%), rgb(66 18 29 / 66%)), url("assets/spiderman-card-hero.png"); background-position: center, 64% center; }
+.tasks-card { background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 78%)), url("assets/spiderman-card-bg.png"); background-position: center, 82% center; }
+.task-toolbar select, .task-toolbar .filter-button { border-color: rgb(145 180 230 / 28%); background: rgb(31 53 86 / 66%); color: #c2d0e4; }
+.task-toolbar select:hover, .task-toolbar .filter-button:hover { border-color: #f3132d; background: rgb(243 19 45 / 24%); color: #fff; }
+.task-row { border-color: rgb(145 180 230 / 18%); }
+.task-row strong { color: #eff5ff; }
+.task-row small { color: #91a4bf; }
+.task-check span { border-color: #78aefb; background: rgb(31 53 86 / 68%); }
+.task-check input:checked + span { border-color: #f3132d; background: #f3132d; }
+.task-status.doing, .task-status.priority-medium { border: 1px solid rgb(120 174 251 / 26%); background: rgb(37 99 235 / 22%); color: #9ec4ff; }
+.task-status.done, .task-status.priority-low { border: 1px solid rgb(91 208 164 / 26%); background: rgb(21 150 106 / 18%); color: #79e0bc; }
+.task-status.priority-high { border: 1px solid rgb(243 19 45 / 30%); background: rgb(243 19 45 / 18%); color: #ff9aa5; }
+.kanban-column { border-color: rgb(145 180 230 / 22%); background: rgb(14 31 57 / 66%); }
+.kanban-column h3 { color: #eff5ff; }
+.kanban-column h3 span { background: rgb(55 93 151 / 34%); color: #b9d4ff; }
+.kanban-task { border-color: rgb(145 180 230 / 24%); background: linear-gradient(135deg, rgb(31 53 86 / 72%), rgb(8 19 38 / 62%)); box-shadow: inset 0 1px rgb(255 255 255 / 8%), 0 8px 18px rgb(0 0 0 / 18%); }
+.kanban-task strong { color: #eff5ff; }
+.kanban-task small { color: #91a4bf; }
+
 /* Barra superior integrada ao novo fundo escuro */
 .app-topbar {
   position: relative;
