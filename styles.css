@@ -1274,7 +1274,7 @@ body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.da
 
 /* Fundo compartilhado por Dashboard, Tarefas, Agenda e todas as telas internas */
 .app-shell {
-  background-color: #030812;
+  background-color: #050b18;
   background-image: none;
 }
 .app-content { background: transparent; }
@@ -1282,8 +1282,8 @@ body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.da
 
 /* Sistema visual unificado do workspace */
 html:has(body.dark-mode) { color-scheme: dark; }
-body.dark-mode { background: #070e1b; }
-body.dark-mode .app-shell { background: #070e1b; }
+body.dark-mode { background: #050b18; }
+body.dark-mode .app-shell { background: #050b18; }
 body.dark-mode .app-content { background: transparent; }
 body.dark-mode .app-topbar { border-bottom-color: rgb(126 164 221 / 18%); }
 body.dark-mode .global-search,
