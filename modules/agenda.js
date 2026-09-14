@@ -5,7 +5,7 @@
    ========================================================================== */
 
 const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-const RECURRENCE = { none: "", daily: "Diário", weekly: "Semanal", monthly: "Mensal" };
+const RECURRENCE = { none: "", daily: "Diário", weekly: "Semanal", monthly: "Mensal", yearly: "Todo ano" };
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 07h–21h na visão semana/dia
 
 const view = { mode: localStorage.getItem("focusdev_agenda_mode") || "month", cursor: new Date(), selected: new Date(), query: "", eventType: "", status: "", events: [], loading: false };

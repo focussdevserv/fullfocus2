@@ -20,3 +20,13 @@ test("lista de eventos aplica período e vínculos no workspace", async (t) => {
   assert.match(calls[0].sql, /status=\$5/);
   assert.deepEqual(calls[0].params, ["org-a", "2026-09-01", "2026-10-01", "7", "pending"]);
 });
+
+test("cria evento com recorrência anual", async (t) => {
+  const calls = [];
+  const pool = { query: async (sql, params) => { calls.push({ sql, params }); return { rows: [{ id: 1, title: "Renovação", recurrence: "yearly" }], rowCount: 1 }; } };
+  const app = express(); app.use(express.json());
+  register(app, { pool, tenant: () => "org-a", classifyDbError: (_error, message) => ({ status: 503, error: message }), validateRelations: async () => {} });
+  const server = createServer(app); await new Promise((resolve) => server.listen(0, resolve)); t.after(() => server.close());
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/events`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Renovação", startsAt: "2026-09-14T10:00:00Z", recurrence: "yearly" }) });
+  assert.equal(response.status, 201); assert.equal(calls[0].params[4], "yearly");
+});
