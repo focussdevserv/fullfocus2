@@ -330,6 +330,14 @@ app.get("/api/tickets", async (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select t.*,c.name client_name,pr.name project_name from tickets t left join clients c on c.id=t.client_id and c.organization_id=t.organization_id left join projects pr on pr.id=t.project_id and pr.organization_id=t.organization_id where ${where.join(" and ")} order by t.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ tickets: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os tickets." }); }
 });
+app.get("/api/charges", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["ch.organization_id=$1"], search = String(req.query?.search || "").trim();
+  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(coalesce(ch.message,'') ilike '%' || ${p} || '%' or coalesce(c.name,'') ilike '%' || ${p} || '%' or coalesce(r.description,'') ilike '%' || ${p} || '%')`); }
+  for (const field of ["status", "channel", "client_id", "project_id", "receivable_id"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`ch.${field}=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select ch.*,c.name client_name,r.description receivable_description from charges ch left join clients c on c.id=ch.client_id and c.organization_id=ch.organization_id left join receivables r on r.id=ch.receivable_id and r.organization_id=ch.organization_id where ${where.join(" and ")} order by ch.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ charges: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar as cobrancas." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
