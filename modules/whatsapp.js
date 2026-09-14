@@ -120,7 +120,10 @@ function bind(status) {
     submit.disabled = true; say(out, "Salvando…");
     try {
       await api("/api/whatsapp/config", { method: "POST", body: { baseUrl: form.baseUrl.value, apiKey: form.apiKey.value } });
-      renderWhatsapp();
+      const next = await api("/api/whatsapp/status");
+      const connection = await api("/api/whatsapp/connect", { method: "POST", body: {} });
+      if (connection.state === "open") renderWhatsapp();
+      else draw({ ...next, state: connection.state || "connecting" }, connection.qr);
     } catch (error) { say(out, error.message, true); submit.disabled = false; }
   });
 }
