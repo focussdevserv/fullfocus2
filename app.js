@@ -167,6 +167,12 @@ function showRegister() {
   $("register-name").focus();
 }
 
+let homeGreeting = "Bom dia, FocusDev";
+function greetingForNow(date = new Date()) {
+  const hour = date.getHours();
+  return hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+}
+
 function showApp(user) {
   loginShell.hidden = true;
   appShell.hidden = false;
@@ -174,7 +180,8 @@ function showApp(user) {
   closeAccountMenu();
   if (user?.name) {
     const firstName = user.name.trim().split(/\s+/)[0];
-    appTitle.textContent = `Bom dia, ${firstName}`;
+    homeGreeting = `${greetingForNow()}, ${firstName}`;
+    appTitle.textContent = homeGreeting;
     document.querySelectorAll(".account-name strong").forEach((element) => { element.textContent = firstName; });
     document.querySelectorAll(".avatar").forEach((element) => { element.textContent = user.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); });
   }
@@ -204,13 +211,20 @@ async function restoreSession() {
   const savedSession = readSavedSession();
   try {
     const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+    if (transition !== authTransition) return;
+    if (response.status === 401) {
+      // Sessão expirada ou inválida: a cópia local não vale mais.
+      localStorage.removeItem(SESSION_KEY);
+      showLogin();
+      return;
+    }
     if (!response.ok) throw new Error();
     const data = await response.json();
-    if (transition !== authTransition) return;
     saveSession(data.user);
     showApp(data.user);
   } catch {
     if (transition !== authTransition) return;
+    // Rede/API indisponível: mantém o workspace utilizável com a sessão salva (modo offline do PWA).
     if (savedSession) {
       showApp(savedSession);
       return;
@@ -262,12 +276,16 @@ async function loadWeather() {
     if (!response.ok) throw new Error("weather unavailable");
     const data = await response.json();
     const code = data.current.weather_code;
-    $("weather-temperature").textContent = `${Math.round(data.current.temperature_2m)}°C`;
-    $("weather-summary").textContent = `${weatherLabels[code] || "Condição atual"} · sensação ${Math.round(data.current.apparent_temperature)}°C`;
-    widget.querySelector(".weather-symbol").textContent = weatherIcons[code] || "☼";
+    // O usuário pode ter saído do Início enquanto a geolocalização/API respondia.
+    const temperature = $("weather-temperature"), summary = $("weather-summary"), symbol = widget.querySelector(".weather-symbol");
+    if (!temperature || !summary) return;
+    temperature.textContent = `${Math.round(data.current.temperature_2m)}°C`;
+    summary.textContent = `${weatherLabels[code] || "Condição atual"} · sensação ${Math.round(data.current.apparent_temperature)}°C`;
+    if (symbol) symbol.textContent = weatherIcons[code] || "☼";
   } catch {
-    $("weather-temperature").textContent = "Indisponível";
-    $("weather-summary").textContent = "Tente novamente mais tarde";
+    const temperature = $("weather-temperature"), summary = $("weather-summary");
+    if (temperature) temperature.textContent = "Indisponível";
+    if (summary) summary.textContent = "Tente novamente mais tarde";
   }
 }
 
@@ -444,7 +462,8 @@ function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   document.querySelector(".nav-item.is-active")?.classList.remove("is-active");
   item.classList.add("is-active");
   const label = item.textContent.trim();
-  appTitle.textContent = item.getAttribute("href") === "#inicio" ? "Bom dia, FocusDev" : label;
+  document.title = `${item.getAttribute("href") === "#inicio" ? "Início" : label} · FocusDev`;
+  appTitle.textContent = item.getAttribute("href") === "#inicio" ? homeGreeting : label;
   document.querySelector(".eyebrow").textContent = item.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
   renderWorkspaceView(item.getAttribute("href"), label);
   closeSidebar();
@@ -745,6 +764,8 @@ function renderChargesView() {
 function renderSubscriptionsView() {
   const subscriptions = [["Acme Inc.", "Plano Growth", "R$ 2.400,00", "18 Jun 2024", "Ativa", "blue"], ["Nexum", "Plano Scale", "R$ 1.800,00", "22 Jun 2024", "Ativa", "green"], ["Orbit", "Plano Starter", "R$ 890,00", "03 Jul 2024", "Trial", "orange"], ["Vértice", "Plano Growth", "R$ 2.400,00", "10 Jul 2024", "Ativa", "blue"], ["Lumen", "Plano Scale", "R$ 1.800,00", "15 Jul 2024", "Pausada", "pink"]];
   dashboardGrid.innerHTML = `${financeIntro("Financeiro", "Assinaturas", "Gerencie receita recorrente, planos ativos e os próximos ciclos de cobrança.", "+ Nova assinatura")}<section class="finance-metrics">${financeMetric("MRR", "R$ 18.460,00", "↑ 9,8% no mês")} ${financeMetric("Assinaturas ativas", "42", "3 novas este mês")} ${financeMetric("Churn mensal", "2,4%", "↓ 0,8% vs. anterior", "positive")} ${financeMetric("Ticket médio", "R$ 439,00", "↑ 4,2% no período", "neutral")}</section><section class="data-card subscriptions-card"><div class="section-heading"><div><p class="card-kicker">Receita recorrente</p><h2>Carteira de assinaturas</h2></div><div class="receivable-filters"><button class="filter-button is-active" type="button">Todas</button><button class="filter-button" type="button">Ativas</button><button class="filter-button" type="button">Em risco</button></div></div><div class="subscription-list">${subscriptions.map(([client, plan, value, date, status, tone]) => `<article class="subscription-row"><span class="lead-avatar">${client.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span><div class="subscription-client"><strong>${client}</strong><small>${plan}</small></div><div><small>Valor mensal</small><strong>${value}</strong></div><div><small>Próxima cobrança</small><strong>${date}</strong></div><span class="finance-status ${tone}">${status}</span><button class="inbox-more" type="button" aria-label="Mais opções">•••</button></article>`).join("")}</div></section>`;
+}
+
 const customerModuleData = {
   conversas: {
     kicker: "Relacionamento",
@@ -940,4 +961,3 @@ topLogoutButton?.addEventListener("click", async () => {
 restoreSession().then(() => {
   renderHashRoute();
 });
-}
