@@ -294,6 +294,16 @@ app.use("/api/tasks", async (req, res, next) => {
 });
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 registerEventRoutes(app, { pool, tenant, classifyDbError, validateRelations });
+for (const table of ["revenues", "expenses", "receivables"]) app.get(`/api/${table}`, async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = [`${table}.organization_id=$1`];
+  const add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
+  const search = String(req.query?.search || "").trim(); if (search) { values.push(search); const param = `$${values.length}`; where.push(`(${table}.description ilike '%' || ${param} || '%' or coalesce(${table}.category,'') ilike '%' || ${param} || '%')`); }
+  if (req.query?.status) add(`${table}.status=$VALUE`, String(req.query.status));
+  for (const field of ["client_id", "project_id", "contract_id"]) if (req.query?.[field]) add(`${table}.${field}=$VALUE`, String(req.query[field]));
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select * from ${table} where ${where.join(" and ")} order by coalesce(due_at,paid_at,created_at) desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ [table]: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar os registros financeiros." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
