@@ -1548,6 +1548,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .funnel-add:hover { border-color: #f3132d; background: rgb(243 19 45 / 14%); color: #fff; }
 @media (max-width: 780px) { .funnel-toolbar { align-items: flex-start; flex-direction: column; } .funnel-toolbar > div { flex-wrap: wrap; } .funnel-board { grid-template-columns: repeat(4, minmax(220px, 78vw)); } }
 
+/* Oportunidades: carteira priorizada para decisao rapida */
+.opportunity-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.opportunity-summary .data-card { display: grid; gap: 6px; padding: 17px 19px; border-color: rgb(120 174 251 / 30%); background: linear-gradient(135deg, rgb(31 53 86 / 78%), rgb(8 19 38 / 74%)); }
+.opportunity-summary span, .opportunity-summary small { color: #aebed4; font-size: 11px; }
+.opportunity-summary strong { color: #eff5ff; font-size: 23px; }
+.opportunities-card { border-color: rgb(120 174 251 / 34%); background-color: rgb(14 31 57 / 78%); background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 74%)), url("assets/spiderman-card-duo.png"); background-position: center, 82% 20%; background-size: cover; }
+.opportunity-actions { display: flex; gap: 8px; }
+.opportunity-list { display: grid; gap: 8px; }
+.opportunity-row { display: grid; grid-template-columns: 34px minmax(180px, 1.2fr) repeat(3, minmax(90px, .6fr)) auto auto; gap: 12px; align-items: center; padding: 13px; border: 1px solid rgb(145 180 230 / 19%); border-radius: 12px; background: rgb(8 19 38 / 66%); }
+.opportunity-icon { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid rgb(243 19 45 / 34%); border-radius: 9px; background: rgb(243 19 45 / 18%); color: #ff9aa5; }
+.opportunity-row > div { display: grid; gap: 4px; min-width: 0; }
+.opportunity-row strong { overflow: hidden; color: #eff5ff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.opportunity-row small { color: #91a4bf; font-size: 10px; }
+.opportunity-name small { font-size: 11px; }
+.priority-pill { padding: 5px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; text-align: center; }
+.priority-alta { border: 1px solid rgb(243 19 45 / 30%); background: rgb(243 19 45 / 17%); color: #ff9aa5; }
+.priority-media { border: 1px solid rgb(245 158 11 / 30%); background: rgb(245 158 11 / 14%); color: #ffd38a; }
+.priority-baixa { border: 1px solid rgb(91 208 164 / 30%); background: rgb(21 150 106 / 15%); color: #79e0bc; }
+@media (max-width: 780px) { .opportunity-summary { grid-template-columns: 1fr; } .opportunity-row { grid-template-columns: 32px minmax(0, 1fr) auto; } .opportunity-row > div:not(.opportunity-name), .opportunity-row > .priority-pill { grid-column: 2 / -1; } .opportunity-actions { flex-wrap: wrap; } }
+
 /* Barra superior integrada ao novo fundo escuro */
 .app-topbar {
   position: relative;
