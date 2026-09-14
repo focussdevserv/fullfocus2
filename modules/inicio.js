@@ -73,6 +73,9 @@ let loadedAt = null;
 function renderHome() {
   dashboardGrid.innerHTML = initialDashboardMarkup;
   bindSkeleton();
+  dashboardGrid.querySelector(".dashboard-pulse")?.replaceChildren();
+  dashboardGrid.querySelector(".activity-list")?.replaceChildren(Object.assign(document.createElement("p"), { className: "inicio-empty", textContent: "Carregando atividades reais do workspace." }));
+  dashboardGrid.querySelector(".agenda-list")?.replaceChildren(Object.assign(document.createElement("p"), { className: "inicio-empty", textContent: "Carregando eventos reais do workspace." }));
   const metricKeys = ["revenue", "leads", "tasks", "projects", "receivables", "overdue", "cashflow", "tickets"];
   metricKeys.forEach((key) => setMetric(key, "…", "Carregando"));
   setAvailability("Sincronizando com o workspace…", "loading");
