@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { sendEmail, renderEmail, APP_URL } from "./mailer.js";
 
 export const hashResetToken = (token) => crypto.createHash("sha256").update(String(token)).digest("hex");
 
@@ -12,7 +13,7 @@ export const isExpired = (expiresAt, now = Date.now()) => {
   return !Number.isFinite(timestamp) || timestamp <= now;
 };
 
-export function attachResetRoutes(app, { pool, hashPassword, ttlMinutes = 60, logger = console }) {
+export function attachResetRoutes(app, { pool, hashPassword, ttlMinutes = 60, logger = console, mail = sendEmail }) {
   app.post("/api/auth/reset-request", async (req, res) => {
     const email = String(req.body?.email || "").trim().toLowerCase();
     try {
@@ -26,6 +27,9 @@ export function attachResetRoutes(app, { pool, hashPassword, ttlMinutes = 60, lo
             await client.query("update password_resets set used_at=now() where user_id=$1 and used_at is null", [user.rows[0].id]);
             await client.query("insert into password_resets (user_id,token_hash,expires_at) values ($1,$2,$3)", [user.rows[0].id, tokenHash, new Date(Date.now() + ttlMinutes * 60_000)]);
             logger.info(`[reset] link para ${email}: /#reset=${token}`);
+            const link = `${APP_URL}/#reset=${token}`;
+            const { html, text } = renderEmail({ title: "Redefina sua senha", intro: `Recebemos um pedido para redefinir a senha da conta ${email}. O link vale por ${ttlMinutes} minutos.`, actionLabel: "Criar nova senha", actionUrl: link });
+            mail({ to: email, subject: "Redefinição de senha · FocusDev", html, text }).catch((error) => logger.error?.("[reset] e-mail não enviado", error?.message));
           }
           await client.query("commit");
         } catch (error) {

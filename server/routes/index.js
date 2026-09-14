@@ -9,8 +9,9 @@ import * as automacoes from "./automacoes.js";
 import * as configuracoes from "./configuracoes.js";
 import * as meu_dia from "./meu-dia.js";
 import * as whatsapp from "./whatsapp.js";
+import * as email from "./email.js";
 
-const domains = [inbox, crm, contas, operacao, financeiro, catalogo, automacoes, configuracoes, meu_dia, whatsapp];
+const domains = [inbox, crm, contas, operacao, financeiro, catalogo, automacoes, configuracoes, meu_dia, whatsapp, email];
 
 export function registerDomainRoutes(app, ctx) {
   for (const domain of domains) domain.register(app, ctx);
