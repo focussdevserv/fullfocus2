@@ -1328,6 +1328,47 @@ body.dark-mode .topbar-profile .account-dropdown a,
 body.dark-mode .topbar-profile .account-dropdown button { color: #eff5ff; }
 body.dark-mode .create-menu a:hover,
 body.dark-mode .topbar-profile .account-dropdown a:hover { background: rgb(55 93 151 / 32%); color: #fff; }
+body.dark-mode .calendar-card,
+body.dark-mode .day-agenda,
+body.dark-mode .agenda-upcoming {
+  border-color: rgb(145 180 230 / 24%);
+  background: linear-gradient(135deg, rgb(26 47 78 / 72%), rgb(8 19 38 / 58%));
+  box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 14px 30px rgb(0 0 0 / 20%);
+}
+body.dark-mode .calendar-toolbar h2,
+body.dark-mode .day-agenda h2,
+body.dark-mode .agenda-upcoming h2 { color: #eff5ff; }
+body.dark-mode .calendar-nav,
+body.dark-mode .agenda-view-toggle,
+body.dark-mode .agenda-export,
+body.dark-mode .icon-action { border-color: rgb(145 180 230 / 28%); background: rgb(31 53 86 / 58%); color: #b9d4ff; }
+body.dark-mode .calendar-nav:hover,
+body.dark-mode .agenda-view-toggle:hover,
+body.dark-mode .agenda-export:hover,
+body.dark-mode .icon-action:hover { border-color: #78aefb; background: rgb(55 93 151 / 48%); color: #fff; }
+body.dark-mode .calendar-day { border-color: transparent; background: rgb(31 53 86 / 42%); color: #c2d0e4; }
+body.dark-mode .calendar-day:hover,
+body.dark-mode .calendar-day.is-selected { border-color: #78aefb; background: rgb(55 93 151 / 58%); color: #fff; }
+body.dark-mode .calendar-day.is-empty { background: transparent; }
+body.dark-mode .day-event,
+body.dark-mode .upcoming-list article { border-color: rgb(145 180 230 / 18%); }
+body.dark-mode .day-event strong,
+body.dark-mode .upcoming-list article strong { color: #eff5ff; }
+body.dark-mode .day-event small,
+body.dark-mode .upcoming-list article small,
+body.dark-mode .agenda-empty { color: #91a4bf; }
+body.dark-mode .agenda-add-link { color: #8bb9ff; }
+body.dark-mode .agenda-add-link:hover { color: #fff; }
+body.dark-mode .upcoming-date { color: #8bb9ff; }
+@media (max-width: 780px) {
+  .agenda-layout { gap: 14px; }
+  .calendar-card, .day-agenda, .agenda-upcoming { padding: 16px; }
+  .calendar-toolbar { gap: 8px; margin-bottom: 16px; }
+  .calendar-toolbar h2 { min-width: 0; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+  .calendar-weekdays, .calendar-grid { gap: 4px; }
+  .calendar-day { min-height: 40px; }
+  .calendar-week-day { min-height: 96px; }
+}
 
 button, a, input, select { touch-action: manipulation; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
