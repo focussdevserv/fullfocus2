@@ -1433,7 +1433,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .create-dialog { background-position: center, 50% 35%; }
 .calendar-card { background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 72%)), url("assets/agenda-spider-red-emblem.png"); background-position: center, 72% center; }
 .day-agenda { background-image: linear-gradient(135deg, rgb(3 8 18 / 86%), rgb(8 19 38 / 70%)), url("assets/agenda-spider-split.png"); background-position: center, center; }
-.agenda-upcoming, .agenda-history, .agenda-card { background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 72%)), url("assets/agenda-spider-mask.png"); background-position: center, 64% center; }
+.agenda-upcoming { background-image: linear-gradient(135deg, rgb(3 8 18 / 92%), rgb(8 19 38 / 78%)), url("assets/agenda-spider-suit.png"); background-position: center, center; }
+.agenda-history { background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 72%)), url("assets/agenda-spider-mask.png"); background-position: center, 64% center; }
+.agenda-card { background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 72%)), url("assets/agenda-spider-split.png"); background-position: center, center; }
 
 /* Barra superior integrada ao novo fundo escuro */
 .app-topbar {
