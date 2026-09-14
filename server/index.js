@@ -137,6 +137,18 @@ const createCrud = (table) => {
 };
 // A auditoria é somente leitura para o cliente; os registros devem ser criados pelo servidor.
 app.use("/api/audit_events", (req, res, next) => req.method === "GET" ? next() : res.status(405).json({ error: "A auditoria é somente leitura." }));
+app.use("/api", async (req, res, next) => {
+  const [, table] = req.path.split("/");
+  if (req.method !== "POST" || !["contacts", "companies", "clients"].includes(table)) return next();
+  const fields = ["document", "email", "phone"], values = fields.map((key) => normalizeIdentity(key, req.body?.[key]));
+  if (!values.some(Boolean)) return next();
+  const conditions = fields.map((key, index) => `${key}=$${index + 2}`).join(" or ");
+  try {
+    const q = await pool.query(`select id from ${table} where organization_id=$1 and (${conditions}) limit 1`, [req.user.organization_id, ...values.map((value) => value || null)]);
+    if (q.rowCount) return res.status(409).json({ error: "Já existe um cadastro com este e-mail, telefone ou documento." });
+    return next();
+  } catch { return res.status(503).json({ error: "Não foi possível validar duplicidade." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.get("/api/dashboard", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const [tasks, leads, projects, revenue] = await Promise.all([pool.query("select count(*)::int total from tasks where organization_id=$1 and status <> 'done'", [org]), pool.query("select count(*)::int total from leads where organization_id=$1 and status <> 'won'", [org]), pool.query("select count(*)::int total from projects where organization_id=$1 and status='active'", [org]), pool.query("select coalesce(sum(amount),0) total from revenues where organization_id=$1 and paid_at >= date_trunc('month',current_date)", [org])]); res.json({ tasks: tasks.rows[0].total, leads: leads.rows[0].total, projects: projects.rows[0].total, revenue: revenue.rows[0].total }); } catch { res.status(503).json({ error: "Não foi possível carregar o dashboard." }); } });
