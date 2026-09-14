@@ -260,24 +260,3 @@ window.FocusInbox = {
 };
 
 registerRoutes({ "caixa-de-entrada": () => renderInbox("caixa-de-entrada"), conversas: () => renderInbox("conversas") });
-
-/* O sino do cabeçalho mostra notificações internas; conversas continuam no módulo Conversas. */
-const notificationRoute = { tasks: "tarefas", leads: "leads", opportunities: "oportunidades", proposals: "propostas", contracts: "contratos", projects: "projetos", tickets: "tickets", receivables: "contas-a-receber", conversations: "conversas", users: "equipe", team_members: "equipe" };
-const notificationEsc = (value) => escapeHtml(value ?? "");
-async function openNotificationCenter() {
-  const trigger = document.querySelector(".notification-button");
-  if (trigger) trigger.disabled = true;
-  try {
-    const data = await api("/api/notifications?status=all&limit=50"), rows = data.notifications || [];
-    const html = `<div class="notification-inbox"><div class="notification-inbox-actions"><strong>${Number(data.unread_count || 0)} não lida(s)</strong><button type="button" class="compact-action" data-notification-read-all ${data.unread_count ? "" : "disabled"}>Marcar todas como lidas</button></div><div class="notification-inbox-list">${rows.length ? rows.map((row) => `<article class="notification-inbox-row ${row.read_at ? "" : "is-unread"}" data-notification-row="${notificationEsc(row.id)}"><div><strong>${notificationEsc(row.message || "Notificação")}</strong><p>${row.entity_type && notificationRoute[row.entity_type] ? `<a href="#${notificationRoute[row.entity_type]}" data-notification-link>Ver registro relacionado →</a>` : "Atualização interna do workspace"}</p><time>${row.created_at ? new Date(row.created_at).toLocaleString("pt-BR") : ""}</time></div><div class="notification-inbox-actions"><button type="button" class="compact-action" data-notification-read="${notificationEsc(row.id)}" ${row.read_at ? "disabled" : ""}>${row.read_at ? "Lida" : "Marcar lida"}</button><button type="button" class="compact-action" data-notification-archive="${notificationEsc(row.id)}">Arquivar</button></div></article>`).join("") : `<div class="inbox-empty"><p>Nenhuma notificação interna.</p></div>`}</div></div>`;
-    const panel = ui.drawer({ title: "Caixa de entrada", subtitle: "Notificações internas", html });
-    const markRead = async (id, button) => { button.disabled = true; try { await api(`/api/notifications/${id}/read`, { method: "PATCH", body: {} }); button.textContent = "Lida"; button.closest("[data-notification-row]")?.classList.remove("is-unread"); } catch (error) { button.disabled = false; toast(error.message, "error"); } };
-    panel.body.querySelectorAll("[data-notification-read]").forEach((button) => button.addEventListener("click", () => markRead(button.dataset.notificationRead, button)));
-    panel.body.querySelector("[data-notification-read-all]")?.addEventListener("click", async (event) => { const button = event.currentTarget; button.disabled = true; try { await api("/api/notifications/read-all", { method: "POST", body: {} }); panel.body.querySelectorAll("[data-notification-read]").forEach((item) => { item.disabled = true; item.textContent = "Lida"; }); panel.body.querySelectorAll(".is-unread").forEach((item) => item.classList.remove("is-unread")); button.textContent = "Tudo lido"; updateNotificationBadge(0); } catch (error) { button.disabled = false; toast(error.message, "error"); } });
-    panel.body.querySelectorAll("[data-notification-archive]").forEach((button) => button.addEventListener("click", async () => { button.disabled = true; try { await api(`/api/notifications/${button.dataset.notificationArchive}`, { method: "PATCH", body: { archived: true } }); button.closest("[data-notification-row]")?.remove(); } catch (error) { button.disabled = false; toast(error.message, "error"); } }));
-  } catch (error) { toast(error.message, "error"); }
-  finally { if (trigger) trigger.disabled = false; }
-}
-function updateNotificationBadge(count) { const badge = document.querySelector(".notification-button > span"); if (badge) { badge.textContent = Number(count) > 0 ? String(count) : ""; badge.hidden = !(Number(count) > 0); } }
-document.querySelector(".notification-button")?.addEventListener("click", openNotificationCenter);
-FocusInbox.unreadCount().then(updateNotificationBadge).catch(() => {});
