@@ -129,7 +129,9 @@ const operationActionObserver = new MutationObserver(async () => {
   } catch {}
 });
 operationActionObserver.observe(dashboardGrid, { childList: true, subtree: true });
-registerRoutes(Object.fromEntries(Object.keys(labels).map((key) => [key, () => renderEstrutura(key)])));
+// Workspaces dedicados assumem as rotas que exigem telas próprias.
+const genericStructureKeys = ["cofre", "aprovacoes", "alteracoes", "entregas"];
+registerRoutes(Object.fromEntries(genericStructureKeys.map((key) => [key, () => renderEstrutura(key)])));
 
 /* A lista estruturada também precisa permitir manutenção dos registros. */
 const structuredMutationObserver = new MutationObserver(async () => {

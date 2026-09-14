@@ -69,7 +69,8 @@ function integrations() {
     dashboardGrid.querySelectorAll("[data-test]").forEach((button) => { button.onclick = async () => { try { const result = await api(`/api/integrations/${button.dataset.test}/test`, { method: "POST" }); dashboardGrid.querySelector(`[data-result="${button.dataset.test}"]`).textContent = `Resultado: ${result.status}`; } catch (error) { dashboardGrid.querySelector(`[data-result="${button.dataset.test}"]`).textContent = error.message; } }; });
   });
 }
-registerRoutes({ automacoes: automations, templates, integracoes: integrations });
+// Templates e integrações possuem workspaces dedicados; esta tela mantém apenas automações.
+// O workspace dedicado de automações é carregado depois e é o proprietário da rota.
 const automationHistoryObserver = new MutationObserver(async () => {
   if (location.hash.replace(/^#/, "") !== "automacoes") { dashboardGrid.dataset.runsBound = ""; return; } if (dashboardGrid.dataset.runsBound === "1") return;
   const articles = [...dashboardGrid.querySelectorAll(".automation-list article")]; if (!articles.length) return;

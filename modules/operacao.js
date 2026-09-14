@@ -84,7 +84,8 @@ async function openProjectOverview(id) {
 }
 const projectOverviewObserver = new MutationObserver(() => { if (location.hash !== "#projetos") return; const table = dashboardGrid.querySelector(".operations-table tbody"); if (!table || table.dataset.overviewActions === "1") return; table.dataset.overviewActions = "1"; table.querySelectorAll("tr").forEach((row, index) => { const projectId = row.querySelector("[data-edit]")?.dataset.edit; if (!projectId) return; const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = "Resumo"; button.addEventListener("click", () => openProjectOverview(projectId)); row.lastElementChild?.append(" ", button); }); });
 projectOverviewObserver.observe(dashboardGrid, { childList: true, subtree: true });
-registerRoutes({ contratos: renderContracts, projetos: renderProjects, arquivos: renderFiles, tickets: renderTickets });
+// Arquivos e tickets possuem workspaces dedicados; operação mantém contratos e projetos.
+registerRoutes({ contratos: renderContracts, projetos: renderProjects });
 
 async function openProjectWorkspace(id) {
   const panel = document.createElement("aside");
