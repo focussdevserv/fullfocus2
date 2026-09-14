@@ -8,7 +8,7 @@ const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const RECURRENCE = { none: "", daily: "Diário", weekly: "Semanal", monthly: "Mensal" };
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 07h–21h na visão semana/dia
 
-const view = { mode: localStorage.getItem("focusdev_agenda_mode") || "month", cursor: new Date(), selected: new Date(), query: "", events: [], loading: false };
+const view = { mode: localStorage.getItem("focusdev_agenda_mode") || "month", cursor: new Date(), selected: new Date(), query: "", eventType: "", status: "", events: [], loading: false };
 
 const esc = (v) => escapeHtml(v == null ? "" : String(v));
 const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
@@ -35,7 +35,7 @@ async function renderAgenda() {
   if (!view.loading) {
     view.loading = true;
     dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Agenda</h2><p>Compromissos, reuniões e lembretes do workspace.</p></div></section>${stateBlock.loading("Carregando agenda…")}`;
-    try { view.events = (await api("/api/events")).events || []; }
+    try { const params = new URLSearchParams(); if (view.eventType) params.set("event_type", view.eventType); if (view.status) params.set("status", view.status); view.events = (await api(`/api/events?${params}`)).events || []; }
     catch (error) { view.loading = false; dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Agenda</h2></div></section>${stateBlock.error(error.message, "agenda-retry")}`; dashboardGrid.querySelector(".agenda-retry")?.addEventListener("click", renderAgenda); return; }
     view.loading = false;
   }
@@ -145,6 +145,11 @@ function bind() {
   root.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { view.mode = b.dataset.mode; localStorage.setItem("focusdev_agenda_mode", view.mode); if (view.mode !== "month") view.cursor = new Date(view.selected); draw(); }));
   root.querySelectorAll("[data-select]").forEach((b) => b.addEventListener("click", (event) => { event.stopPropagation(); view.selected = new Date(b.dataset.select); if (view.mode === "day") view.cursor = new Date(view.selected); draw(); }));
   root.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { view.selected = new Date(b.dataset.go); view.cursor = new Date(b.dataset.go); draw(); }));
+  const searchBox = root.querySelector(".agenda-search");
+  if (searchBox && !searchBox.querySelector("[data-agenda-type]")) searchBox.insertAdjacentHTML("beforeend", `<select data-agenda-type aria-label="Filtrar tipo"><option value="">Todos os tipos</option><option value="meeting">Reunião</option><option value="call">Ligação</option><option value="followup">Retorno</option><option value="deadline">Prazo/entrega</option><option value="billing">Cobrança</option><option value="support">Suporte</option></select><select data-agenda-status aria-label="Filtrar situação"><option value="">Todas as situações</option><option value="pending">Pendente</option><option value="confirmed">Confirmado</option><option value="in_progress">Em andamento</option><option value="done">Concluído</option><option value="cancelled">Cancelado</option></select>`);
+  const typeFilter = root.querySelector("[data-agenda-type]"), statusFilter = root.querySelector("[data-agenda-status]");
+  if (typeFilter) { typeFilter.value = view.eventType; typeFilter.addEventListener("change", () => { view.eventType = typeFilter.value; view.loading = false; renderAgenda(); }); }
+  if (statusFilter) { statusFilter.value = view.status; statusFilter.addEventListener("change", () => { view.status = statusFilter.value; view.loading = false; renderAgenda(); }); }
   const search = root.querySelector(".agenda-search input");
   search?.addEventListener("input", () => { view.query = search.value; const pos = search.selectionStart; draw(); const again = root.querySelector(".agenda-search input"); again?.focus(); again?.setSelectionRange(pos, pos); });
 
