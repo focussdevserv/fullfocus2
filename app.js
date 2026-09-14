@@ -190,8 +190,18 @@ function saveSession(user) {
   try { localStorage.setItem(SESSION_KEY, JSON.stringify({ id: user.id, name: user.name, email: user.email })); } catch { /* armazenamento indisponível */ }
 }
 
+function readSavedSession() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    return saved?.id && saved?.email ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 async function restoreSession() {
   const transition = authTransition;
+  const savedSession = readSavedSession();
   try {
     const response = await fetch("/api/auth/me", { credentials: "same-origin" });
     if (!response.ok) throw new Error();
@@ -201,7 +211,10 @@ async function restoreSession() {
     showApp(data.user);
   } catch {
     if (transition !== authTransition) return;
-    localStorage.removeItem(SESSION_KEY);
+    if (savedSession) {
+      showApp(savedSession);
+      return;
+    }
     showLogin();
   }
 }
