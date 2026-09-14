@@ -839,3 +839,31 @@ openCreateDialog = function openCreateDialogWithContractAutofill(kind) {
   const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.contractFill = "true"; button.textContent = "Preencher da proposta/projeto"; proposal.insertAdjacentElement("afterend", button);
   button.addEventListener("click", async () => { const project = dialogFields.querySelector('[name="project_id"]'); const client = dialogFields.querySelector('[name="client_id"]'); const query = new URLSearchParams(); if (proposal.value) query.set("proposal_id", proposal.value); if (project?.value) query.set("project_id", project.value); if (client?.value) query.set("client_id", client.value); if (!query.toString()) { proposal.focus(); return; } button.disabled = true; button.textContent = "Preenchendo..."; try { const response = await fetch(`/api/contracts/autofill?${query}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível preparar o contrato."); Object.entries(data).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value !== undefined && value !== null && value !== "") field.value = value; }); const total = Number(dialogFields.querySelector('[name="total_value"]')?.value || dialogFields.querySelector('[name="value"]')?.value || 0); const entry = Number(dialogFields.querySelector('[name="down_payment"]')?.value || 0); const installments = Number(dialogFields.querySelector('[name="installments"]')?.value || 1); const installment = dialogFields.querySelector('[name="installment_value"]'); if (installment && installments > 0) installment.value = ((total - entry) / installments).toFixed(2); dialogStatus.textContent = "Dados preenchidos. Revise cláusulas e valores antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Preencher da proposta/projeto"; } });
 };
+
+const accessibleDialog = openCreateDialog;
+openCreateDialog = function openCreateDialogWithRichFields(kind) {
+  accessibleDialog(kind);
+  const config = createConfig[kind];
+  if (!config) return;
+  config.fields.forEach((field) => {
+    const input = dialogFields.querySelector(`[name="${field.name}"]`);
+    if (!input) return;
+    const label = input.closest("label");
+    if (field.type === "textarea") {
+      const area = document.createElement("textarea");
+      [...input.attributes].forEach((attribute) => area.setAttribute(attribute.name, attribute.value));
+      area.rows = field.rows || 4;
+      input.replaceWith(area);
+    }
+    if (field.type === "checkbox" && label) {
+      label.classList.add("dialog-checkbox");
+      label.firstChild.textContent = field.text || field.label || "Selecionar";
+    }
+  });
+};
+const baseOpenEditDialog = openEditDialog;
+openEditDialog = function openEditDialogWithCorrectTitle(kind, item, endpoint) {
+  baseOpenEditDialog(kind, item, endpoint);
+  const title = createConfig[kind]?.title;
+  if (title) dialogTitle.textContent = title.replace(/^Novo\s+/i, "Editar ");
+};
