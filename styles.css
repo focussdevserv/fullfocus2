@@ -1171,6 +1171,16 @@ tbody tr:last-child td { border-bottom: 0; } td:first-child { color: var(--ink);
 .event-edit:hover { color: var(--blue); } .event-delete:hover, .task-delete:hover { color: var(--red); }
 .agenda-add-link { margin-top: 15px; padding: 0; border: 0; background: transparent; color: var(--blue); font: inherit; font-size: 11px; font-weight: 800; }
 .agenda-upcoming { grid-column: 1 / -1; }
+.agenda-history { grid-column: 1 / -1; }
+.history-list { display: grid; gap: 0; }
+.history-list article { display: flex; min-width: 0; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgb(207 220 239 / 68%); }
+.history-list article:last-child { border-bottom: 0; }
+.history-date { min-width: 64px; color: var(--blue); font-size: 10px; font-weight: 800; text-transform: capitalize; }
+.history-date strong { display: block; margin-top: 3px; font-size: 12px; }
+.history-list article > div { min-width: 0; flex: 1; }
+.history-list article > div strong { display: block; overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.history-list article > div small { display: block; margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.history-status { padding: 5px 8px; border: 1px solid rgb(91 208 164 / 24%); border-radius: 6px; background: rgb(21 150 106 / 18%); color: #79e0bc; font-size: 9px; font-weight: 800; }
 .upcoming-date { min-width: 58px; color: var(--muted); font-size: 10px; font-weight: 700; }
 .upcoming-date strong { margin-top: 4px; color: var(--blue); font-size: 13px; }
 .event-tag { padding: 5px 8px; border-radius: 6px; font-size: 9px; font-weight: 800; }
@@ -1360,6 +1370,10 @@ body.dark-mode .agenda-empty { color: #91a4bf; }
 body.dark-mode .agenda-add-link { color: #8bb9ff; }
 body.dark-mode .agenda-add-link:hover { color: #fff; }
 body.dark-mode .upcoming-date { color: #8bb9ff; }
+body.dark-mode .history-list article { border-color: rgb(145 180 230 / 18%); }
+body.dark-mode .history-list article > div strong { color: #eff5ff; }
+body.dark-mode .history-list article > div small { color: #91a4bf; }
+body.dark-mode .history-date { color: #8bb9ff; }
 @media (max-width: 780px) {
   .agenda-layout { gap: 14px; }
   .calendar-card, .day-agenda, .agenda-upcoming { padding: 16px; }
