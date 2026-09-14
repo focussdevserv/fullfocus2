@@ -106,7 +106,7 @@ const operationActionObserver = new MutationObserver(async () => {
 operationActionObserver.observe(dashboardGrid, { childList: true, subtree: true });
 registerRoutes(Object.fromEntries(Object.keys(labels).map((key) => [key, () => renderEstrutura(key)])));
 
-/* A lista estruturada tambÃ©m precisa permitir manutenÃ§Ã£o dos registros. */
+/* A lista estruturada também precisa permitir manutenção dos registros. */
 const structuredMutationObserver = new MutationObserver(async () => {
   const key = location.hash.replace(/^#/, "");
   const kind = recordCreateKind[key];

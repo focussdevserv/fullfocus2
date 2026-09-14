@@ -533,7 +533,7 @@ function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   let key = hash.replace(/^#/, "");
   // Rota válida = item do menu ou rota registrada por um módulo (sub-tela). Fora disso, volta ao Início.
   if (!navItemsByHash.has(hash) && !routeRenderers[key]) {
-    // Um hash profundo pode chegar antes do mÃ³dulo que registra sua rota.
+    // Um hash profundo pode chegar antes do módulo que registra sua rota.
     if (modulesLoading) return;
     hash = "#inicio";
     key = "inicio";

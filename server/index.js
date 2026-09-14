@@ -193,7 +193,7 @@ app.use("/api", (req, res, next) => {
   if (table === "clients" && req.body?.status !== undefined && !["lead", "prospecting", "active", "inactive", "blocked", "churned", "onboarding", "maintenance", "delinquent", "closed"].includes(String(req.body.status))) return res.status(400).json({ error: "status is invalid." });
   return next();
 });
-/* Antes de qualquer exclusÃ£o de entidade, guarda uma cÃ³pia recuperÃ¡vel na lixeira. */
+/* Antes de qualquer exclusão de entidade, guarda uma cópia recuperável na lixeira. */
 app.use("/api", async (req, res, next) => {
   if (req.method !== "DELETE") return next();
   const [, table, id] = req.path.split("/");
@@ -201,12 +201,12 @@ app.use("/api", async (req, res, next) => {
   const org = tenant(req, res); if (!org) return;
   try {
     const found = await pool.query(`select * from ${table} where id=$1 and organization_id=$2`, [id, org]);
-    if (!found.rowCount) return res.status(404).json({ error: "Registro nÃ£o encontrado." });
+    if (!found.rowCount) return res.status(404).json({ error: "Registro não encontrado." });
     const payload = { ...found.rows[0] };
     if (table === "proposals") payload.proposal_items = (await pool.query("select * from proposal_items where proposal_id=$1 and organization_id=$2 order by position,id", [id, org])).rows;
     await pool.query("insert into trash (organization_id,entity_type,entity_id,payload,deleted_by,restore_until) values ($1,$2,$3,$4,$5,now()+interval '30 days')", [org, table, id, JSON.stringify(payload), req.user?.id || null]);
     return next();
-  } catch { return res.status(503).json({ error: "NÃ£o foi possÃ­vel preparar a exclusÃ£o recuperÃ¡vel." }); }
+  } catch { return res.status(503).json({ error: "Não foi possível preparar a exclusão recuperável." }); }
 });
 Object.keys(entities).forEach(createCrud);
 
