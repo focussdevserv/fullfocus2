@@ -49,6 +49,15 @@ export function register(app, ctx) {
     return q.rows[0]?.role || "member";
   };
   const canManageIntegrations = async (req, org) => ["owner", "admin"].includes(await roleOf(req, org));
+  app.use("/api/templates", async (req, res, next) => {
+    if (req.method !== "GET") return next();
+    const org = tenant(req, res); if (!org) return;
+    const search = text(req.query?.search || req.query?.q), kind = text(req.query?.kind); const params = [org], where = ["organization_id=$1"];
+    if (search) { params.push(search); where.push(`(name ilike '%' || $${params.length} || '%' or coalesce(category,'') ilike '%' || $${params.length} || '%' or coalesce(body,'') ilike '%' || $${params.length} || '%')`); }
+    if (TEMPLATE_KINDS.includes(kind)) { params.push(kind); where.push(`kind=$${params.length}`); }
+    const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); params.push(limit, offset);
+    try { const q = await pool.query(`select * from templates where ${where.join(" and ")} order by created_at desc limit $${params.length - 1} offset $${params.length}`, params); return res.json({ templates: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (error) { return fail(res, error, "Nao foi possivel carregar os templates."); }
+  });
 
   const definitions = {
     automations: {
