@@ -50,6 +50,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(frontendRoot));
+app.use(async (req, res, next) => { const isBriefing = req.path.startsWith("/api/briefings/public/") || req.path.startsWith("/briefing/"); if (!isBriefing) return next(); const token = req.path.split("/").filter(Boolean).pop(); if (!token) return next(); try { const q = await pool.query("select status from briefings where public_token=$1", [token]); if (!q.rowCount || !["published", "sent"].includes(q.rows[0].status)) return res.status(404).json({ error: "Briefing indisponível." }); return next(); } catch { return res.status(503).json({ error: "Não foi possível validar o briefing." }); } });
 
 /* Formulários públicos podem disparar somente registros explicitamente
    permitidos na configuração do próprio formulário. A operação é transacional
