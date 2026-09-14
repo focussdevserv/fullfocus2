@@ -1,17 +1,26 @@
-/* Rotas HTTP do domínio "operacao" — Contratos, Projetos, Arquivos, Tickets
-   Ownership: server/routes/operacao.js (+ server/migrations/NNN_operacao_*.sql)
-
-   register(app, ctx) recebe:
-     ctx.pool            pool pg
-     ctx.tenant(req,res) -> organization_id ou null (já respondeu 400)
-     ctx.requireAuth     middleware (as rotas /api/* já exigem sessão)
-     ctx.asText          normaliza string
-     ctx.classifyDbError(err, fallback) -> { status, error }
-     ctx.singular(table) -> chave do DTO
-   Regras: toda query filtra por organization_id; erros de entrada -> 400; nunca
-   retornar dados de outra organização; mensagens em pt-BR. */
-
+/* Rotas específicas da operação: contratos, projetos, arquivos e tickets. */
 export function register(app, ctx) {
-  // Nenhuma rota específica ainda. O CRUD genérico de server/index.js continua valendo.
-  void app; void ctx;
+  const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
+  const fail = (res, err, fallback) => { const out = classifyDbError(err, fallback); res.status(out.status).json({ error: out.error }); };
+  const run = (table, singular, fields, validate = () => null) => {
+    app.get(`/api/${table}`, async (req, res) => { const org = tenant(req, res); if (!org) return; try {
+      const joins = fields.includes("client_id") ? ` left join clients c on c.id=${table}.client_id and c.organization_id=${table}.organization_id` : "";
+      const contractJoin = fields.includes("contract_id") ? ` left join contracts co on co.id=${table}.contract_id and co.organization_id=${table}.organization_id` : "";
+      const select = `${table}.*${fields.includes("client_id") ? ", c.name client_name" : ""}${fields.includes("contract_id") ? ", co.name contract_name" : ""}`;
+      const q = await pool.query(`select ${select} from ${table}${joins}${contractJoin} where ${table}.organization_id=$1 order by ${table}.created_at desc`, [org]); res.json({ [table]: q.rows });
+    } catch (e) { fail(res, e, `Não foi possível carregar ${table}.`); } });
+    app.post(`/api/${table}`, async (req, res) => { const org = tenant(req, res); if (!org) return; const issue = validate(req.body || {}); if (issue) return res.status(400).json({ error: issue }); try {
+      await validateRelations?.(Object.fromEntries(fields.filter((f) => f.endsWith("_id")).map((f) => [f, req.body[f] || null])), org);
+      const vals = fields.map((f) => req.body[f] === "" ? null : req.body[f]); const q = await pool.query(`insert into ${table} (organization_id,${fields.join(",")}) values ($1,${fields.map((_, i) => `$${i + 2}`).join(",")}) returning *`, [org, ...vals]); res.status(201).json({ [singular]: q.rows[0] });
+    } catch (e) { if (e.code === "invalid_relation") return res.status(400).json({ error: e.message }); fail(res, e, `Não foi possível criar ${singular}.`); } });
+    app.patch(`/api/${table}/:id`, async (req, res) => { const org = tenant(req, res); if (!org) return; const issue = validate(req.body || {}, true); if (issue) return res.status(400).json({ error: issue }); const update = fields.filter((f) => Object.prototype.hasOwnProperty.call(req.body || {}, f)); if (!update.length) return res.status(400).json({ error: "Informe ao menos um campo para atualizar." }); try {
+      const vals = update.map((f) => req.body[f] === "" ? null : req.body[f]); const q = await pool.query(`update ${table} set ${update.map((f, i) => `${f}=$${i + 1}`).join(",")},updated_at=now() where id=$${update.length + 1} and organization_id=$${update.length + 2} returning *`, [...vals, req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: `${singular} não encontrado.` }); res.json({ [singular]: q.rows[0] });
+    } catch (e) { fail(res, e, `Não foi possível atualizar ${singular}.`); } });
+    app.delete(`/api/${table}/:id`, async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query(`delete from ${table} where id=$1 and organization_id=$2 returning id`, [req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: `${singular} não encontrado.` }); res.status(204).end(); } catch (e) { fail(res, e, `Não foi possível excluir ${singular}.`); } });
+  };
+  const oneOf = (key, values) => (body, partial) => (!partial && !asText(body[key]) ? `Informe ${key.replaceAll("_", " ")}.` : (body[key] !== undefined && !values.includes(body[key]) ? `Valor inválido para ${key}.` : null));
+  run("contracts", "contract", ["name", "client_id", "value", "starts_on", "ends_on", "status"], (b, p) => oneOf("status", ["draft", "active", "expired", "cancelled"])(b, p) || (!p && (!asText(b.name) || !b.client_id || !Number.isFinite(Number(b.value)) || Number(b.value) < 0) ? "Informe nome, cliente e valor válidos." : null));
+  run("projects", "project", ["name", "client_id", "contract_id", "status", "progress"], (b, p) => oneOf("status", ["planning", "active", "paused", "done"])(b, p) || (b.progress !== undefined && (!Number.isFinite(Number(b.progress)) || Number(b.progress) < 0 || Number(b.progress) > 100) ? "O progresso deve estar entre 0 e 100." : (!p && !asText(b.name) ? "Informe o nome do projeto." : null)));
+  run("files", "file", ["name", "url", "kind", "size_bytes", "project_id", "client_id"], (b, p) => !p && (!asText(b.name) || !asText(b.url) ? "Informe nome e URL válidos." : null));
+  run("tickets", "ticket", ["title", "description", "client_id", "priority", "status", "due_at"], (b, p) => { const a = oneOf("priority", ["low", "medium", "high", "urgent"])(b, p) || oneOf("status", ["open", "in_progress", "waiting", "done"])(b, p); return a || (!p && !asText(b.title) ? "Informe o título do ticket." : null); });
 }
