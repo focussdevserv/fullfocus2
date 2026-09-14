@@ -98,6 +98,19 @@ async function renderProjectsConnected() {
     dashboardGrid.querySelectorAll("[data-progress]").forEach((button) => button.addEventListener("click", () => { const item = rows.find((row) => String(row.id) === button.dataset.progress); setup("projeto").then(() => { const form = document.querySelector("#create-form"); if (!form || !item) return; form.elements.progress.value = item.progress || 0; form.dataset.method = "PATCH"; form.dataset.endpoint = `/api/projects/${item.id}`; }); }));
   } catch (error) { dashboardGrid.innerHTML = intro(title, "Acompanhe progresso, status, clientes e contratos.", "projeto") + state("error", error.message); }
 }
+let githubAutoFillBusy = false;
+document.addEventListener("change", async (event) => {
+  const input = event.target;
+  if (input?.name !== "repository_url" || !/^https:\/\/(www\.)?github\.com\//i.test(input.value.trim()) || githubAutoFillBusy) return;
+  githubAutoFillBusy = true;
+  try {
+    const data = await api(`/api/projects/github-preview?url=${encodeURIComponent(input.value.trim())}`);
+    const form = input.closest("form");
+    ["name", "description", "repository_url", "production_url", "technologies", "domain", "observations"].forEach((name) => { const field = form?.elements?.[name], value = data[name]; if (field && value !== undefined && value !== null && !String(field.value || "").trim()) field.value = value; });
+    toast("Dados do GitHub identificados e campos vazios preenchidos.", "success");
+  } catch (error) { toast(error.message || "Não foi possível consultar o GitHub.", "error"); }
+  finally { githubAutoFillBusy = false; }
+});
 registerRoutes({ contratos: renderContracts, projetos: renderProjectsConnected });
 
 async function openProjectWorkspace(id) {
