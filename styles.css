@@ -1419,6 +1419,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .agenda-new { background: linear-gradient(135deg, #f3132d, #ba0b2a); box-shadow: 0 10px 20px rgb(243 19 45 / 22%); }
 .agenda-new:hover { background: linear-gradient(135deg, #ff4053, #d61032); }
 
+/* Textura Spider-Man aplicada a toda a experiência da Agenda */
+.agenda-card,
+.calendar-card,
+.day-agenda,
+.agenda-upcoming,
+.agenda-history,
+.create-dialog {
+  background-image: linear-gradient(135deg, rgb(3 8 18 / 92%), rgb(8 19 38 / 78%)), url("assets/agenda-spider-suit.png");
+  background-position: center, center;
+  background-size: cover, cover;
+}
+.create-dialog { background-position: center, 50% 35%; }
+
 /* Barra superior integrada ao novo fundo escuro */
 .app-topbar {
   position: relative;
