@@ -1589,6 +1589,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .proposal-rascunho { border: 1px solid rgb(145 180 230 / 24%); background: rgb(145 180 230 / 12%); color: #b9d4ff; }
 @media (max-width: 780px) { .proposal-stats { grid-template-columns: 1fr; } .proposal-row { grid-template-columns: 48px minmax(0, 1fr) auto; } .proposal-cover { width: 48px; height: 52px; } .proposal-status, .proposal-open { grid-column: 2 / -1; justify-self: start; } }
 
+/* Follow-ups: fila de retornos com prioridade e prazo visiveis */
+.followup-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.followup-summary .data-card { display: grid; gap: 6px; padding: 17px 19px; border-color: rgb(120 174 251 / 30%); background: linear-gradient(135deg, rgb(31 53 86 / 76%), rgb(8 19 38 / 74%)); }
+.followup-summary span, .followup-summary small { color: #aebed4; font-size: 11px; }
+.followup-summary strong { color: #eff5ff; font-size: 23px; }
+.followups-card { border-color: rgb(120 174 251 / 32%); background-color: rgb(14 31 57 / 78%); background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 74%)), url("assets/spiderman-hanging.png"); background-position: center, 88% 25%; background-size: cover; }
+.followup-list { display: grid; gap: 8px; }
+.followup-row { display: grid; grid-template-columns: 22px 36px minmax(180px, 1fr) 170px auto auto; gap: 12px; align-items: center; padding: 13px; border: 1px solid rgb(145 180 230 / 19%); border-radius: 12px; background: rgb(8 19 38 / 67%); }
+.followup-check input { position: absolute; opacity: 0; }
+.followup-check span { display: block; width: 17px; height: 17px; border: 2px solid #78aefb; border-radius: 5px; cursor: pointer; }
+.followup-check input:checked + span { border-color: #f3132d; background: #f3132d; box-shadow: inset 0 0 0 3px #111a2d; }
+.followup-avatar { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: linear-gradient(145deg, #78aefb, #345b9a); color: #fff; font-size: 10px; font-weight: 800; }
+.followup-main, .followup-date { display: grid; gap: 4px; min-width: 0; }
+.followup-main strong, .followup-date strong { overflow: hidden; color: #eff5ff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.followup-main small, .followup-date small { color: #91a4bf; font-size: 10px; }
+@media (max-width: 780px) { .followup-summary { grid-template-columns: 1fr; } .followup-row { grid-template-columns: 22px 34px minmax(0, 1fr) auto; } .followup-date, .followup-row > .priority-pill { grid-column: 3 / -1; justify-self: start; } }
+
 /* Barra superior integrada ao novo fundo escuro */
 .app-topbar {
   position: relative;
