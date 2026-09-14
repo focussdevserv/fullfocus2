@@ -17,11 +17,12 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
-    <script src="app.js" defer></script>
+    <link rel="stylesheet" href="styles.css?v=2" />
+    <script src="app.js?v=2" defer></script>
     <script>if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));</script>
   </head>
   <body>
+    <script>try { if (localStorage.getItem("focusdev_theme_v2") !== "light") document.body.classList.add("dark-mode"); } catch { /* tema padrão */ }</script>
     <!-- ===================== Login / redefinição de senha ===================== -->
     <main class="login-shell" id="login-shell">
       <section class="hero" id="hero" data-scene="login" aria-label="FocusDev">
