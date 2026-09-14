@@ -207,6 +207,23 @@ const createCrud = (table) => {
 };
 // A auditoria é somente leitura para o cliente; os registros devem ser criados pelo servidor.
 app.use("/api/audit_events", (req, res, next) => req.method === "GET" ? next() : res.status(405).json({ error: "A auditoria é somente leitura." }));
+app.get("/api/audit_events", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250);
+  const values = [org], where = ["a.organization_id=$1"];
+  const add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
+  if (req.query.action) add("a.action=$VALUE", String(req.query.action).slice(0, 80));
+  if (req.query.entity_type) add("a.entity_type=$VALUE", String(req.query.entity_type).slice(0, 80));
+  if (req.query.actor_id && /^\\d+$/.test(String(req.query.actor_id))) add("a.actor_id=$VALUE", String(req.query.actor_id));
+  if (req.query.from && !Number.isNaN(Date.parse(String(req.query.from)))) add("a.created_at >= $VALUE::timestamptz", String(req.query.from));
+  if (req.query.to && !Number.isNaN(Date.parse(String(req.query.to)))) add("a.created_at < ($VALUE::date + interval '1 day')", String(req.query.to));
+  if (req.query.search) { values.push(`%${String(req.query.search).slice(0, 100)}%`); const index = values.length; where.push(`(a.action ilike $${index} or a.entity_type ilike $${index} or coalesce(u.name,'') ilike $${index})`); }
+  values.push(limit);
+  try {
+    const q = await pool.query(`select a.id,a.action,a.entity_type,a.entity_id,a.changes,a.ip_address,a.user_agent,a.created_at,u.name as actor_name from audit_events a left join users u on u.id=a.actor_id and u.organization_id=a.organization_id where ${where.join(" and ")} order by a.created_at desc limit $${values.length}`, values);
+    res.json({ audit_events: q.rows });
+  } catch { res.status(503).json({ error: "Não foi possível carregar a auditoria." }); }
+});
 app.use("/api", async (req, res, next) => {
   const [, table] = req.path.split("/");
   if (req.method !== "POST" || !["contacts", "companies", "clients"].includes(table)) return next();
