@@ -4,6 +4,30 @@ export function register(app, ctx) {
   const roleOf = async (req, org) => (await pool.query("select role from users where id=$1 and organization_id=$2", [req.user?.id, org])).rows[0]?.role || null;
   const authorized = async (req, org) => ["owner", "admin"].includes(await roleOf(req, org));
   app.get("/api/team/access-status", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select id,name,email,role,access_status,created_at from users where organization_id=$1 order by created_at", [org]); res.json({ users: q.rows }); } catch { res.status(503).json({ error: "Não foi possível carregar a equipe." }); } });
+  app.get("/api/team/dashboard", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const query = (sql, params = [org]) => pool.query(sql, params).catch(() => ({ rows: [{ total: 0 }] }));
+    try {
+      const [members, tasks, projects, hours, tickets, events, absences] = await Promise.all([
+        query("select count(*)::int total,count(*) filter (where coalesce(access_status,'active')='active')::int active,count(*) filter (where access_status in ('inactive','blocked'))::int inactive,count(*) filter (where availability='online')::int online,count(*) filter (where availability='available')::int available,count(*) filter (where availability='busy')::int busy from users where organization_id=$1"),
+        query("select count(*) filter (where status <> 'done')::int pending,count(*) filter (where status <> 'done' and due_at < now())::int overdue from tasks where organization_id=$1"),
+        query("select responsible,count(*)::int total from projects where organization_id=$1 group by responsible order by total desc"),
+        query("select coalesce(sum(minutes),0)::int total_minutes from time_entries where organization_id=$1 and status <> 'rejected'"),
+        query("select count(*)::int total from tickets where organization_id=$1 and status in ('new','open','in_analysis','in_progress')"),
+        query("select id,title,starts_at from events where organization_id=$1 and starts_at >= now() order by starts_at limit 5"),
+        query("select id,user_id,kind,starts_on,ends_on from absences where organization_id=$1 and ends_on >= current_date order by starts_on limit 10"),
+      ]);
+      res.json({ members: members.rows[0] || {}, tasks: tasks.rows[0] || {}, projects_by_responsible: projects.rows, hours: hours.rows[0] || {}, tickets: tickets.rows[0] || {}, upcoming_events: events.rows, absences: absences.rows });
+    } catch { res.status(503).json({ error: "Não foi possível carregar o painel da equipe." }); }
+  });
+  app.patch("/api/team/:id/profile", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    if (String(req.params.id) !== String(req.user?.id) && !(await authorized(req, org))) return res.status(403).json({ error: "Você não tem permissão." });
+    const fields = ["avatar_url", "document", "birth_date", "phone", "whatsapp", "address", "emergency_contact", "job_title", "department", "employment_type", "started_on", "work_schedule", "hourly_rate", "monthly_rate", "commission_rate", "skills", "experience_level", "manager_id", "access_expires_on", "two_factor_enabled", "availability"];
+    const update = fields.filter((field) => Object.prototype.hasOwnProperty.call(req.body || {}, field));
+    if (!update.length) return res.status(400).json({ error: "Informe ao menos um campo profissional." });
+    try { const q = await pool.query(`update users set ${update.map((field, i) => `${field}=$${i + 1}`).join(",")} where id=$${update.length + 1} and organization_id=$${update.length + 2} returning id,name,email,role,access_status,job_title,department,employment_type,started_on,work_schedule,hourly_rate,monthly_rate,commission_rate,skills,experience_level,availability`, [...update.map((field) => req.body[field]), req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Membro não encontrado." }); res.json({ user: q.rows[0] }); } catch { res.status(400).json({ error: "Não foi possível salvar os dados profissionais." }); }
+  });
   app.patch("/api/team/:id/access", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     if (!(await authorized(req, org))) return res.status(403).json({ error: "Você não tem permissão." });
