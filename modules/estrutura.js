@@ -45,6 +45,24 @@ async function renderEstrutura(key) {
     dashboardGrid.querySelector("[data-start-timer]")?.addEventListener("click", async (event) => { const button = event.currentTarget; button.disabled = true; try { await api("/api/time-entry-timer/start", { method: "POST", body: {} }); toast("Cronômetro iniciado.", "success"); renderEstrutura(key); } catch (error) { button.disabled = false; toast(error.message, "error"); } });
   } catch (error) { dashboardGrid.innerHTML = stateBlock.error(error.message, "estrutura-retry"); }
 }
+const approvalSummaryObserver = new MutationObserver(async () => {
+  if (location.hash.replace(/^#/, "") !== "aprovacoes" || dashboardGrid.querySelector("[data-approval-summary]")) return;
+  const list = dashboardGrid.querySelector(".automation-list"); if (!list) return;
+  try {
+    const data = await api("/api/approvals/overview");
+    const groups = [
+      ["Propostas aguardando resposta", data.proposals || [], "#propostas", (item) => item.title || "Proposta"],
+      ["Contratos aguardando assinatura", data.contracts || [], "#contratos", (item) => item.name || "Contrato"],
+      ["Entregas aguardando aprovação", data.deliveries || [], "#entregas", (item) => `Versão ${item.version || "—"}`],
+      ["Alterações aguardando decisão", data.changes || [], "#alteracoes", (item) => item.title || "Alteração"],
+    ];
+    const card = document.createElement("section"); card.className = "data-card approval-summary"; card.dataset.approvalSummary = "1";
+    card.innerHTML = `<div class="section-heading"><div><p class="card-kicker">Visão consolidada</p><h2>Decisões pendentes</h2></div><strong>${groups.reduce((total, [, items]) => total + items.length, 0)}</strong></div><div class="approval-summary-grid">${groups.map(([title, items, href, label]) => `<a class="approval-summary-item" href="${href}"><strong>${items.length}</strong><span>${title}</span>${items.slice(0, 2).map((item) => `<small>${escapeHtml(label(item))}</small>`).join("")}</a>`).join("")}</div>`;
+    list.before(card);
+  } catch (error) { toast(error.message, "error"); }
+});
+approvalSummaryObserver.observe(dashboardGrid, { childList: true, subtree: true });
+
 const approvalActionsObserver = new MutationObserver(async () => {
   if (location.hash.replace(/^#/, "") !== "aprovacoes") return;
   const list = dashboardGrid.querySelector(".automation-list");
