@@ -423,6 +423,7 @@ document.querySelectorAll(".nav-item").forEach((item) => {
 
 const navIconPaths = {
   inicio: '<path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-6h6v6"/>',
+  crm: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.7-3.4 2.7-5 5-5s4.3 1.6 5 5M11 20c.7-3 2.4-4.4 5-4.4 2.5 0 4.4 1.4 5 4.4"/>',
   agenda: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/>',
   tarefas: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 2.5 2.5L16 9"/>',
   'caixa-de-entrada': '<path d="M4 5h16v14H4Z"/><path d="M4 13h4l1.5 2h5L16 13h4M8 9h8"/>',
@@ -611,6 +612,13 @@ function renderFollowupsView() {
   dashboardGrid.querySelector(".followup-new")?.addEventListener("click", () => openCreateDialog("tarefa"));
 }
 
+function renderCRMView() {
+  const modules = [["leads", "Leads", "Organize contatos e novas oportunidades.", "spiderman-card-web.png"], ["campanhas", "Campanhas", "Acompanhe desempenho e investimento.", "spiderman-card-hero.png"], ["funil", "Funil", "Veja cada oportunidade avançar.", "spiderman-card-duo.png"], ["oportunidades", "Oportunidades", "Priorize negociações importantes.", "agenda-spider-red-emblem.png"], ["propostas", "Propostas", "Crie e acompanhe documentos comerciais.", "agenda-spider-mask.png"], ["follow-ups", "Follow-ups", "Controle todos os próximos contatos.", "spiderman-hanging.png"]];
+  dashboardGrid.innerHTML = `<section class="page-intro crm-intro"><div><p class="card-kicker">Workspace comercial</p><h2>CRM FocusDev</h2><p>Um centro único para controlar relacionamento, pipeline e fechamento.</p></div><button class="button button-primary compact-action" type="button" data-crm-module="leads">+ Novo lead</button></section><section class="crm-overview"><article class="data-card"><span>Pipeline total</span><strong>R$ 116.400</strong><small>26 oportunidades em andamento</small></article><article class="data-card"><span>Próximos contatos</span><strong>04</strong><small>1 prioridade para hoje</small></article><article class="data-card"><span>Propostas abertas</span><strong>02</strong><small>R$ 66.800 em negociação</small></article></section><section class="data-card crm-hub"><div class="section-heading"><div><p class="card-kicker">Módulos do CRM</p><h2>Escolha uma área para continuar</h2></div></div><div class="crm-module-grid">${modules.map(([key, title, description, image]) => `<button class="crm-module-card" type="button" data-crm-module="${key}" style="--crm-image:url('assets/${image}')"><span class="crm-module-icon">✦</span><strong>${title}</strong><small>${description}</small><b>Abrir →</b></button>`).join("")}</div></section>`;
+  const actions = { leads: renderLeadsView, campanhas: renderCampaignsView, funil: renderFunnelView, oportunidades: renderOpportunitiesView, propostas: renderProposalsView, "follow-ups": renderFollowupsView };
+  dashboardGrid.querySelectorAll("[data-crm-module]").forEach((button) => button.addEventListener("click", () => { const key = button.dataset.crmModule; history.replaceState({}, "", `#${key}`); actions[key]?.(); }));
+}
+
 function renderWorkspaceView(hash, label) {
   if (!dashboardGrid) return;
   const key = hash?.replace("#", "");
@@ -618,6 +626,7 @@ function renderWorkspaceView(hash, label) {
     dashboardGrid.innerHTML = initialDashboardMarkup;
     return;
   }
+  if (key === "crm") { renderCRMView(); return; }
   if (key === "agenda") { renderAgendaView(); return; }
   if (key === "tarefas") { renderTasksView(); return; }
   if (key === "caixa-de-entrada") { renderInboxView(); return; }
