@@ -8,7 +8,7 @@ function poolFor(automation, source) {
     async query(sql, params) {
       calls.push({ sql, params });
       if (sql.startsWith("select * from automations")) return { rows: [automation] };
-      if (sql.includes("from leads s") || sql.includes("from proposals s") || sql.includes("from contracts s")) return { rows: [source] };
+      if (sql.includes("from leads s") || sql.includes("from proposals s") || sql.includes("from contracts s") || sql.includes("from projects s")) return { rows: [source] };
       if (sql.startsWith("select id from leads")) return { rowCount: 1, rows: [{ id: source.id }] };
       if (sql.startsWith("insert into automation_runs")) return { rowCount: 1, rows: [{ id: 90 }] };
       if (sql.startsWith("insert into followups")) return { rowCount: 1, rows: [{ id: 91 }] };
@@ -16,6 +16,7 @@ function poolFor(automation, source) {
       if (sql.startsWith("insert into contracts")) return { rowCount: 1, rows: [{ id: 93 }] };
       if (sql.startsWith("insert into projects")) return { rowCount: 1, rows: [{ id: 94 }] };
       if (sql.startsWith("insert into files")) return { rowCount: 1, rows: [{ id: 95 }] };
+      if (sql.startsWith("insert into satisfaction_requests")) return { rowCount: 1, rows: [{ id: 96, token: "token" }] };
       return { rowCount: 1, rows: [] };
     },
     release() {},
@@ -59,4 +60,10 @@ test("registra documento gerado no acervo de arquivos", async () => {
   const { client, calls } = poolFor({ id: 52, organization_id: "org", trigger: "proposal_approved", action: "generate_document", config: { url: "https://example.com/contract.pdf" } }, { id: 53, title: "Site", client_id: 54 });
   assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
   assert.equal(calls.filter((call) => call.sql.startsWith("insert into files")).length, 1);
+});
+
+test("cria pesquisa de satisfação vinculada ao projeto concluído", async () => {
+  const { client, calls } = poolFor({ id: 55, organization_id: "org", trigger: "project_completed", action: "request_satisfaction", config: {} }, { id: 56, name: "Site", client_id: 57 });
+  assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
+  assert.equal(calls.filter((call) => call.sql.startsWith("insert into satisfaction_requests")).length, 1);
 });

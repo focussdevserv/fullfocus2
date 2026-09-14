@@ -1,5 +1,6 @@
 import { normalizeNumber, sendWhatsappText } from "./routes/whatsapp.js";
 import { sendEmail } from "./mailer.js";
+import { randomBytes } from "node:crypto";
 
 const SOURCE_TABLES = {
   lead_created: "leads",
@@ -185,6 +186,14 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
       [automation.organization_id, String(config.name || `${automation.name} · documento`).slice(0, 240), url.slice(0, 4000), String(config.kind || "document").slice(0, 40), projectId, clientId],
     );
     return { action: "generate_document", file_id: document.rows[0].id, project_id: projectId, client_id: clientId };
+  }
+  if (automation.action === "request_satisfaction") {
+    const token = randomBytes(24).toString("base64url");
+    const request = await client.query(
+      "insert into satisfaction_requests (organization_id,project_id,client_id,token) values ($1,$2,$3,$4) returning id,token",
+      [automation.organization_id, source.id || null, source.client_id || null, token],
+    );
+    return { action: "request_satisfaction", request_id: request.rows[0].id, token: request.rows[0].token, project_id: source.id || null };
   }
   if (automation.action === "update_status") {
     const tables = new Set(["leads", "opportunities", "proposals", "contracts", "projects", "tasks", "tickets", "clients", "receivables"]);
