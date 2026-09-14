@@ -16,6 +16,7 @@ import { registerDeliveryPublicRoutes } from "./routes/delivery-public.js";
 import { registerPortalPublicRoute } from "./routes/portal-public.js";
 import { registerPortalAuthRoutes } from "./routes/portal-auth.js";
 import { registerPortalAdminRoutes } from "./routes/portal-admin.js";
+import { registerFormRoutes } from "./routes/forms.js";
 import { registerCrmFollowupRoutes } from "./routes/crm-followups.js";
 import { registerFinanceOverviewRoutes } from "./routes/finance-overview.js";
 import { registerDeliveryWorkflowRoutes } from "./routes/delivery-workflow.js";
@@ -461,6 +462,7 @@ registerFinanceOverviewRoutes(app, { pool, tenant, classifyDbError });
 registerDeliveryWorkflowRoutes(app, { pool, tenant, classifyDbError });
 registerAutomationRunRoutes(app, { pool, tenant, classifyDbError });
 registerPortalAdminRoutes(app, { pool, tenant, hashPassword });
+registerFormRoutes(app, { pool, tenant });
 
 app.post("/api/forms/:id/public-link", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const token = crypto.randomBytes(32).toString("base64url"); const q = await pool.query("update forms set public_token=$1,status='published',updated_at=now() where id=$2 and organization_id=$3 returning id,name,status", [token, req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Formulário não encontrado." }); res.status(201).json({ form: q.rows[0], token, path: "/form/" + token }); } catch { res.status(503).json({ error: "Não foi possível gerar o link do formulário." }); } });
 async function start() { try { await runMigrations(pool); app.listen(port, "0.0.0.0", () => { console.log(`FocusApp API listening on ${port}`); startAutomationRunner(pool); }); } catch (e) { console.error("FocusApp API could not connect to PostgreSQL:", e.message); process.exitCode = 1; } }
