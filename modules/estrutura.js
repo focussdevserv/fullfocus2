@@ -128,7 +128,9 @@ const structuredMutationObserver = new MutationObserver(async () => {
         try { await api(`/api/${table}/${row.id}`, { method: "DELETE" }); renderEstrutura(key); }
         catch (error) { remove.disabled = false; remove.textContent = error.message; }
       });
-      actions.append(edit, remove); article.append(actions);
+      actions.append(edit, remove);
+      if (key === "contas-a-pagar" && !["paid", "cancelled"].includes(row.status)) { const pay = document.createElement("button"); pay.type = "button"; pay.className = "compact-action"; pay.textContent = "Registrar pagamento"; pay.addEventListener("click", async () => { pay.disabled = true; try { await api(`/api/payables/${row.id}/record-payment`, { method: "POST", body: {} }); ui.toast("Pagamento registrado como despesa.", "success"); renderEstrutura(key); } catch (error) { pay.disabled = false; ui.toast(error.message, "error"); } }); actions.append(pay); }
+      article.append(actions);
     });
   } catch {}
 });

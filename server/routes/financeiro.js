@@ -27,6 +27,22 @@ export function register(app, ctx) {
     finally { db.release?.(); }
   };
   app.post("/api/receivables/:id/record-payment", recordReceivablePayment);
+  app.post("/api/payables/:id/record-payment", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const db = pool.connect ? await pool.connect() : pool;
+    try {
+      await db.query("begin");
+      const source = await db.query("select * from payables where id=$1 and organization_id=$2 for update", [req.params.id, org]);
+      if (!source.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Conta a pagar não encontrada." }); }
+      const payable = source.rows[0];
+      if (["paid", "cancelled"].includes(payable.status)) { await db.query("rollback"); return res.status(400).json({ error: "Esta conta não aceita nova baixa." }); }
+      const expense = await db.query("insert into expenses (organization_id,description,project_id,client_id,amount,supplier,status,due_at,paid_at) values ($1,$2,$3,$4,$5,$6,'paid',$7,now()) returning *", [org, payable.description, payable.project_id, payable.client_id, payable.amount, payable.supplier, payable.due_at]);
+      const updated = await db.query("update payables set status='paid',paid_at=now(),updated_at=now() where id=$1 and organization_id=$2 returning *", [payable.id, org]);
+      await db.query("commit");
+      res.status(201).json({ payable: updated.rows[0], expense: expense.rows[0] });
+    } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível registrar o pagamento da conta."); }
+    finally { db.release?.(); }
+  });
   app.post("/api/receivables/:id/create-charge", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const channel = ["pix", "boleto", "card", "link", "transfer"].includes(req.body?.channel) ? req.body.channel : "link";
