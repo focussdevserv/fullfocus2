@@ -20,10 +20,10 @@ const pageStatus = (text, isError = false) => { const p = dashboardGrid.querySel
 const wrap = (title, kicker, promise) => promise.catch((error) => { dashboardGrid.innerHTML = header({ kicker, title }) + stateBlock.error(error.message, "crm-retry"); dashboardGrid.querySelector(".crm-retry")?.addEventListener("click", () => renderHashRoute(window.location.hash)); });
 
 /* Cache leve de listas usadas em selects. */
-const cache = { leads: null, opportunities: null, campaigns: null, catalog: null };
+const cache = { leads: null, clients: null, opportunities: null, campaigns: null, catalog: null };
 async function options(kind) {
   if (!cache[kind]) {
-    const path = { leads: "/api/leads", opportunities: "/api/opportunities", campaigns: "/api/campaigns", catalog: "/api/catalog-items" }[kind];
+    const path = { leads: "/api/leads", clients: "/api/clients", opportunities: "/api/opportunities", campaigns: "/api/campaigns", catalog: "/api/catalog-items" }[kind];
     try { cache[kind] = (await api(path))[kind === "catalog" ? "catalog-items" : kind] || []; } catch { cache[kind] = []; }
   }
   return cache[kind];
@@ -445,3 +445,16 @@ async function followupForm(f, after) {
 }
 
 registerRoutes({ crm: renderHub, leads: renderLeads, funil: renderFunnel, oportunidades: renderOpportunities, campanhas: renderCampaigns, propostas: renderProposals, "follow-ups": renderFollowups }, { parent: "#crm", titles: { crm: "CRM comercial", leads: "Leads", funil: "Funil de vendas", oportunidades: "Oportunidades", campanhas: "Campanhas", propostas: "Propostas", "follow-ups": "Follow-ups" } });
+followupForm = async function followupFormConnected(f, after) {
+  const [leads, clients, opportunities] = await Promise.all([options("leads"), options("clients"), options("opportunities")]);
+  const editing = Boolean(f?.id);
+  form({ title: editing ? "Editar follow-up" : "Novo follow-up", subtitle: "CRM", submitLabel: editing ? "Salvar" : "Agendar", values: { ...(f || {}), lead_id: f?.lead_id ? String(f.lead_id) : "", client_id: f?.client_id ? String(f.client_id) : "", opportunity_id: f?.opportunity_id ? String(f.opportunity_id) : "", due_at: f?.due_at || new Date(Date.now() + 86400e3).toISOString(), channel: f?.channel || "whatsapp", priority: f?.priority || "medium" }, fields: [
+    { name: "lead_id", label: "Lead", type: "select", required: false, options: [["", "Sem lead"], ...leads.map((l) => [String(l.id), l.name])] },
+    { name: "client_id", label: "Cliente", type: "select", required: false, options: [["", "Sem cliente"], ...clients.map((c) => [String(c.id), c.name])] },
+    { name: "opportunity_id", label: "Oportunidade", type: "select", required: false, options: [["", "Sem oportunidade"], ...opportunities.map((o) => [String(o.id), o.name])] },
+    { name: "title", label: "Assunto", required: false }, { name: "due_at", label: "Quando", type: "datetime-local", half: true },
+    { name: "channel", label: "Canal", type: "select", options: [["whatsapp", "WhatsApp"], ["ligacao", "Ligação"], ["email", "E-mail"], ["reuniao", "Reunião"], ["outro", "Outro"]], half: true },
+    { name: "priority", label: "Prioridade", type: "select", options: [["low", "Baixa"], ["medium", "Média"], ["high", "Alta"], ["urgent", "Urgente"]], half: true },
+    { name: "reminder_minutes", label: "Lembrete (minutos antes)", type: "number", required: false, half: true }, { name: "next_action", label: "Próxima ação", required: false }, { name: "note", label: "Observações", type: "textarea", required: false, rows: 3 }
+  ], onSubmit: async (values) => { if (!values.lead_id && !values.client_id && !values.opportunity_id) throw new Error("Vincule um lead, cliente ou oportunidade."); if (editing) await api(`/api/followups/${f.id}`, { method: "PATCH", body: values }); else await api("/api/followups", { method: "POST", body: values }); toast(editing ? "Follow-up atualizado." : "Follow-up agendado.", "success"); after(); } });
+};

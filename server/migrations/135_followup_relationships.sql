@@ -1,0 +1,11 @@
+alter table followups alter column lead_id drop not null;
+alter table followups add column if not exists client_id bigint references clients(id) on delete cascade;
+alter table followups add column if not exists opportunity_id bigint references opportunities(id) on delete cascade;
+alter table followups add column if not exists title text;
+alter table followups add column if not exists type text;
+alter table followups add column if not exists priority text not null default 'medium';
+alter table followups add column if not exists reminder_minutes integer;
+alter table followups add column if not exists result text;
+alter table followups add column if not exists next_action text;
+create index if not exists idx_followups_client on followups(organization_id, client_id);
+create index if not exists idx_followups_opportunity on followups(organization_id, opportunity_id);

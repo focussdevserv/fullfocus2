@@ -16,6 +16,7 @@ import { registerDeliveryPublicRoutes } from "./routes/delivery-public.js";
 import { registerPortalPublicRoute } from "./routes/portal-public.js";
 import { registerPortalAuthRoutes } from "./routes/portal-auth.js";
 import { registerPortalAdminRoutes } from "./routes/portal-admin.js";
+import { registerCrmFollowupRoutes } from "./routes/crm-followups.js";
 import { startAutomationRunner } from "./automations-runner.js";
 const { Pool } = pg;
 export const app = express();
@@ -299,6 +300,7 @@ app.get("/api/events", async (req, res) => { const org = tenant(req, res); if (!
 app.patch("/api/events/:id", async (req, res) => { const org = tenant(req, res); if (!org) return; const fields = {}; if (req.body?.title !== undefined) fields.title = asText(req.body.title); if (req.body?.startsAt !== undefined) fields.starts_at = req.body.startsAt; if (req.body?.description !== undefined) fields.description = asText(req.body.description) || null; if (req.body?.recurrence !== undefined) fields.recurrence = ["none", "daily", "weekly", "monthly"].includes(req.body.recurrence) ? req.body.recurrence : null; if (req.body?.reminderMinutes !== undefined) fields.reminder_minutes = Math.max(0, Number(req.body.reminderMinutes) || 0); if (fields.title === "" || (fields.starts_at !== undefined && Number.isNaN(Date.parse(fields.starts_at))) || fields.recurrence === null) return res.status(400).json({ error: "Dados do evento inválidos." }); const keys = Object.keys(fields); if (!keys.length) return res.status(400).json({ error: "Nenhum campo válido informado." }); try { const q = await pool.query(`update events set ${keys.map((key, index) => `${key}=$${index + 1}`).join(",")} where id=$${keys.length + 1} and organization_id=$${keys.length + 2} returning *`, [...keys.map((key) => fields[key]), req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.json({ event: q.rows[0] }); } catch (e) { const { status, error } = classifyDbError(e, "Não foi possível atualizar o evento."); res.status(status).json({ error }); } });
 app.delete("/api/events/:id", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("delete from events where id=$1 and organization_id=$2 returning id", [req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.status(204).end(); } catch { res.status(503).json({ error: "Não foi possível excluir o evento." }); } });
 
+registerCrmFollowupRoutes(app, { pool, tenant, validateRelations, classifyDbError });
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 registerPortalAdminRoutes(app, { pool, tenant, hashPassword });
 
