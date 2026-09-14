@@ -35,7 +35,6 @@ export function register(app, ctx) {
   // Public handler; move it ahead of the /api requireAuth middleware installed by
   // server/index.js (the domain registry itself runs after that middleware).
   app.get("/api/portal/:token", portal);
-  app.get("/portal/:token", portal);
   const stack = app.router?.stack;
   const portalLayer = stack?.[stack.length - 1];
   const authIndex = stack?.findIndex((layer) => !layer.route && layer.handle?.name === "requireAuth");
