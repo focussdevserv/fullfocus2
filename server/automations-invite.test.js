@@ -7,7 +7,7 @@ test("processa um novo membro convidado uma única vez", async () => {
   const client = { async query(sql, params) {
     calls.push({ sql, params });
     if (sql.startsWith("select * from automations")) return { rows: [{ id: 11, organization_id: "org", trigger: "team_member_invited", action: "notify", config: {} }] };
-    if (sql.startsWith("select s.* from users")) return { rows: [{ id: 12, name: "Novo membro", email: "novo@example.com" }] };
+    if (sql.startsWith("select s.*,u.name member_name,u.email")) return { rows: [{ id: 12, user_id: "member", member_name: "Novo membro", email: "novo@example.com" }] };
     if (sql.startsWith("insert into automation_runs")) return { rowCount: 1, rows: [{ id: 13 }] };
     if (sql.startsWith("select id from users")) return { rowCount: 1, rows: [{ id: "admin" }] };
     return { rowCount: 1, rows: [] };

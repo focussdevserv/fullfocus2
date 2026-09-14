@@ -9,7 +9,7 @@ const SOURCE_TABLES = {
   ticket_created: "tickets",
   freelancer_project_finished: "projects",
   project_completed: "projects",
-  team_member_invited: "users",
+  team_member_invited: "team_invite_events",
   member_added_to_project: "project_members",
   project_member_added: "project_members",
   task_assigned: "tasks",
@@ -27,7 +27,7 @@ const sourceWhere = {
   ticket_created: "created_at <= $2",
   freelancer_project_finished: "(status in ('done','completed','published') or completed_on is not null) and (completed_on is null or completed_on <= $2::date)",
   project_completed: "(status in ('done','completed','published') or completed_on is not null) and (completed_on is null or completed_on <= $2::date)",
-  team_member_invited: "created_at <= $2 and coalesce(access_status,'active') = 'active'",
+  team_member_invited: "s.created_at <= $2",
   member_added_to_project: "added_at <= $2",
   project_member_added: "added_at <= $2",
   task_assigned: "assigned_at is not null and assigned_at <= $2 and assignee_id is not null",
@@ -43,7 +43,7 @@ const sourceMessage = (trigger, row) => {
   if (trigger === "task_overdue") return `Tarefa atrasada: ${row.title}`;
   if (trigger === "receivable_overdue") return `Recebível vencido: ${row.description}`;
   if (trigger === "freelancer_project_finished" || trigger === "project_completed") return `Projeto finalizado: ${row.name}`;
-  if (trigger === "team_member_invited") return `Bem-vindo ao FocusDev, ${row.name}`;
+  if (trigger === "team_member_invited") return `Bem-vindo ao FocusDev, ${row.member_name || row.name}`;
   if (trigger === "member_added_to_project" || trigger === "project_member_added") return `Você foi adicionado ao projeto ${row.project_name || row.project_id}.`;
   if (trigger === "task_assigned") return `Nova tarefa atribuída: ${row.title}`;
   if (trigger === "member_overloaded") return `Membro sobrecarregado: ${row.name} (${row.open_tasks} tarefas abertas)`;
@@ -56,8 +56,8 @@ async function findSources(client, automation, now) {
   const table = SOURCE_TABLES[automation.trigger];
   const where = sourceWhere[automation.trigger];
   if (!table || !where) return [];
-  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : automation.trigger === "task_assigned" ? "select s.*,u.name member_name,u.email" : automation.trigger === "member_overloaded" ? "select s.*,(select count(*)::int from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) open_tasks" : automation.trigger === "absence_started" ? "select s.*,u.name member_name,u.manager_id" : automation.trigger === "sale_won" ? "select s.*,(select c.id from clients c where c.organization_id=s.organization_id and ((s.contact_id is not null and c.contact_id=s.contact_id) or (s.company_id is not null and c.company_id=s.company_id)) order by c.id limit 1) client_id" : automation.trigger === "user_deactivated" ? "select s.*,u.name member_name,u.manager_id,u.email" : "select s.*";
-  const joins = table === "project_members" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id join projects p on p.id=s.project_id and p.organization_id=s.organization_id" : automation.trigger === "task_assigned" ? " join users u on u.id=s.assignee_id and u.organization_id=s.organization_id" : automation.trigger === "absence_started" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : automation.trigger === "user_deactivated" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : "";
+  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : automation.trigger === "task_assigned" ? "select s.*,u.name member_name,u.email" : automation.trigger === "member_overloaded" ? "select s.*,(select count(*)::int from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) open_tasks" : automation.trigger === "absence_started" ? "select s.*,u.name member_name,u.manager_id" : automation.trigger === "sale_won" ? "select s.*,(select c.id from clients c where c.organization_id=s.organization_id and ((s.contact_id is not null and c.contact_id=s.contact_id) or (s.company_id is not null and c.company_id=s.company_id)) order by c.id limit 1) client_id" : automation.trigger === "user_deactivated" ? "select s.*,u.name member_name,u.manager_id,u.email" : automation.trigger === "team_member_invited" ? "select s.*,u.name member_name,u.email" : "select s.*";
+  const joins = table === "project_members" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id join projects p on p.id=s.project_id and p.organization_id=s.organization_id" : automation.trigger === "task_assigned" ? " join users u on u.id=s.assignee_id and u.organization_id=s.organization_id" : automation.trigger === "absence_started" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : automation.trigger === "user_deactivated" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : automation.trigger === "team_member_invited" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : "";
   const query = `${select} from ${table} s${joins} where s.organization_id=$1 and ${where}
     and not exists (select 1 from automation_runs r where r.automation_id=$3 and r.source_type=$4 and r.source_id=s.id)
     order by s.id limit 100`;
