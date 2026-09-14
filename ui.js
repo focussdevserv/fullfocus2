@@ -93,8 +93,8 @@ const ui = (() => {
     </form>`;
     document.body.append(backdrop);
     const formEl = backdrop.querySelector("form"), status = backdrop.querySelector(".ui-modal-status");
-    let dirty = false;
-    const close = (force = false) => { const saving = formEl.querySelector("[type=submit]")?.disabled; if (!force && !saving && dirty && !window.confirm("Existem alterações não salvas. Sair mesmo assim?")) return; backdrop.remove(); document.removeEventListener("keydown", onKey); };
+    let dirty = false, discardPending = false;
+    const close = (force = false) => { const saving = formEl.querySelector("[type=submit]")?.disabled; if (!force && !saving && dirty && !discardPending) { discardPending = true; status.textContent = "Existem alterações não salvas. Clique novamente em Descartar alterações para sair."; const cancel = formEl.querySelector("[data-cancel]"); if (cancel) cancel.textContent = "Descartar alterações"; return; } backdrop.remove(); document.removeEventListener("keydown", onKey); };
     const onKey = (event) => { if (event.key === "Escape") close(); };
     document.addEventListener("keydown", onKey);
     backdrop.querySelector(".ui-modal-close").addEventListener("click", close);
