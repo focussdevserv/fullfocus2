@@ -1298,7 +1298,7 @@ body.dark-mode .data-card,
 body.dark-mode .task-summary .data-card,
 body.dark-mode .quick-summary .data-card {
   border-color: rgb(145 180 230 / 24%);
-  background: linear-gradient(135deg, rgb(26 47 78 / 72%), rgb(8 19 38 / 58%));
+  background-color: rgb(26 47 78 / 72%);
   box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 14px 30px rgb(0 0 0 / 20%);
   backdrop-filter: blur(18px);
 }
