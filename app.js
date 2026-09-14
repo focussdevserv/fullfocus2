@@ -598,3 +598,5 @@ topLogoutButton?.addEventListener("click", () => {
 });
 
 restoreSession();
+const initialRoute = document.querySelector(`.nav-item[href="${window.location.hash || "#inicio"}"]`);
+if (initialRoute) initialRoute.click();
