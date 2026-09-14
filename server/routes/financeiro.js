@@ -2,6 +2,15 @@
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
   const error = (res, e, fallback) => { const out = classifyDbError(e, fallback); res.status(out.status).json({ error: out.error }); };
+  app.use("/api/subscriptions", async (req, res, next) => {
+    if (req.method !== "GET") return next();
+    const org = tenant(req, res); if (!org) return;
+    const search = asText(req.query?.search || req.query?.q), status = asText(req.query?.status); const params = [org], where = ["s.organization_id=$1"];
+    if (search) { params.push(search); where.push(`(s.plan ilike '%' || $${params.length} || '%' or coalesce(c.name,'') ilike '%' || $${params.length} || '%')`); }
+    if (["active", "paused", "cancelled", "pending"].includes(status)) { params.push(status); where.push(`s.status=$${params.length}`); }
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 250, 1), 250), offset = Math.max(Number(req.query?.offset) || 0, 0); params.push(limit, offset);
+    try { const q = await pool.query(`select s.*,c.name client_name from subscriptions s left join clients c on c.id=s.client_id and c.organization_id=s.organization_id where ${where.join(" and ")} order by s.created_at desc limit $${params.length - 1} offset $${params.length}`, params); return res.json({ subscriptions: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { return error(res, e, "Não foi possível carregar as assinaturas."); }
+  });
   const recordReceivablePayment = async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const amount = Number(req.body?.amount), method = asText(req.body?.method) || "manual";
