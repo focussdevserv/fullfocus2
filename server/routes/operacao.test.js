@@ -6,7 +6,8 @@ import { register } from "./operacao.js";
 
 function harness() {
   const calls = [];
-  const pool = { query: async (sql, params) => { calls.push({ sql, params }); if (sql.startsWith("select")) return { rows: [{ id: 1, organization_id: params[0], title: "T" }] }; return { rows: [{ id: 2, organization_id: params[0] }], rowCount: 1 }; } };
+  const query = async (sql, params) => { calls.push({ sql, params }); if (sql.includes("from contracts")) return { rows: [{ id: 9, organization_id: "org-a", status: "signed", name: "Contrato", client_id: 4, value: 2700 }], rowCount: 1 }; if (sql.startsWith("select")) return { rows: [{ id: 1, organization_id: "org-a", title: "T" }], rowCount: 1 }; return { rows: [{ id: 2, organization_id: "org-a" }], rowCount: 1 }; };
+  const pool = { query, connect: async () => ({ query, release() {} }) };
   const app = express(); app.use(express.json());
   register(app, { pool, tenant: (_req) => "org-a", asText: (v) => String(v ?? "").trim(), classifyDbError: (_e, error) => ({ status: 500, error }), validateRelations: async () => {} });
   return { app, calls };
@@ -20,3 +21,4 @@ test("POST de arquivo válido retorna 201", async (t) => withServer(t, async () 
 test("POST de ticket sem título retorna 400", async (t) => withServer(t, async () => { const response = await request(t, "POST", "/api/tickets", { priority: "urgent" }); assert.equal(response.status, 400); assert.match((await response.json()).error, /título/i); }));
 test("POST de projeto rejeita status legado desconhecido", async (t) => withServer(t, async () => { const response = await request(t, "POST", "/api/projects", { name: "Site", status: "unknown" }); assert.equal(response.status, 400); }));
 test("GitHub preview rejeita host externo", async (t) => withServer(t, async () => { const response = await request(t, "GET", "/api/projects/github-preview?url=https%3A%2F%2Fexample.com%2Frepo"); assert.equal(response.status, 400); }));
+test("contrato assinado cria projeto vinculado no mesmo tenant", async (t) => withServer(t, async (calls) => { const response = await request(t, "POST", "/api/contracts/9/create-project", {}); const body = await response.json(); assert.equal(response.status, 201, `${JSON.stringify(body)} ${JSON.stringify(calls)}`); assert.equal(body.created, true); assert.ok(calls.every((x) => x.sql === "begin" || x.sql === "commit" || x.sql === "rollback" || x.sql.includes("organization_id"))); }));

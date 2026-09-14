@@ -36,6 +36,27 @@ export function register(app, ctx) {
     const urlIssue = ["repository_url", "development_url", "staging_url", "production_url"].some((key) => b[key] !== undefined && b[key] !== "" && !/^https?:\/\//i.test(String(b[key]))) ? "Os links do projeto devem começar com http:// ou https://." : null;
     return statusIssue || priorityIssue || progressIssue || urlIssue || (!p && !asText(b.name) ? "Informe o nome do projeto." : null);
   });
+  app.post("/api/contracts/:id/create-project", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const db = pool.connect ? await pool.connect() : pool;
+    try {
+      await db.query("begin");
+      const contract = await db.query("select * from contracts where id=$1 and organization_id=$2 for update", [req.params.id, org]);
+      if (!contract.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Contrato não encontrado." }); }
+      const source = contract.rows[0];
+      if (!["signed", "active"].includes(source.status)) { await db.query("rollback"); return res.status(400).json({ error: "O contrato precisa estar assinado ou ativo para criar o projeto." }); }
+      if (source.project_id) {
+        const existing = await db.query("select * from projects where id=$1 and organization_id=$2", [source.project_id, org]);
+        if (existing.rowCount) { await db.query("commit"); return res.status(200).json({ project: existing.rows[0], created: false }); }
+      }
+      const code = `PROJ-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      const project = await db.query("insert into projects (organization_id,contract_id,client_id,name,status,progress,internal_code,total_value,down_payment,payment_method,installments,installment_value,payment_due_dates,discount,maintenance_monthly_value,support_period,observations) values ($1,$2,$3,$4,'planning',0,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *", [org, source.id, source.client_id, source.name, code, source.total_value ?? source.value ?? 0, source.down_payment ?? 0, source.payment_method, source.installments ?? 1, source.installment_value ?? 0, source.payment_due_dates, source.discount ?? 0, source.maintenance_monthly ?? 0, source.support_period, "Projeto criado automaticamente a partir do contrato."]);
+      await db.query("update contracts set project_id=$1, updated_at=now() where id=$2 and organization_id=$3", [project.rows[0].id, source.id, org]);
+      await db.query("commit");
+      res.status(201).json({ project: project.rows[0], created: true });
+    } catch (e) { await db.query("rollback").catch(() => {}); fail(res, e, "Não foi possível criar o projeto a partir do contrato."); }
+    finally { db.release?.(); }
+  });
   app.get("/api/projects/github-preview", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const raw = String(req.query.url || "").trim();
