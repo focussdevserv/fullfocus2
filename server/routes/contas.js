@@ -8,8 +8,26 @@ export function isValidCnpj(value) {
   return calc(12) === Number(cnpj[12]) && calc(13) === Number(cnpj[13]);
 }
 const cache = new Map();
-const publicFields = ["cnpj", "razao_social", "nome_fantasia", "situacao", "abertura", "cnae", "municipio", "uf", "telefone", "email"];
-const pickCnpj = (data, cnpj) => Object.fromEntries(publicFields.map((key) => [key, key === "cnpj" ? cnpj : data?.[key] ?? null]));
+export const pickCnpj = (data, cnpj) => ({
+  cnpj,
+  razao_social: data?.razao_social ?? data?.razaoSocial ?? null,
+  nome_fantasia: data?.nome_fantasia ?? data?.nomeFantasia ?? null,
+  situacao: data?.situacao ?? data?.situacao_cadastral ?? null,
+  abertura: data?.abertura ?? data?.data_inicio_atividade ?? null,
+  cnae: data?.cnae ?? data?.cnae_fiscal ?? null,
+  municipio: data?.municipio ?? null,
+  uf: data?.uf ?? null,
+  telefone: data?.telefone ?? data?.ddd_telefone_1 ?? data?.telefone_1 ?? null,
+  email: data?.email ?? null,
+  logradouro: data?.logradouro ?? null,
+  numero: data?.numero ?? null,
+  complemento: data?.complemento ?? null,
+  bairro: data?.bairro ?? null,
+  cep: data?.cep ?? null,
+  natureza_juridica: data?.natureza_juridica ?? null,
+  porte: data?.porte ?? null,
+  capital_social: data?.capital_social ?? null,
+});
 const html = (value) => String(value ?? "").replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character]));
 const portalPage = ({ client, contracts, receivables }) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Portal · ${html(client.name)}</title><style>:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#07111f;color:#edf4ff}body{margin:0;padding:32px 18px;background:radial-gradient(circle at 80% 0,#123b77,#07111f 48%)}main{max-width:900px;margin:auto}.brand{color:#ff2844;font-weight:800}.brand span{color:#fff}.hero,.card{border:1px solid #27466d;background:#0d1c31dd;border-radius:18px;padding:24px}.hero{margin:22px 0;display:flex;justify-content:space-between;gap:20px;align-items:end}.hero h1{margin:8px 0;font-size:clamp(26px,5vw,42px)}.muted{color:#9eb1cc}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.card h2{margin-top:0;font-size:18px}.row{padding:14px 0;border-top:1px solid #27466d;display:flex;justify-content:space-between;gap:12px}.row:first-of-type{border-top:0}.pill{color:#7ce5b2;font-size:12px}.amount{font-weight:700}.empty{color:#9eb1cc;padding:8px 0}@media(max-width:600px){body{padding:20px 12px}.hero{display:block}}</style></head><body><main><div class="brand">Focus<span>Dev</span></div><section class="hero"><div><div class="muted">Portal do cliente</div><h1>Olá, ${html(client.name)}.</h1><div class="muted">Acompanhe seus contratos e próximos pagamentos.</div></div><div class="muted">Atualizado agora</div></section><div class="grid"><section class="card"><h2>Contratos ativos</h2>${contracts.length ? contracts.map((contract) => `<div class="row"><div><strong>${html(contract.name)}</strong><div class="muted">${html(contract.starts_on || "")} ${contract.ends_on ? `até ${html(contract.ends_on)}` : ""}</div></div><div class="pill">Ativo</div></div>`).join("") : '<div class="empty">Nenhum contrato ativo.</div>'}</section><section class="card"><h2>Próximos pagamentos</h2>${receivables.length ? receivables.map((receivable) => `<div class="row"><div><strong>${html(receivable.description)}</strong><div class="muted">Vencimento: ${html(receivable.due_at)}</div></div><div class="amount">R$ ${Number(receivable.amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div></div>`).join("") : '<div class="empty">Nenhum pagamento pendente.</div>'}</section></div></main></body></html>`;
 function tokenHash(token) { return crypto.createHash("sha256").update(token).digest("hex"); }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import { createServer } from "node:http";
 import crypto from "node:crypto";
-import { isValidCnpj, register } from "./contas.js";
+import { isValidCnpj, pickCnpj, register } from "./contas.js";
 
 const org = "00000000-0000-0000-0000-000000000001";
 function harness() {
@@ -23,3 +23,4 @@ test("overview do cliente agrega relacionamentos e filtra organizacao", async ()
 test("portal com token errado responde 404", async () => { const h = harness(); const response = await request(h, "/api/portal/token-inexistente"); assert.equal(response.status, 404); });
 test("portal retorna somente dados do cliente da organização", async () => { const h = harness(); const response = await request(h, "/api/portal/valid-token"); assert.equal(response.status, 200); const body = await response.json(); assert.equal(body.client.name, "Cliente teste"); assert.deepEqual(Object.keys(body), ["client", "contracts", "receivables"]); assert.ok(h.calls.filter((x) => x.sql.includes("organization_id")).length >= 3); });
 test("GET CEP invalid responds 400", async () => { const h = harness(); const response = await request(h, "/api/cep/123"); assert.equal(response.status, 400); });
+test("normaliza os campos retornados pela BrasilAPI", () => { const data = pickCnpj({ razao_social: "Empresa Ltda", nome_fantasia: "Empresa", situacao_cadastral: "ATIVA", data_inicio_atividade: "2020-01-02", cnae_fiscal: 6201, ddd_telefone_1: "1133334444", logradouro: "Rua A", numero: "10" }, "11222333000181"); assert.equal(data.situacao, "ATIVA"); assert.equal(data.abertura, "2020-01-02"); assert.equal(data.cnae, 6201); assert.equal(data.telefone, "1133334444"); assert.equal(data.logradouro, "Rua A"); });
