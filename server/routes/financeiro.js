@@ -27,6 +27,20 @@ export function register(app, ctx) {
     finally { db.release?.(); }
   };
   app.post("/api/receivables/:id/record-payment", recordReceivablePayment);
+  app.post("/api/receivables/:id/create-charge", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const channel = ["pix", "boleto", "card", "link", "transfer"].includes(req.body?.channel) ? req.body.channel : "link";
+    try {
+      const receivable = await pool.query("select * from receivables where id=$1 and organization_id=$2", [req.params.id, org]);
+      if (!receivable.rowCount) return res.status(404).json({ error: "Conta a receber não encontrada." });
+      const source = receivable.rows[0];
+      if (["paid", "cancelled"].includes(source.status)) return res.status(400).json({ error: "Esta conta não aceita novas cobranças." });
+      const existing = await pool.query("select * from charges where receivable_id=$1 and organization_id=$2 and status in ('draft','generated','sent','pending') order by created_at desc limit 1", [source.id, org]);
+      if (existing.rowCount) return res.json({ charge: existing.rows[0], created: false, provider_connected: false });
+      const charge = await pool.query("insert into charges (organization_id,receivable_id,client_id,project_id,channel,status,amount,due_at,message) values ($1,$2,$3,$4,$5,'generated',$6,$7,$8) returning *", [org, source.id, source.client_id, source.project_id, channel, source.updated_amount ?? source.amount, source.due_at, asText(req.body?.message) || `Cobrança: ${source.description}`]);
+      res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: false, notice: "Cobrança registrada. Conecte um gateway para gerar Pix, boleto ou link de pagamento." });
+    } catch (e) { error(res, e, "Não foi possível gerar a cobrança."); }
+  });
   app.get("/api/finance/summary", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const months = Math.min(24, Math.max(1, Number.parseInt(req.query.months, 10) || 6));
