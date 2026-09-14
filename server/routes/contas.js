@@ -26,7 +26,8 @@ export function register(app, ctx) {
   const portal = async (req, res) => {
     const wantsHtml = req.path.startsWith("/portal/") || (req.get("accept") || "").includes("text/html");
     if (wantsHtml) {
-      res.json = (payload) => res.type("html").send(portalPage(payload));
+      const sendJson = res.json.bind(res);
+      res.json = (payload) => payload?.client ? res.type("html").send(portalPage(payload)) : sendJson(payload);
     }
     const token = asText(req.params.token); if (!token) return res.status(404).json({ error: "Portal não encontrado." });
     try { const link = await pool.query("select client_id, organization_id from client_portal_links where token_hash=$1 and (expires_at is null or expires_at > now())", [tokenHash(token)]); if (!link.rowCount) return res.status(404).json({ error: "Portal não encontrado." }); const { client_id: clientId, organization_id: org } = link.rows[0]; const client = await pool.query("select name from clients where id=$1 and organization_id=$2", [clientId, org]); if (!client.rowCount) return res.status(404).json({ error: "Portal não encontrado." }); const [contracts, receivables] = await Promise.all([pool.query("select id,name,status,value,starts_on,ends_on from contracts where client_id=$1 and organization_id=$2 and status='active'", [clientId, org]), pool.query("select id,description,amount,due_at,status from receivables where client_id=$1 and organization_id=$2 and status in ('pending','overdue')", [clientId, org])]); res.json({ client: client.rows[0], contracts: contracts.rows, receivables: receivables.rows }); } catch (e) { const { status, error } = classifyDbError(e, "Não foi possível carregar o portal."); res.status(status).json({ error }); }
