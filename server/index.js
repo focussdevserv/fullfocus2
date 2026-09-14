@@ -40,6 +40,36 @@ app.use((req, res, next) => {
 });
 app.use(express.static(frontendRoot));
 
+/* Formulários públicos podem disparar somente registros explicitamente
+   permitidos na configuração do próprio formulário. A operação é transacional
+   para não salvar a resposta sem criar o registro de origem. */
+app.use(async (req, res, next) => {
+  if (req.method !== "POST" || !req.path.startsWith("/api/forms/public/")) return next();
+  const responses = req.body?.responses;
+  if (!responses || typeof responses !== "object" || Array.isArray(responses)) return res.status(400).json({ error: "Envie as respostas do formulário." });
+  const token = req.path.slice("/api/forms/public/".length);
+  if (!token || token.includes("/")) return next();
+  const db = await pool.connect().catch(() => null);
+  if (!db) return res.status(503).json({ error: "Serviço indisponível." });
+  const textValue = (keys) => keys.map((key) => responses[key]).find((value) => value !== undefined && String(value).trim() !== "") || null;
+  try {
+    await db.query("begin");
+    const formQuery = await db.query("select id,organization_id,name,status,automation_config from forms where public_token=$1 and status in ('published','active') for update", [token]);
+    if (!formQuery.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Formulário indisponível." }); }
+    const form = formQuery.rows[0], config = form.automation_config && typeof form.automation_config === "object" ? form.automation_config : {}, target = ["lead", "ticket", "task"].includes(config.create) ? config.create : null;
+    const updated = await db.query("update forms set responses=coalesce(responses,'[]'::jsonb) || $1::jsonb,submitted_at=now(),updated_at=now() where id=$2 returning id,name,status,submitted_at", [JSON.stringify([responses]), form.id]);
+    let createdRecord = null;
+    const name = textValue(["name", "nome", "full_name"]) || `Envio: ${form.name}`;
+    const email = textValue(["email", "e-mail"]), phone = textValue(["phone", "telefone", "whatsapp"]), details = JSON.stringify({ form_id: form.id, responses });
+    if (target === "lead") createdRecord = (await db.query("insert into leads (organization_id,name,email,phone,source,status,notes) values ($1,$2,$3,$4,'form','new',$5) returning id,name,status", [form.organization_id, name, email, phone, details])).rows[0];
+    if (target === "ticket") createdRecord = (await db.query("insert into tickets (organization_id,title,description,priority,status) values ($1,$2,$3,'medium','open') returning id,title,status", [form.organization_id, name, details])).rows[0];
+    if (target === "task") createdRecord = (await db.query("insert into tasks (organization_id,title,description,priority,status) values ($1,$2,$3,'medium','todo') returning id,title,status", [form.organization_id, name, details])).rows[0];
+    await db.query("commit");
+    return res.json({ form: updated.rows[0], created_record: target ? { type: target, record: createdRecord } : null });
+  } catch { await db.query("rollback").catch(() => {}); return res.status(503).json({ error: "Não foi possível salvar as respostas." }); }
+  finally { db.release(); }
+});
+
 const hashPassword = (password, salt = crypto.randomBytes(16).toString("hex")) => ({ salt, hash: crypto.scryptSync(password, salt, 64).toString("hex") });
 const verifyPassword = (password, salt, expected) => { try { return crypto.timingSafeEqual(Buffer.from(hashPassword(password, salt).hash, "hex"), Buffer.from(expected, "hex")); } catch { return false; } };
 const signSession = (user) => { const payload = Buffer.from(JSON.stringify({ id: user.id, name: user.name, email: user.email, organization_id: user.organization_id, iat: Date.now(), exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE })).toString("base64url"); const signature = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url"); return `${payload}.${signature}`; };
