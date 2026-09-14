@@ -5,7 +5,7 @@
 
 export const CAMPAIGN_CHANNELS = ["email", "whatsapp", "ads", "social", "other"];
 export const CAMPAIGN_STATUSES = ["draft", "active", "paused", "done"];
-export const PROPOSAL_STATUSES = ["draft", "sent", "accepted", "rejected"];
+export const PROPOSAL_STATUSES = ["draft", "sent", "viewed", "negotiation", "accepted", "rejected", "expired", "cancelled"];
 export const OPPORTUNITY_STAGES = ["prospecting", "qualification", "proposal", "negotiation", "won", "lost"];
 
 const toNumber = (value, fallback = null) => { if (value === undefined || value === null || value === "") return fallback; const n = Number(String(value).replace(",", ".")); return Number.isFinite(n) ? n : NaN; };

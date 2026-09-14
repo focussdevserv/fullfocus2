@@ -6,11 +6,11 @@
    Ownership: modules/crm.js, modules/crm.css
    ========================================================================== */
 
-const LEAD_STATUS = { new: ["Novo", "blue"], contacted: ["Contatado", "purple"], qualified: ["Qualificado", "orange"], proposal: ["Em proposta", "orange"], won: ["Ganho", "green"], lost: ["Perdido", "red"] };
+const LEAD_STATUS = { new: ["Novo", "blue"], contacted: ["Em contato", "purple"], qualified: ["Qualificado", "orange"], proposal: ["Em proposta", "orange"], won: ["Convertido", "green"], lost: ["Descartado", "red"] };
 const STAGES = { prospecting: ["Prospecção", "blue"], qualification: ["Qualificação", "purple"], proposal: ["Proposta", "orange"], negotiation: ["Negociação", "orange"], won: ["Ganho", "green"], lost: ["Perdido", "red"] };
 const CHANNELS = { email: "E-mail", whatsapp: "WhatsApp", ads: "Anúncios", social: "Redes sociais", other: "Outro" };
 const CAMPAIGN_STATUS = { draft: ["Rascunho", "gray"], active: ["Ativa", "green"], paused: ["Pausada", "orange"], done: ["Concluída", "blue"] };
-const PROPOSAL_STATUS = { draft: ["Rascunho", "gray"], sent: ["Enviada", "blue"], accepted: ["Aceita", "green"], rejected: ["Recusada", "red"] };
+const PROPOSAL_STATUS = { draft: ["Rascunho", "gray"], sent: ["Enviada", "blue"], viewed: ["Visualizada", "purple"], negotiation: ["Em negociação", "orange"], accepted: ["Aprovada", "green"], rejected: ["Recusada", "red"], expired: ["Expirada", "gray"], cancelled: ["Cancelada", "red"] };
 const SOURCES = [["site", "Site"], ["indicacao", "Indicação"], ["instagram", "Instagram"], ["whatsapp", "WhatsApp"], ["google", "Google"], ["evento", "Evento"], ["outro", "Outro"]];
 
 const { esc, money, date, dateTime, relative, badge, avatar, header, button, stats, toolbar, table, empty, rowActions, confirmInline, toast, form, drawer, facts, keepSearchFocus, downloadCsv } = ui;
