@@ -545,6 +545,18 @@ function renderInboxView() {
   dashboardGrid.querySelectorAll(".inbox-folder").forEach((folder) => folder.addEventListener("click", () => { dashboardGrid.querySelector(".inbox-folder.is-active")?.classList.remove("is-active"); folder.classList.add("is-active"); }));
 }
 
+function renderLeadsView() {
+  const leads = [
+    ["Bruno Almeida", "Nexum", "Qualificacao", "R$ 24.000", "Novo lead"],
+    ["Carolina Mendes", "Vertice", "Proposta", "R$ 18.500", "Proposta"],
+    ["Diego Nunes", "Orbit", "Negociacao", "R$ 31.200", "Negociacao"],
+    ["Fernanda Reis", "Acme Inc.", "Contato", "R$ 9.800", "Novo lead"]
+  ];
+  const stages = [["Novo lead", "2", "#3b82f6"], ["Qualificacao", "4", "#8b5cf6"], ["Proposta", "2", "#f59e0b"], ["Negociacao", "1", "#f3132d"]];
+  dashboardGrid.innerHTML = `<section class="page-intro leads-intro"><div><p class="card-kicker">CRM</p><h2>Leads</h2><p>Transforme conversas em oportunidades e mantenha cada etapa sob controle.</p></div><button class="button button-primary compact-action lead-new" type="button">+ Novo lead</button></section><section class="lead-funnel">${stages.map(([name, count, color]) => `<article class="lead-stage" style="--stage-color:${color}"><span>${name}</span><strong>${count}</strong><small>oportunidades</small></article>`).join("")}</section><section class="data-card leads-card"><div class="section-heading"><div><p class="card-kicker">Pipeline comercial</p><h2>Oportunidades recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="lead-list">${leads.map(([name, company, stage, value, tag]) => `<article class="lead-row"><span class="lead-avatar">${name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div><strong>${name}</strong><small>${company}</small></div><span class="lead-stage-name">${stage}</span><strong class="lead-value">${value}</strong><span class="inbox-tag">${tag}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section>`;
+  dashboardGrid.querySelector(".lead-new")?.addEventListener("click", () => openCreateDialog("lead"));
+}
+
 function renderWorkspaceView(hash, label) {
   if (!dashboardGrid) return;
   const key = hash?.replace("#", "");
@@ -555,6 +567,7 @@ function renderWorkspaceView(hash, label) {
   if (key === "agenda") { renderAgendaView(); return; }
   if (key === "tarefas") { renderTasksView(); return; }
   if (key === "caixa-de-entrada") { renderInboxView(); return; }
+  if (key === "leads") { renderLeadsView(); return; }
   const view = views[key] || { kicker: document.querySelector(".eyebrow").textContent, title: label, intro: "Esta área está pronta para receber seus dados.", columns: ["Item", "Responsável", "Atualização", "Status"], rows: [["Nenhum registro carregado", "—", "Agora", "Aguardando dados"]] };
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">${view.kicker}</p><h2>${view.title}</h2><p>${view.intro}</p></div><button class="button button-primary compact-action" type="button">+ Novo</button></section><section class="data-card table-card"><div class="section-heading"><div><p class="card-kicker">Visão geral</p><h2>Registros recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="table-wrap"><table><thead><tr>${view.columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead><tbody>${view.rows.map((row) => `<tr>${row.map((cell, index) => `<td class="${index === row.length - 1 ? "status-cell" : ""}">${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section><section class="quick-summary"><article class="data-card"><span class="metric-label">Total de registros</span><strong>${view.rows.length}</strong><small class="positive">↑ 4,2% este mês</small></article><article class="data-card"><span class="metric-label">Atualizados hoje</span><strong>08</strong><small class="neutral">Última atualização há 12 min</small></article><article class="data-card"><span class="metric-label">Precisam de atenção</span><strong>03</strong><small class="warning">Verificar pendências</small></article></section>`;
 }
