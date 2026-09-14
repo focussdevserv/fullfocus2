@@ -292,7 +292,7 @@ app.use("/api/tasks", async (req, res, next) => {
   return next();
 });
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
-registerEventRoutes(app, { pool, tenant, classifyDbError });
+registerEventRoutes(app, { pool, tenant, classifyDbError, validateRelations });
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
