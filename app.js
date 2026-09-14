@@ -433,15 +433,17 @@ function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   renderWorkspaceView(item.getAttribute("href"), label);
   closeSidebar();
 }
-document.querySelectorAll(".nav-item").forEach((item) => {
-  item.addEventListener("click", (event) => {
-    event.preventDefault();
-    const href = item.getAttribute("href") || "#inicio";
-    if (window.location.hash !== href) history.pushState(null, "", href);
-    renderHashRoute(href);
-  });
+document.addEventListener("click", (event) => {
+  const item = event.target.closest?.(".nav-item");
+  if (!item) return;
+  event.preventDefault();
+  const href = item.getAttribute("href") || "#inicio";
+  if (window.location.hash !== href) history.pushState(null, "", href);
+  renderHashRoute(href);
+  window.requestAnimationFrame(() => renderHashRoute(href));
 });
-window.addEventListener("hashchange", renderHashRoute);
+window.addEventListener("hashchange", () => renderHashRoute(window.location.hash));
+window.addEventListener("popstate", () => renderHashRoute(window.location.hash));
 
 const navIconPaths = {
   inicio: '<path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-6h6v6"/>',
