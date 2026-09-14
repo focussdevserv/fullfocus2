@@ -78,6 +78,21 @@ async function pollBrowserNotifications() {
 }
 window.setInterval(pollBrowserNotifications, 60000);
 
+/* Contador de mensagens não lidas (exposto por modules/inbox.js em window.FocusInbox). */
+async function refreshInboxBadge() {
+  if (!notificationButton || typeof window.FocusInbox?.unreadCount !== "function" || appShell.hidden) return;
+  try {
+    const count = Number(await window.FocusInbox.unreadCount()) || 0;
+    let badge = notificationButton.querySelector(".inbox-badge");
+    if (!badge) { badge = document.createElement("span"); badge.className = "inbox-badge"; notificationButton.append(badge); }
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.hidden = count === 0;
+    notificationButton.classList.toggle("has-unread", count > 0);
+  } catch { /* badge é opcional */ }
+}
+window.setInterval(refreshInboxBadge, 45000);
+document.addEventListener("focus-inbox-changed", refreshInboxBadge);
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SESSION_KEY = "focusdev_session";
 let authTransition = 0;
@@ -185,6 +200,7 @@ function showApp(user) {
   appTitle.focus();
   syncDashboard();
   loadWeather();
+  window.setTimeout(refreshInboxBadge, 300);
   if (window.location.hash && window.location.hash !== "#inicio") {
     window.requestAnimationFrame(() => renderHashRoute(window.location.hash));
   }
@@ -674,7 +690,7 @@ function applyDashboardProfile(profile = localStorage.getItem(DASHBOARD_PROFILE_
 function renderWorkspaceView(hash, label) {
   if (!dashboardGrid) return;
   const key = hash?.replace("#", "");
-  if (key === "inicio") {
+  if (key === "inicio" && !routeRenderers.inicio) {
     dashboardGrid.innerHTML = initialDashboardMarkup;
     applyDashboardProfile();
     return;
