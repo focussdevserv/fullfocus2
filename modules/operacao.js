@@ -12,6 +12,29 @@ const config = {
   ticket: { title: "Novo ticket", endpoint: "/api/tickets", fields: [{ name: "title", label: "Título" }, { name: "description", label: "Descrição", required: false }, { name: "client_id", label: "Cliente", type: "select", options: [] }, { name: "priority", label: "Prioridade", type: "select", options: Object.entries({ low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" }) }, { name: "status", label: "Status", type: "select", options: Object.entries({ open: "Aberto", in_progress: "Em andamento", waiting: "Aguardando", done: "Concluído" }) }, { name: "due_at", label: "Prazo", type: "datetime-local", required: false }] }
 };
 Object.assign(createConfig, config);
+config.projeto.fields.push(
+  { name: "description", label: "Descrição", required: false },
+  { name: "current_stage", label: "Etapa atual", required: false },
+  { name: "starts_on", label: "Data de início", type: "date", required: false },
+  { name: "due_on", label: "Prazo previsto", type: "date", required: false },
+  { name: "next_action", label: "Próxima ação", required: false },
+  { name: "next_action_at", label: "Data da próxima ação", type: "datetime-local", required: false },
+  { name: "technologies", label: "Tecnologias", required: false },
+  { name: "repository_url", label: "Repositório GitHub", type: "url", required: false, githubAutoFill: true },
+  { name: "development_url", label: "Link de desenvolvimento", type: "url", required: false },
+  { name: "staging_url", label: "Link de homologação", type: "url", required: false },
+  { name: "production_url", label: "Link de produção", type: "url", required: false },
+  { name: "domain", label: "Domínio", required: false },
+  { name: "hosting_provider", label: "Provedor de hospedagem", required: false },
+  { name: "database_provider", label: "Banco/Firebase/Supabase", required: false },
+  { name: "external_apis", label: "APIs e serviços externos", required: false },
+  { name: "access_storage_reference", label: "Onde os acessos estão guardados", placeholder: "Ex.: 1Password do cliente", required: false },
+  { name: "total_value", label: "Valor total", type: "number", required: false },
+  { name: "down_payment", label: "Valor de entrada", type: "number", required: false },
+  { name: "payment_status", label: "Situação do pagamento", required: false },
+  { name: "pending_items", label: "Pendências", required: false },
+  { name: "observations", label: "Observações", required: false }
+);
 async function setup(kind) { const c = config[kind]; if (c.fields.some((f) => f.name.endsWith("_id") && f.name !== "contract_id")) { const d = await api("/api/clients"); clients = d.clients || []; c.fields.forEach((f) => { if (f.name === "client_id") f.options = [["", "Sem cliente"], ...clients.map((x) => [x.id, x.name])]; }); } openCreateDialog(kind); }
 function intro(title, description, kind) { return `<section class="page-intro operations-intro"><div><p class="card-kicker">Operação</p><h2>${title}</h2><p>${description}</p></div><button class="button button-primary compact-action operations-new" data-create="${kind}" type="button">+ Novo</button></section>`; }
 function bindCommon(kind, rows, endpoint) { dashboardGrid.querySelector(".operations-new")?.addEventListener("click", () => setup(kind)); dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", async () => { b.disabled = true; await api(`${endpoint}/${b.dataset.delete}`, { method: "DELETE" }); renderHashRoute(); })); dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { const item = rows.find((x) => String(x.id) === b.dataset.edit); if (!item) return; setup(kind).then(() => { const form = document.querySelector("#create-form"); if (!form) return; Object.entries(item).forEach(([k, v]) => { const field = form.elements[k]; if (field && v != null) field.value = String(v); }); form.dataset.method = "PATCH"; form.dataset.endpoint = `${endpoint}/${item.id}`; }); })); }

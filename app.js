@@ -789,3 +789,29 @@ if (bootResetToken) {
     if (!appShell.hidden) renderHashRoute();
   });
 }
+
+const baseOpenCreateDialog = openCreateDialog;
+openCreateDialog = function openCreateDialogWithGithub(kind) {
+  baseOpenCreateDialog(kind);
+  if (kind !== "projeto") return;
+  const repository = dialogFields.querySelector('[name="repository_url"]');
+  if (!repository || dialogFields.querySelector("[data-github-fill]")) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "compact-action";
+  button.dataset.githubFill = "true";
+  button.textContent = "Preencher pelo GitHub";
+  repository.insertAdjacentElement("afterend", button);
+  button.addEventListener("click", async () => {
+    if (!repository.value) { repository.focus(); return; }
+    button.disabled = true; button.textContent = "Lendo GitHub...";
+    try {
+      const response = await fetch(`/api/projects/github-preview?url=${encodeURIComponent(repository.value)}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível ler o GitHub.");
+      Object.entries(data).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value !== undefined && value !== null && value !== "") field.value = value; });
+      dialogStatus.textContent = "Dados públicos preenchidos. Revise antes de salvar.";
+    } catch (error) { dialogStatus.textContent = error.message; }
+    finally { button.disabled = false; button.textContent = "Preencher pelo GitHub"; }
+  });
+};

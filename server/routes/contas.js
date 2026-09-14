@@ -23,6 +23,22 @@ export function register(app, ctx) {
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 8000);
     try { const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, { signal: controller.signal }); if (!response.ok) return res.status(response.status === 404 ? 404 : 503).json({ error: "Não foi possível consultar o CNPJ." }); const data = pickCnpj(await response.json(), cnpj); cache.set(cnpj, { data, expires: Date.now() + 600000 }); res.json(data); } catch { res.status(503).json({ error: "Não foi possível consultar o CNPJ." }); } finally { clearTimeout(timer); }
   });
+  app.get("/api/clients/:id/overview", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    try {
+      const client = await pool.query("select c.*,co.name company_name,co.phone company_phone,ct.name contact_name,ct.phone contact_phone from clients c left join companies co on co.id=c.company_id and co.organization_id=c.organization_id left join contacts ct on ct.id=c.contact_id and ct.organization_id=c.organization_id where c.id=$1 and c.organization_id=$2", [req.params.id, org]);
+      if (!client.rowCount) return res.status(404).json({ error: "Cliente não encontrado." });
+      const row = client.rows[0];
+      const [contacts, conversations, contracts, proposals, receivables] = await Promise.all([
+        pool.query("select id,name,email,phone,role from contacts where organization_id=$1 and (id=$2 or company_id=$3) order by name", [org, row.contact_id || 0, row.company_id || 0]),
+        pool.query("select c.id,c.subject,c.channel,c.status,c.remote_number,c.unread_count,c.last_message_at,(select body from messages m where m.conversation_id=c.id order by m.created_at desc limit 1) last_message from conversations c where c.organization_id=$1 and (c.client_id=$2 or c.contact_id=$3) order by c.last_message_at desc nulls last,c.created_at desc limit 20", [org, row.id, row.contact_id || 0]),
+        pool.query("select id,name,status,value,starts_on,ends_on from contracts where organization_id=$1 and client_id=$2 order by created_at desc", [org, row.id]),
+        pool.query("select p.id,p.title,p.status,p.amount,p.valid_until from proposals p left join opportunities o on o.id=p.opportunity_id and o.organization_id=p.organization_id left join leads l on l.id=p.lead_id and l.organization_id=p.organization_id where p.organization_id=$1 and ((o.company_id=$2 and $2 is not null) or (l.contact_id=$3 and $3 is not null)) order by p.created_at desc limit 20", [org, row.company_id || null, row.contact_id || null]),
+        pool.query("select id,description,amount,due_at,status,paid_at from receivables where organization_id=$1 and client_id=$2 order by due_at desc limit 20", [org, row.id]),
+      ]);
+      res.json({ client: row, contacts: contacts.rows, conversations: conversations.rows, contracts: contracts.rows, proposals: proposals.rows, receivables: receivables.rows });
+    } catch (e) { const { status, error } = classifyDbError(e, "Não foi possível carregar o resumo do cliente."); res.status(status).json({ error }); }
+  });
   const portal = async (req, res) => {
     const wantsHtml = req.path.startsWith("/portal/") || (req.get("accept") || "").includes("text/html");
     if (wantsHtml) {
