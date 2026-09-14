@@ -42,4 +42,15 @@ async function openClientDetails(record) {
 }
 
 async function renderPortal() { return renderList("cliente", "Portal do cliente", "Gere links seguros para clientes acompanharem contratos e contas em aberto.", "/api/clients", "clients", "client"); }
+const portalAccessObserver = new MutationObserver(() => {
+  if (location.hash.replace(/^#/, "") !== "portal-do-cliente") return;
+  dashboardGrid.querySelectorAll("[data-portal]").forEach((source) => {
+    if (source.parentElement.querySelector("[data-portal-access]")) return;
+    const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.portalAccess = source.dataset.portal; button.textContent = "Configurar acesso";
+    button.addEventListener("click", () => {
+      const panel = document.createElement("aside"); panel.className = "conta-drawer"; panel.innerHTML = `<button class="conta-close" type="button">×</button><p class="card-kicker">Portal do cliente</p><h2>Acesso individual</h2><p class="conta-muted">Defina as credenciais do cliente. A senha é armazenada de forma protegida e nunca aparece novamente.</p><form data-portal-access-form><label>E-mail de acesso<input name="email" type="email" autocomplete="username" required></label><label>Nova senha<input name="password" type="password" minlength="8" autocomplete="new-password" required></label><label>Confirmar senha<input name="confirmation" type="password" minlength="8" autocomplete="new-password" required></label><button class="button button-primary" type="submit">Salvar acesso</button><output data-portal-access-result role="status"></output></form>`; document.body.append(panel); panel.querySelector(".conta-close").onclick = () => panel.remove(); panel.querySelector("form").onsubmit = async (event) => { event.preventDefault(); const form = event.currentTarget, values = Object.fromEntries(new FormData(form)); const result = panel.querySelector("[data-portal-access-result]"); if (values.password !== values.confirmation) { result.textContent = "As senhas não conferem."; return; } const submit = form.querySelector("button[type=submit]"); submit.disabled = true; result.textContent = "Salvando..."; try { await api(`/api/clients/${button.dataset.portalAccess}/portal-access`, { method: "PUT", body: { email: values.email, password: values.password } }); result.textContent = "Acesso configurado com sucesso."; form.reset(); } catch (error) { result.textContent = error.message; } finally { submit.disabled = false; } };
+    }); source.parentElement.append(button);
+  });
+});
+portalAccessObserver.observe(dashboardGrid, { childList: true, subtree: true });
 registerRoutes({ contatos: () => renderList("contato", "Contatos", "Pessoas e vínculos da sua operação.", "/api/contacts", "contacts", "contact"), empresas: () => renderList("empresa", "Empresas", "Organizações conectadas ao workspace.", "/api/companies", "companies", "company"), clientes: () => renderList("cliente", "Clientes", "Saúde e relacionamento da sua carteira.", "/api/clients", "clients", "client"), "consulta-cnpj": renderCnpj, "portal-do-cliente": renderPortal });
