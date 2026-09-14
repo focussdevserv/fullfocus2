@@ -121,8 +121,15 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     const recipient = String(config.to || source.email || "").trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(recipient)) throw new Error("A automação de e-mail precisa de um destinatário válido.");
     const delivery = await sendEmail({ to: recipient, subject: String(config.subject || automation.name).slice(0, 240), html: String(config.body || message).slice(0, 10000), text: String(config.body || message).slice(0, 4000) });
+    if (!delivery?.sent && automation.action === "send_onboarding" && source.user_id) {
+      await client.query("insert into notifications (organization_id,user_id,automation_id,message) values ($1,$2,$3,$4)", [automation.organization_id, source.user_id, automation.id, `${message} · Orienta\u00e7\u00f5es dispon\u00edveis no app.`]);
+      return { action: automation.action, to: recipient, email_sent: false, fallback: "internal_notification", message };
+    }
     if (!delivery?.sent) throw new Error(delivery?.reason || "O e-mail não foi enviado.");
-    return { action: automation.action, to: recipient, message };
+    if (automation.action === "send_onboarding" && source.user_id) {
+      await client.query("insert into notifications (organization_id,user_id,automation_id,message) values ($1,$2,$3,$4)", [automation.organization_id, source.user_id, automation.id, `${message} · Orienta\u00e7\u00f5es dispon\u00edveis no app.`]);
+    }
+    return { action: automation.action, to: recipient, email_sent: Boolean(delivery.sent), message };
   }
   if (automation.action === "grant_project_access" && automation.trigger === "task_assigned") {
     if (!source.assignee_id || !source.project_id) throw new Error("A tarefa precisa estar vinculada a usuário e projeto.");
