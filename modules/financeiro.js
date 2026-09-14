@@ -3,6 +3,7 @@ const financeDate = (value) => value ? new Date(value).toLocaleDateString("pt-BR
 const financeStatus = { pending: "Pendente", paid: "Pago", overdue: "Vencido", cancelled: "Cancelado", sent: "Enviada", active: "Ativa", paused: "Pausada" };
 const financeEsc = (value) => escapeHtml(value ?? "");
 const financeTone = (status) => ["paid", "active"].includes(status) ? "positive" : ["overdue", "cancelled"].includes(status) ? "warning" : "neutral";
+document.addEventListener("click", async (event) => { const button = event.target.closest?.("[data-pay][data-table='receivables']"); if (!button) return; event.stopImmediatePropagation(); const raw = button.closest("tr")?.cells?.[1]?.textContent || "0"; const amount = Number(raw.replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", ".")); button.disabled = true; try { await api(`/api/receivables/${button.dataset.pay}/record-payment`, { method: "POST", body: { amount, method: "manual" } }); toast("Pagamento registrado e receita confirmada.", "success"); renderHashRoute(); } catch (error) { button.disabled = false; toast(error.message, "error"); } }, true);
 
 export function financeSixMonths(revenues, expenses, today = new Date()) {
   return Array.from({ length: 6 }, (_, index) => {

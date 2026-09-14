@@ -2,7 +2,31 @@
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
   const error = (res, e, fallback) => { const out = classifyDbError(e, fallback); res.status(out.status).json({ error: out.error }); };
-
+  const recordReceivablePayment = async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const amount = Number(req.body?.amount), method = asText(req.body?.method) || "manual";
+    if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Informe um valor de pagamento válido." });
+    const db = pool.connect ? await pool.connect() : pool;
+    try {
+      await db.query("begin");
+      const receivable = await db.query("select * from receivables where id=$1 and organization_id=$2 for update", [req.params.id, org]);
+      if (!receivable.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Conta a receber não encontrada." }); }
+      const source = receivable.rows[0];
+      if (["paid", "cancelled"].includes(source.status)) { await db.query("rollback"); return res.status(400).json({ error: "Esta conta não aceita novos pagamentos." }); }
+      const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [source.id, org]);
+      const remaining = Math.max(0, Number(source.amount || 0) - Number(prior.rows[0]?.total || 0));
+      if (amount > remaining + 0.005) { await db.query("rollback"); return res.status(400).json({ error: "O pagamento não pode exceder o saldo restante." }); }
+      const payment = await db.query("insert into payments (organization_id,receivable_id,amount,paid_at,method) values ($1,$2,$3,now(),$4) returning *", [org, source.id, amount, method]);
+      const totalPaid = Number(prior.rows[0]?.total || 0) + amount;
+      const paid = totalPaid >= Number(source.amount || 0) - 0.005;
+      const updated = await db.query("update receivables set status=$1,paid_at=case when $1='paid' then now() else paid_at end,updated_at=now() where id=$2 and organization_id=$3 returning *", [paid ? "paid" : "partially_paid", source.id, org]);
+      const revenue = await db.query("insert into revenues (organization_id,description,client_id,project_id,contract_id,amount,net_amount,payment_method,paid_at,status) values ($1,$2,$3,$4,$5,$6,$6,$7,now(),'confirmed') returning *", [org, source.description, source.client_id, source.project_id, source.contract_id, amount, method]);
+      await db.query("commit");
+      res.status(201).json({ payment: payment.rows[0], receivable: updated.rows[0], revenue: revenue.rows[0], remaining: Math.max(0, Number(source.amount || 0) - totalPaid) });
+    } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível registrar o pagamento."); }
+    finally { db.release?.(); }
+  };
+  app.post("/api/receivables/:id/record-payment", recordReceivablePayment);
   app.get("/api/finance/summary", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const months = Math.min(24, Math.max(1, Number.parseInt(req.query.months, 10) || 6));
