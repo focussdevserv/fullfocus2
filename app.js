@@ -434,8 +434,11 @@ function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   closeSidebar();
 }
 document.querySelectorAll(".nav-item").forEach((item) => {
-  item.addEventListener("click", () => {
-    renderHashRoute(item.getAttribute("href"));
+  item.addEventListener("click", (event) => {
+    event.preventDefault();
+    const href = item.getAttribute("href") || "#inicio";
+    if (window.location.hash !== href) history.pushState(null, "", href);
+    renderHashRoute(href);
   });
 });
 window.addEventListener("hashchange", renderHashRoute);
