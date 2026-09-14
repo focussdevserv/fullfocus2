@@ -106,6 +106,26 @@ const entities = {
   team_messages: { fields: ["sender_id", "project_id", "body", "important", "read_by"], required: ["body"] }
   , project_members: { fields: ["project_id", "user_id", "access_level", "files_visible", "tasks_visible", "added_at"], required: ["project_id", "user_id"] }
 };
+const permissionDomains = { contacts: "crm", companies: "crm", clients: "crm", leads: "crm", opportunities: "crm", projects: "operation", tasks: "operation", contracts: "operation", briefings: "operation", deliveries: "operation", infrastructure_assets: "operation", knowledge_articles: "operation", forms: "operation", revenues: "finance", expenses: "finance", receivables: "finance", charges: "finance", payments: "finance", payables: "finance", bank_accounts: "finance", invoices: "finance", team_roles: "team", team_goals: "team", absences: "team", time_entries: "team", team_messages: "team", project_members: "team", catalog_items: "catalog", automations: "integrations", templates: "integrations", integrations: "integrations", conversations: "conversations" };
+const permissionAction = (method) => ({ GET: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" }[method]);
+const permissionAllows = (permissions, domain, table, action) => {
+  if (!permissions || typeof permissions !== "object") return true;
+  for (const value of [permissions[table], permissions[domain], permissions[`${domain}.${action}`], permissions[`${table}.${action}`]]) {
+    if (Array.isArray(value)) return value.includes(action) || value.includes("admin") || value.includes("administrate");
+    if (typeof value === "boolean") return value;
+    if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, action)) return Boolean(value[action]);
+  }
+  return true;
+};
+app.use("/api", async (req, res, next) => {
+  const [, table] = req.path.split("/"), domain = permissionDomains[table], action = permissionAction(req.method);
+  if (!domain || !action || !req.user || ["owner", "admin"].includes(req.user.role)) return next();
+  try {
+    const q = await pool.query("select tr.permissions from users u left join team_roles tr on tr.id=u.team_role_id and tr.organization_id=u.organization_id where u.id=$1 and u.organization_id=$2", [req.user.id, req.user.organization_id]);
+    if (!permissionAllows(q.rows[0]?.permissions, domain, table, action)) return res.status(403).json({ error: "Seu cargo não permite esta ação." });
+    return next();
+  } catch { return res.status(503).json({ error: "Não foi possível validar as permissões." }); }
+});
 const normalize = (table, body) => { const spec = entities[table]; const values = {}; for (const key of spec.fields) if (body?.[key] !== undefined) values[key] = body[key]; for (const key of ["email", "document", "phone"]) if (values[key] !== undefined) values[key] = normalizeIdentity(key, values[key]); if (["tasks", "leads", "opportunities"].includes(table) && typeof values.tags === "string") values.tags = values.tags.split(",").map(asText).filter(Boolean).slice(0, 8); if (!["amount", "value"].every((k) => values[k] === undefined || isValidAmount(table, k, values[k]))) throw new Error("amount must be a positive number"); return values; };
 const relations = { company_id: "companies", contact_id: "contacts", lead_id: "leads", opportunity_id: "opportunities", client_id: "clients", contract_id: "contracts", project_id: "projects", parent_id: "tasks", receivable_id: "receivables", charge_id: "charges", owner_id: "users", assignee_id: "users", user_id: "users" };
 async function validateRelations(values, org) { for (const [field, table] of Object.entries(relations)) { if (values[field] === undefined || values[field] === null || values[field] === "") continue; const result = await pool.query(`select 1 from ${table} where id=$1 and organization_id=$2`, [values[field], org]); if (!result.rowCount) { const error = new Error(`${field} does not belong to this organization.`); error.code = "invalid_relation"; throw error; } } }
