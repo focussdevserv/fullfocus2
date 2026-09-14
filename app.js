@@ -344,10 +344,6 @@ loginForm.addEventListener("submit", async (event) => {
   } catch (error) { setLoading(loginSubmit, false); setStatus(loginStatus, error.message, "error"); }
 });
 
-createAccount.addEventListener("click", () => {
-  setStatus(loginStatus, "O cadastro será liberado em breve.");
-});
-
 /* ---------------------------------------------------------------------------
    Redefinição de senha
    --------------------------------------------------------------------------- */
