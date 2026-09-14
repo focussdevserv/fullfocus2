@@ -9,7 +9,7 @@ const tr = {
   webhook_received: "Webhook recebido", freelancer_project_finished: "Freelancer finalizou projeto", sale_won: "Venda concluída", team_member_invited: "Novo membro convidado", member_added_to_project: "Membro adicionado a projeto", project_member_added: "Membro adicionado a projeto", task_assigned: "Tarefa atribuída", member_overloaded: "Membro sobrecarregado", absence_started: "Férias iniciadas", user_deactivated: "Usuário desativado",
 };
 const act = {
-  notify: "Notificar equipe", notify_responsible: "Lembrar responsável", create_task: "Criar tarefa", send_message: "Enviar WhatsApp", send_email: "Enviar e-mail", send_onboarding: "Enviar acesso e orientações",
+  notify: "Enviar notificação", notify_responsible: "Lembrar responsável", create_task: "Criar tarefa", send_message: "Enviar WhatsApp", send_email: "Enviar e-mail", send_onboarding: "Enviar acesso e orientações",
   create_followup: "Criar follow-up", create_charge: "Criar cobrança", generate_contract: "Gerar contrato", create_project: "Criar projeto",
   update_status: "Alterar status", move_pipeline: "Mover no funil", assign_owner: "Atribuir responsável", add_tag: "Adicionar etiqueta",
   webhook: "Chamar webhook", n8n_flow: "Executar fluxo n8n", wait: "Aguardar período", end: "Encerrar automação",
