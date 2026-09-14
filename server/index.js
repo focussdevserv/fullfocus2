@@ -290,6 +290,7 @@ app.use("/api/tasks", async (req, res, next) => {
   res.on("finish", () => { if (res.statusCode >= 200 && res.statusCode < 300 && projectId) refreshProjectProgress(projectId, org).catch(() => {}); });
   return next();
 });
+registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
@@ -324,7 +325,6 @@ registerCrmFollowupRoutes(app, { pool, tenant, validateRelations, classifyDbErro
 registerFinanceOverviewRoutes(app, { pool, tenant, classifyDbError });
 registerDeliveryWorkflowRoutes(app, { pool, tenant, classifyDbError });
 registerAutomationRunRoutes(app, { pool, tenant, classifyDbError });
-registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 registerPortalAdminRoutes(app, { pool, tenant, hashPassword });
 
 app.post("/api/forms/:id/public-link", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const token = crypto.randomBytes(32).toString("base64url"); const q = await pool.query("update forms set public_token=$1,status='published',updated_at=now() where id=$2 and organization_id=$3 returning id,name,status", [token, req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Formulário não encontrado." }); res.status(201).json({ form: q.rows[0], token, path: "/form/" + token }); } catch { res.status(503).json({ error: "Não foi possível gerar o link do formulário." }); } });
