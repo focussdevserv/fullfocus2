@@ -531,11 +531,17 @@ document.addEventListener("keydown", (event) => {
 });
 
 const navItemsByHash = new Map([...document.querySelectorAll(".nav-item")].map((item) => [item.getAttribute("href"), item]));
+let modulesLoading = document.readyState === "loading";
 function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   let hash = requestedHash || "#inicio";
   let key = hash.replace(/^#/, "");
   // Rota válida = item do menu ou rota registrada por um módulo (sub-tela). Fora disso, volta ao Início.
-  if (!navItemsByHash.has(hash) && !routeRenderers[key]) { hash = "#inicio"; key = "inicio"; }
+  if (!navItemsByHash.has(hash) && !routeRenderers[key]) {
+    // Um hash profundo pode chegar antes do mÃ³dulo que registra sua rota.
+    if (modulesLoading) return;
+    hash = "#inicio";
+    key = "inicio";
+  }
   const navItem = navItemsByHash.get(hash) || navItemsByHash.get(routeMeta[key]?.parent || "") || navItemsByHash.get("#inicio");
   if (window.location.hash !== hash) history.replaceState(null, "", hash);
   document.querySelector(".nav-item.is-active")?.classList.remove("is-active");
@@ -554,7 +560,6 @@ document.addEventListener("click", (event) => {
   const href = item.getAttribute("href") || "#inicio";
   if (window.location.hash !== href) history.pushState(null, "", href);
   renderHashRoute(href);
-  window.requestAnimationFrame(() => renderHashRoute(href));
 });
 window.addEventListener("hashchange", () => renderHashRoute(window.location.hash));
 window.addEventListener("popstate", () => renderHashRoute(window.location.hash));
@@ -639,6 +644,10 @@ function registerRoutes(map, meta = {}) {
 window.addEventListener("focusdev:routes-ready", () => {
   if (!appShell.hidden) renderHashRoute(window.location.hash || "#inicio");
 });
+window.addEventListener("load", () => {
+  modulesLoading = false;
+  if (!appShell.hidden) renderHashRoute(window.location.hash || "#inicio");
+}, { once: true });
 
 /* Chamada de API autenticada (cookie same-origin) com erro legível em pt-BR. */
 async function api(path, { method = "GET", body, headers } = {}) {
