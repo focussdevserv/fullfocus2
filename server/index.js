@@ -120,6 +120,7 @@ const permissionAllows = (permissions, domain, table, action) => {
 app.use("/api", async (req, res, next) => {
   const [, table] = req.path.split("/"), domain = permissionDomains[table], action = permissionAction(req.method);
   if (!domain || !action || !req.user || ["owner", "admin"].includes(req.user.role)) return next();
+  if (["team_roles", "audit_events", "trash"].includes(table)) return res.status(403).json({ error: "Apenas proprietários e administradores acessam este módulo." });
   try {
     const q = await pool.query("select tr.permissions from users u left join team_roles tr on tr.id=u.team_role_id and tr.organization_id=u.organization_id where u.id=$1 and u.organization_id=$2", [req.user.id, req.user.organization_id]);
     if (!permissionAllows(q.rows[0]?.permissions, domain, table, action)) return res.status(403).json({ error: "Seu cargo não permite esta ação." });
