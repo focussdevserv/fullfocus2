@@ -29,7 +29,14 @@ app.use(cors({ origin(origin, callback) {
 app.use(express.json({ limit: "1mb" }));
 app.use((_req, res, next) => { res.setHeader("X-Content-Type-Options", "nosniff"); res.setHeader("X-Frame-Options", "DENY"); res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin"); next(); });
 app.use((req, _res, next) => { if (/^\/api\/(events|tasks)\/\d+-(?:[^/?]+)$/.test(req.path) || /^\/api\/(events|tasks)\/\d+\/(?:details|schedule)$/.test(req.path)) req.url = req.url.replace(/(\/api\/(?:events|tasks)\/\d+)(?:-[^/?]+|\/(?:details|schedule))/, "$1"); next(); });
-const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."); app.use(express.static(frontendRoot));
+const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+app.use((req, res, next) => {
+  if (req.path === "/" || req.path === "/index.html" || req.path === "/service-worker.js") {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  }
+  next();
+});
+app.use(express.static(frontendRoot));
 
 const hashPassword = (password, salt = crypto.randomBytes(16).toString("hex")) => ({ salt, hash: crypto.scryptSync(password, salt, 64).toString("hex") });
 const verifyPassword = (password, salt, expected) => { try { return crypto.timingSafeEqual(Buffer.from(hashPassword(password, salt).hash, "hex"), Buffer.from(expected, "hex")); } catch { return false; } };
