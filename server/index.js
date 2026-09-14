@@ -322,6 +322,14 @@ app.get("/api/files", async (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select f.*,p.name project_name,c.name client_name from files f left join projects p on p.id=f.project_id and p.organization_id=f.organization_id left join clients c on c.id=f.client_id and c.organization_id=f.organization_id where ${where.join(" and ")} order by f.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ files: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os arquivos." }); }
 });
+app.get("/api/tickets", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["t.organization_id=$1"], search = String(req.query?.search || "").trim();
+  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(t.title ilike '%' || ${p} || '%' or coalesce(t.description,'') ilike '%' || ${p} || '%' or coalesce(c.name,'') ilike '%' || ${p} || '%' or coalesce(pr.name,'') ilike '%' || ${p} || '%')`); }
+  for (const field of ["status", "priority", "client_id", "project_id", "assignee_id"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`t.${field}=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select t.*,c.name client_name,pr.name project_name from tickets t left join clients c on c.id=t.client_id and c.organization_id=t.organization_id left join projects pr on pr.id=t.project_id and pr.organization_id=t.organization_id where ${where.join(" and ")} order by t.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ tickets: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os tickets." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
