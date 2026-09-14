@@ -35,7 +35,8 @@ const projectName = (t) => state.projects.find((p) => String(p.id) === String(t.
 
 async function renderTasks() {
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Tarefas</h2><p>Organize prioridades e acompanhe o trabalho da equipe.</p></div></section>${stateBlock.loading("Carregando tarefas…")}`;
-  const [tasks, projects] = await Promise.allSettled([api("/api/tasks"), api("/api/projects")]);
+  const params = new URLSearchParams(); if (state.query.trim()) params.set("search", state.query.trim()); if (state.status !== "all") params.set("status", state.status); if (state.priority !== "all") params.set("priority", state.priority); if (state.project !== "all") params.set("project_id", state.project);
+  const [tasks, projects] = await Promise.allSettled([api(`/api/tasks?${params}`), api("/api/projects")]);
   if (tasks.status === "rejected") {
     dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Tarefas</h2></div></section>${stateBlock.error(tasks.reason?.message, "tasks-retry")}`;
     dashboardGrid.querySelector(".tasks-retry")?.addEventListener("click", renderTasks);
@@ -185,8 +186,8 @@ function bind() {
   });
 
   const search = root.querySelector(".tasks-search");
-  search?.addEventListener("input", () => { state.query = search.value; const pos = search.selectionStart; draw(); const again = root.querySelector(".tasks-search"); again?.focus(); again?.setSelectionRange(pos, pos); });
-  root.querySelectorAll("[data-filter]").forEach((select) => select.addEventListener("change", () => { state[select.dataset.filter] = select.value; draw(); }));
+  search?.addEventListener("input", () => { state.query = search.value; clearTimeout(state.searchTimer); state.searchTimer = setTimeout(renderTasks, 250); });
+  root.querySelectorAll("[data-filter]").forEach((select) => select.addEventListener("change", () => { state[select.dataset.filter] = select.value; if (["status", "priority", "project"].includes(select.dataset.filter)) renderTasks(); else draw(); }));
   root.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { state.mode = b.dataset.mode; localStorage.setItem("focusdev_tasks_mode", state.mode); draw(); }));
 
   root.querySelectorAll("[data-toggle]").forEach((input) => input.addEventListener("change", async () => {
