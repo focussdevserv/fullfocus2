@@ -1,0 +1,11 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import express from "express";
+import { createServer } from "node:http";
+import { registerDeliveryPublicRoutes } from "./delivery-public.js";
+
+async function request(server, path, options = {}) { const address = server.address(); return fetch(`http://127.0.0.1:${address.port}${path}`, { ...options, headers: { "content-type": "application/json" }, body: options.body === undefined ? undefined : JSON.stringify(options.body) }); }
+function setup() { const calls = []; const query = async (sql, params) => { calls.push({ sql, params }); if (sql.startsWith("update deliveries set client_approved")) return { rowCount: 1, rows: [{ id: 4, version: "v1", status: "approved", client_approved: true }] }; return { rowCount: 1, rows: [{ id: 4, version: "v1", status: "published", client_approved: false, project_name: "Site" }] }; }; const pool = { query, connect: async () => ({ query, release() {} }) }; const app = express(); app.use(express.json()); registerDeliveryPublicRoutes(app, { pool, tenant: () => "org", requireAuth: (_req, _res, next) => next(), classifyDbError: (_error, fallback) => ({ status: 500, error: fallback }) }); return { app, calls }; }
+
+test("aprovação pública de entrega valida os dados do cliente", async (t) => { const { app } = setup(), server = createServer(app); await new Promise((resolve) => server.listen(0, resolve)); t.after(() => server.close()); const response = await request(server, "/api/deliveries/public/token/approve", { method: "POST", body: { name: "", email: "x" } }); assert.equal(response.status, 400); });
+test("aprovação pública de entrega persiste a decisão", async (t) => { const { app, calls } = setup(), server = createServer(app); await new Promise((resolve) => server.listen(0, resolve)); t.after(() => server.close()); const response = await request(server, "/api/deliveries/public/token/approve", { method: "POST", body: { name: "Cliente", email: "cliente@example.com" } }); assert.equal(response.status, 200); assert.equal((await response.json()).approved, true); assert.ok(calls.some((call) => call.sql.includes("client_approved=true") && call.params[1].length === 64)); });
