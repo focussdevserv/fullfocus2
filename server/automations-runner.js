@@ -9,6 +9,8 @@ const SOURCE_TABLES = {
   freelancer_project_finished: "projects",
   project_completed: "projects",
   team_member_invited: "users",
+  member_added_to_project: "project_members",
+  project_member_added: "project_members",
 };
 
 const sourceWhere = {
@@ -19,6 +21,8 @@ const sourceWhere = {
   freelancer_project_finished: "(status in ('done','completed','published') or completed_on is not null) and (completed_on is null or completed_on <= $2::date)",
   project_completed: "(status in ('done','completed','published') or completed_on is not null) and (completed_on is null or completed_on <= $2::date)",
   team_member_invited: "created_at <= $2 and coalesce(access_status,'active') = 'active'",
+  member_added_to_project: "added_at <= $2",
+  project_member_added: "added_at <= $2",
 };
 
 const sourceMessage = (trigger, row) => {
@@ -27,6 +31,7 @@ const sourceMessage = (trigger, row) => {
   if (trigger === "receivable_overdue") return `Recebível vencido: ${row.description}`;
   if (trigger === "freelancer_project_finished" || trigger === "project_completed") return `Projeto finalizado: ${row.name}`;
   if (trigger === "team_member_invited") return `Bem-vindo ao FocusDev, ${row.name}`;
+  if (trigger === "member_added_to_project" || trigger === "project_member_added") return `Você foi adicionado ao projeto ${row.project_name || row.project_id}.`;
   return `Novo ticket: ${row.title}`;
 };
 
@@ -34,7 +39,9 @@ async function findSources(client, automation, now) {
   const table = SOURCE_TABLES[automation.trigger];
   const where = sourceWhere[automation.trigger];
   if (!table || !where) return [];
-  const query = `select s.* from ${table} s where s.organization_id=$1 and ${where}
+  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : "select s.*";
+  const joins = table === "project_members" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id join projects p on p.id=s.project_id and p.organization_id=s.organization_id" : "";
+  const query = `${select} from ${table} s${joins} where s.organization_id=$1 and ${where}
     and not exists (select 1 from automation_runs r where r.automation_id=$3 and r.source_type=$4 and r.source_id=s.id)
     order by s.id limit 100`;
   const result = await client.query(query, [automation.organization_id, now, automation.id, automation.trigger]);
@@ -87,12 +94,18 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     await client.query("update conversations set last_message_at=now(),updated_at=now() where id=$1 and organization_id=$2", [conversationId, automation.organization_id]);
     return { action: "send_message", conversation_id: conversationId, message };
   }
-  if (automation.action === "send_email") {
+  if (automation.action === "send_email" || automation.action === "send_onboarding") {
     const recipient = String(config.to || source.email || "").trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(recipient)) throw new Error("A automação de e-mail precisa de um destinatário válido.");
     const delivery = await sendEmail({ to: recipient, subject: String(config.subject || automation.name).slice(0, 240), html: String(config.body || message).slice(0, 10000), text: String(config.body || message).slice(0, 4000) });
     if (!delivery?.sent) throw new Error(delivery?.reason || "O e-mail não foi enviado.");
-    return { action: "send_email", to: recipient, message };
+    return { action: automation.action, to: recipient, message };
+  }
+  if (automation.action === "grant_project_access") {
+    if (!source.user_id || !source.project_id) throw new Error("O acesso precisa estar vinculado a usuário e projeto.");
+    await client.query("update project_members set files_visible=true,tasks_visible=true where id=$1 and organization_id=$2", [source.id, automation.organization_id]);
+    await client.query("insert into notifications (organization_id,user_id,automation_id,message) values ($1,$2,$3,$4)", [automation.organization_id, source.user_id, automation.id, message]);
+    return { action: "grant_project_access", project_id: source.project_id, user_id: source.user_id };
   }
   if (automation.action === "calculate_commission") {
     const baseAmount = Math.max(0, Number(source.total_value || source.value || config.base_amount || 0));

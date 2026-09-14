@@ -83,6 +83,7 @@ const entities = {
   team_roles: { fields: ["name", "department", "permissions", "hidden_fields"], required: ["name"] },
   time_entries: { fields: ["user_id", "project_id", "task_id", "started_at", "ended_at", "minutes", "billable", "status", "notes"], required: ["user_id"] },
   team_messages: { fields: ["sender_id", "project_id", "body", "important", "read_by"], required: ["body"] }
+  , project_members: { fields: ["project_id", "user_id", "access_level", "files_visible", "tasks_visible", "added_at"], required: ["project_id", "user_id"] }
 };
 const normalize = (table, body) => { const spec = entities[table]; const values = {}; for (const key of spec.fields) if (body?.[key] !== undefined) values[key] = body[key]; for (const key of ["email", "document", "phone"]) if (values[key] !== undefined) values[key] = normalizeIdentity(key, values[key]); if (table === "tasks" && typeof values.tags === "string") values.tags = values.tags.split(",").map(asText).filter(Boolean).slice(0, 8); if (!["amount", "value"].every((k) => values[k] === undefined || isValidAmount(table, k, values[k]))) throw new Error("amount must be a positive number"); return values; };
 const relations = { company_id: "companies", contact_id: "contacts", lead_id: "leads", opportunity_id: "opportunities", client_id: "clients", contract_id: "contracts", project_id: "projects", parent_id: "tasks", receivable_id: "receivables", charge_id: "charges" };

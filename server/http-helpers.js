@@ -33,6 +33,7 @@ export const SINGULAR = {
   team_roles: "team_role",
   time_entries: "time_entry",
   team_messages: "team_message",
+  project_members: "project_member",
 };
 
 export function singular(table) {
