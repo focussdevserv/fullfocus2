@@ -1084,7 +1084,7 @@ svg {
 .quick-icon { background-repeat: no-repeat; background-position: center; background-size: 19px; font-size: 0; }
 .quick-actions button:nth-child(odd) .quick-icon { background-image: url("assets/icons8-spiderman-head.png"); }
 .quick-actions button:nth-child(even) .quick-icon { background-image: url("assets/icons8-spiderman-new.png"); }
-.quick-icon.blue { background: #e7efff; color: #286ce7; } .quick-icon.pink { background: #ffedf5; color: #d45287; } .quick-icon.orange { background: #fff3df; color: #d58a22; } .quick-icon.green { background: #e7f8f1; color: #15966a; }
+.quick-icon.blue { background-color: rgb(63 118 214 / 28%); color: #8bb9ff; } .quick-icon.pink { background-color: rgb(211 82 135 / 28%); color: #ff9fc5; } .quick-icon.orange { background-color: rgb(213 138 34 / 28%); color: #ffc66d; } .quick-icon.green { background-color: rgb(21 150 106 / 28%); color: #79e0bc; }
 .quick-actions button:nth-child(odd) .quick-icon { background-image: url("assets/icons8-spiderman-head.png"); }
 .quick-actions button:nth-child(even) .quick-icon { background-image: url("assets/icons8-spiderman-new.png"); }
 .priorities-card { grid-column: 1 / -1; }
@@ -1238,7 +1238,7 @@ tbody tr:last-child td { border-bottom: 0; } td:first-child { color: var(--ink);
 body.dark-mode { --paper: #111a2d; --ink: #eff5ff; --ink-soft: #c2d0e4; --muted: #91a4bf; --line: #293852; --blue-soft: #172b4d; background: #091120; color: var(--ink); }
 body.dark-mode .app-shell { background: #091120; }
 body.dark-mode .app-topbar { background: transparent; background-image: none; }
-body.dark-mode .data-card, body.dark-mode .global-search, body.dark-mode .notification-button, body.dark-mode .theme-toggle, body.dark-mode .create-dialog, body.dark-mode .kanban-task { background: #111a2d; border-color: #293852; }
+body.dark-mode .data-card, body.dark-mode .global-search, body.dark-mode .notification-button, body.dark-mode .theme-toggle, body.dark-mode .create-dialog, body.dark-mode .kanban-task { background-color: #111a2d; border-color: #293852; }
 body.dark-mode .metric-card { background-color: #111a2d; border-color: #293852; }
 body.dark-mode .quick-actions-card { border-color: rgb(145 180 230 / 28%); background: linear-gradient(135deg, rgb(31 53 86 / 68%), rgb(8 19 38 / 58%)); box-shadow: 0 14px 30px rgb(0 0 0 / 24%), inset 0 1px rgb(255 255 255 / 12%); }
 body.dark-mode .quick-actions button { border-color: rgb(174 204 246 / 28%); background: linear-gradient(135deg, rgb(57 82 122 / 46%), rgb(19 35 61 / 42%)); color: #eff5ff; box-shadow: inset 0 1px rgb(255 255 255 / 14%), 0 5px 12px rgb(0 0 0 / 16%); }
