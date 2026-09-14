@@ -155,6 +155,10 @@ function setAvailability(text, tone) {
   const mark = box.querySelector(".availability-mark"); if (mark) mark.textContent = tone === "ok" ? "✓" : tone === "warning" ? "!" : "…";
 }
 
+// O status técnico de sincronização não aparece no dashboard; os próprios
+// cards exibem carregamento, vazio e erro quando necessário.
+setAvailability = function hideTechnicalAvailability() {};
+
 function setMetric(key, value, note) {
   const strong = dashboardGrid.querySelector(`[data-metric="${key}"]`);
   if (!strong) return;
@@ -383,7 +387,8 @@ function renderOnboarding(data) {
     <div class="inicio-progress"><i style="width:${Math.round((finished / steps.length) * 100)}%"></i></div>
     <ul class="inicio-steps">${steps.map((s, i) => `<li class="${s.done ? "is-done" : ""}"><span class="inicio-step-mark">${s.done ? "✓" : i + 1}</span><span>${s.label}</span>${s.done ? "" : `<button class="text-action" type="button" data-step="${i}">Fazer agora →</button>`}</li>`).join("")}</ul>`;
   card.querySelectorAll("[data-step]").forEach((button) => button.addEventListener("click", () => steps[Number(button.dataset.step)].action()));
-  dashboardGrid.querySelector(".workspace-availability")?.after(card);
+  const anchor = dashboardGrid.querySelector(".workspace-availability") || dashboardGrid.querySelector(".dashboard-toolbar");
+  anchor?.after(card);
   // Estado real do WhatsApp (não bloqueia a tela).
   api("/api/whatsapp/status").then((status) => { if (status.state === "open") { const li = card.querySelectorAll(".inicio-steps li")[5]; li?.classList.add("is-done"); li?.querySelector("button")?.remove(); const mark = li?.querySelector(".inicio-step-mark"); if (mark) mark.textContent = "✓"; } }).catch(() => {});
 }
