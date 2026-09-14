@@ -19,6 +19,19 @@ export const normalizeNumber = (value) => String(value || "").replace(/\D/g, "")
 export const webhookTokenFor = (organizationId, secret = process.env.SESSION_SECRET || "development-only-change-me") =>
   crypto.createHmac("sha256", secret).update(`whatsapp-webhook:${organizationId}`).digest("base64url").slice(0, 32);
 
+/* Envia texto pelo WhatsApp da organização (usado pela caixa de entrada e automações). */
+export async function sendWhatsappText(pool, org, number, text) {
+  const q = await pool.query("select id, status, config from integrations where organization_id=$1 and provider='whatsapp' limit 1", [org]);
+  const config = q.rows[0]?.config || {};
+  const cfg = { baseUrl: String(config.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, ""), apiKey: config.apiKey || process.env.EVOLUTION_API_KEY || "" };
+  if (!cfg.apiKey) throw Object.assign(new Error("WhatsApp não configurado nesta organização."), { status: 400 });
+  await assertSafeOutboundUrl(cfg.baseUrl);
+  const response = await fetch(`${cfg.baseUrl}/message/sendText/${encodeURIComponent(instanceNameFor(org))}`, { method: "POST", headers: { apikey: cfg.apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: normalizeNumber(number), text }), redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(data?.response?.message?.[0] || data?.message || `WhatsApp respondeu ${response.status}`), { status: 502 });
+  return { id: data?.key?.id || null };
+}
+
 export function register(app, ctx) {
   const { pool, tenant, classifyDbError } = ctx;
   const fail = (res, status, error) => res.status(status).json({ error });
@@ -186,9 +199,11 @@ export function register(app, ctx) {
 
   async function upsertConversation(org, number, pushName) {
     const subject = `WhatsApp · ${pushName ? `${pushName} (${number})` : number}`;
-    const existing = await pool.query("select id from conversations where organization_id=$1 and channel='whatsapp' and subject like $2 order by created_at desc limit 1", [org, `%${number}%`]);
-    if (existing.rows[0]) return existing.rows[0];
-    const created = await pool.query("insert into conversations (organization_id, subject, channel, status, last_message_at) values ($1,$2,'whatsapp','open',now()) returning id", [org, subject]);
+    const existing = await pool.query("select id from conversations where organization_id=$1 and channel='whatsapp' and (remote_number=$2 or subject like $3) order by created_at desc limit 1", [org, number, `%${number}%`]);
+    if (existing.rows[0]) { await pool.query("update conversations set remote_number=coalesce(remote_number,$2) where id=$1", [existing.rows[0].id, number]).catch(() => {}); return existing.rows[0]; }
+    // Vincula automaticamente a um contato com este telefone, se existir.
+    const contact = await pool.query("select id from contacts where organization_id=$1 and regexp_replace(coalesce(phone,''), '\\D', '', 'g') like '%' || $2 limit 1", [org, number.slice(-8)]).catch(() => ({ rows: [] }));
+    const created = await pool.query("insert into conversations (organization_id, subject, channel, status, last_message_at, remote_number, contact_id) values ($1,$2,'whatsapp','open',now(),$3,$4) returning id", [org, subject, number, contact.rows[0]?.id || null]);
     return created.rows[0];
   }
 
