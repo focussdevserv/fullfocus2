@@ -9,135 +9,46 @@ import { readFile } from "node:fs/promises";
 import { expandRecurringEvents } from "./recurrence.js";
 
 const { Pool } = pg;
-const app = express();
+export const app = express();
 const port = Number(process.env.PORT || 3000);
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined });
+export const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined });
+const DEFAULT_ORGANIZATION_ID = process.env.DEFAULT_ORGANIZATION_ID || "00000000-0000-0000-0000-000000000001";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const organizationId = (req) => { const value = req.get("x-organization-id") || req.query.organizationId || DEFAULT_ORGANIZATION_ID; return UUID.test(String(value)) ? String(value) : null; };
+const tenant = (req, res) => { const id = organizationId(req); if (!id) res.status(400).json({ error: "organization_id inválido." }); return id; };
+const asText = (v) => typeof v === "string" ? v.trim() : "";
+const amount = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
+app.use(cors()); app.use(express.json());
+app.use((req, _res, next) => { if (/^\/api\/(events|tasks)\/\d+-(?:[^/?]+)$/.test(req.path) || /^\/api\/(events|tasks)\/\d+\/(?:details|schedule)$/.test(req.path)) req.url = req.url.replace(/(\/api\/(?:events|tasks)\/\d+)(?:-[^/?]+|\/(?:details|schedule))/, "$1"); next(); });
+const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."); app.use(express.static(frontendRoot));
 
-app.use(cors());
-app.use(express.json());
-app.use((req, _res, next) => {
-  if (req.path.startsWith("/api/events/") && /^\/api\/events\/\d+-/.test(req.path)) {
-    req.url = req.url.replace(/(\/api\/events\/\d+)-[^/?]+/, "$1");
-  }
-  next();
-});
-const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-app.use(express.static(frontendRoot));
 const hashPassword = (password, salt = crypto.randomBytes(16).toString("hex")) => ({ salt, hash: crypto.scryptSync(password, salt, 64).toString("hex") });
-const verifyPassword = (password, salt, expected) => crypto.timingSafeEqual(Buffer.from(hashPassword(password, salt).hash, "hex"), Buffer.from(expected, "hex"));
-app.post("/api/auth/register", async (req, res) => {
-  const name = String(req.body?.name || "").trim(), email = String(req.body?.email || "").trim().toLowerCase(), password = String(req.body?.password || "");
-  if (name.length < 2) return res.status(400).json({ error: "Informe seu nome completo." });
-  if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: "Informe um e-mail válido." });
-  if (password.length < 8) return res.status(400).json({ error: "A senha deve ter pelo menos 8 caracteres." });
-  try { const { salt, hash } = hashPassword(password); const result = await pool.query("insert into users (name,email,password_hash) values ($1,$2,$3) returning id,name,email", [name, email, `${salt}:${hash}`]); res.status(201).json({ user: result.rows[0] }); }
-  catch (error) { if (error.code === "23505") return res.status(409).json({ error: "Este e-mail já está cadastrado." }); res.status(503).json({ error: "Não foi possível criar a conta." }); }
-});
-app.post("/api/auth/login", async (req, res) => {
-  const email = String(req.body?.email || "").trim().toLowerCase(), password = String(req.body?.password || "");
-  try { const result = await pool.query("select id,name,email,password_hash from users where email=$1", [email]); const user = result.rows[0]; const [salt, hash] = user?.password_hash?.split(":") || []; if (!user || !salt || !verifyPassword(password, salt, hash)) return res.status(401).json({ error: "E-mail ou senha inválidos." }); res.json({ user: { id: user.id, name: user.name, email: user.email } }); }
-  catch { res.status(503).json({ error: "Serviço indisponível." }); }
-});
-app.get("/api/health", async (_req, res) => {
-  try { const result = await pool.query("select now() as time"); res.json({ ok: true, database: "connected", time: result.rows[0].time }); }
-  catch (error) { res.status(503).json({ ok: false, database: " unavailable", error: error.message }); }
-});
-app.get("/api/dashboard", async (_req, res) => {
-  try {
-    const [tasks, leads, projects, revenue] = await Promise.all([
-      pool.query("select count(*)::int as total from tasks where status <> 'done'"),
-      pool.query("select count(*)::int as total from leads where status <> 'won'"),
-      pool.query("select count(*)::int as total from projects where status = 'active'"),
-      pool.query("select coalesce(sum(amount), 0)::numeric as total from revenues where paid_at >= date_trunc('month', current_date)")
-    ]);
-    res.json({ tasks: tasks.rows[0].total, leads: leads.rows[0].total, projects: projects.rows[0].total, revenue: revenue.rows[0].total });
-  } catch (error) { res.status(503).json({ ok: false, error: error.message }); }
-});
-app.post("/api/tasks", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium", tags = String(req.body?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 8), parentId = req.body?.parentId || null;
-  if (!title) return res.status(400).json({ error: "Informe o título da tarefa." });
-  try { const result = await pool.query("insert into tasks (title, priority, tags, parent_id, due_at) values ($1, $2, $3, $4, $5) returning id,title,status,priority,tags,parent_id,due_at", [title, priority, tags, parentId, req.body?.dueAt || null]); res.status(201).json({ task: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "Não foi possível criar a tarefa.", detail: error.message }); }
-});
-app.get("/api/tasks", async (_req, res) => {
-  try { const result = await pool.query("select id,title,status,priority,tags,parent_id,due_at,created_at from tasks order by case when status = 'done' then 1 else 0 end, due_at nulls last, created_at desc"); res.json({ tasks: result.rows }); }
-  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar as tarefas.", detail: error.message }); }
-});
-app.patch("/api/tasks/:id", async (req, res) => {
-  const status = ["todo", "doing", "blocked", "done"].includes(req.body?.status) ? req.body.status : "doing", title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : null;
-  try { const result = await pool.query("update tasks set status=$1 where id=$2 returning id,title,status", [status, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Tarefa não encontrada." }); res.json({ task: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "Não foi possível atualizar a tarefa.", detail: error.message }); }
-});
-app.delete("/api/tasks/:id", async (req, res) => {
-  try { const result = await pool.query("delete from tasks where id=$1 returning id", [req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Tarefa nÃ£o encontrada." }); res.status(204).end(); }
-  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel excluir a tarefa.", detail: error.message }); }
-});
-app.patch("/api/tasks/:id/details", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), priority = ["low", "medium", "high"].includes(req.body?.priority) ? req.body.priority : "medium", tags = String(req.body?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 8);
-  if (!title) return res.status(400).json({ error: "Informe o tÃ­tulo da tarefa." });
-  try { const result = await pool.query("update tasks set title=$1, priority=$2, tags=$3, due_at=$4 where id=$5 returning id,title,status,priority,tags,due_at", [title, priority, tags, req.body?.dueAt || null, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Task not found." }); res.json({ task: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel editar a tarefa.", detail: error.message }); }
-});
-app.post("/api/leads", async (req, res) => {
-  const name = String(req.body?.name || "").trim(), company = String(req.body?.company || "").trim();
-  if (!name) return res.status(400).json({ error: "Informe o nome do lead." });
-  try { const result = await pool.query("insert into leads (name,company) values ($1,$2) returning id,name,company,status", [name, company || null]); res.status(201).json({ lead: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "Não foi possível criar o lead.", detail: error.message }); }
-});
-app.post("/api/revenues", async (req, res) => {
-  const description = String(req.body?.description || "").trim(), amount = Number(req.body?.amount);
-  if (!description || !Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Informe descrição e valor válidos." });
-  try { const result = await pool.query("insert into revenues (description,amount,paid_at) values ($1,$2,$3) returning id,description,amount,paid_at", [description, amount, req.body?.paid ? new Date() : null]); res.status(201).json({ revenue: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "Não foi possível registrar a receita.", detail: error.message }); }
-});
-app.post("/api/projects", async (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  if (!name) return res.status(400).json({ error: "Informe o nome do projeto." });
-  try { const result = await pool.query("insert into projects (name) values ($1) returning id,name,status,progress", [name]); res.status(201).json({ project: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "Não foi possível criar o projeto.", detail: error.message }); }
-});
-app.post("/api/events", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt, recurrence = ["none", "daily", "weekly", "monthly"].includes(req.body?.recurrence) ? req.body.recurrence : "none", reminderMinutes = Number(req.body?.reminderMinutes) || 0;
-  if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe título e horário válidos." });
-  try { const result = await pool.query("insert into events (title,starts_at,description,recurrence,reminder_minutes) values ($1,$2,$3,$4,$5) returning id,title,starts_at,description,recurrence,reminder_minutes", [title, startsAt, String(req.body?.description || "").trim() || null, recurrence, reminderMinutes]); res.status(201).json({ event: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "Não foi possível criar o evento.", detail: error.message }); }
-});
-app.get("/api/events", async (_req, res) => {
-  try {
-    const result = await pool.query("select id,title,starts_at,description,recurrence,reminder_minutes from events order by starts_at asc");
-    res.json({ events: expandRecurringEvents(result.rows) });
-  } catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar os eventos.", detail: error.message }); }
-});
-app.patch("/api/events/:id", async (req, res) => {
-  const startsAt = req.body?.startsAt;
-  if (!startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe uma data válida." });
-  try { const result = await pool.query("update events set starts_at=$1 where id=$2 returning id,title,starts_at,description", [startsAt, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.json({ event: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "Não foi possível mover o evento.", detail: error.message }); }
-});
-app.delete("/api/events/:id", async (req, res) => {
-  try { const result = await pool.query("delete from events where id=$1 returning id", [req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento nÃ£o encontrado." }); res.status(204).end(); }
-  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel excluir o evento.", detail: error.message }); }
-});
-app.patch("/api/events/:id/schedule", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt, recurrence = ["none", "daily", "weekly", "monthly"].includes(req.body?.recurrence) ? req.body.recurrence : "none", reminderMinutes = Number(req.body?.reminderMinutes) || 0;
-  if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe título e horário válidos." });
-  try { const result = await pool.query("update events set title=$1, starts_at=$2, description=$3, recurrence=$4, reminder_minutes=$5 where id=$6 returning id,title,starts_at,description,recurrence,reminder_minutes", [title, startsAt, String(req.body?.description || "").trim() || null, recurrence, reminderMinutes, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.json({ event: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "Não foi possível atualizar o evento.", detail: error.message }); }
-});
-app.patch("/api/events/:id/details", async (req, res) => {
-  const title = String(req.body?.title || "").trim(), startsAt = req.body?.startsAt, recurrence = ["none", "daily", "weekly", "monthly"].includes(req.body?.recurrence) ? req.body.recurrence : "none", reminderMinutes = Number(req.body?.reminderMinutes) || 0;
-  if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe tÃ­tulo e horÃ¡rio vÃ¡lidos." });
-  try { const result = await pool.query("update events set title=$1, starts_at=$2, description=$3 where id=$4 returning id,title,starts_at,description", [title, startsAt, String(req.body?.description || "").trim() || null, req.params.id]); if (!result.rowCount) return res.status(404).json({ error: "Evento nÃ£o encontrado." }); res.json({ event: result.rows[0] }); }
-  catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel editar o evento.", detail: error.message }); }
-});
-async function start() {
-  try {
-    const schema = await readFile(new URL("./schema.sql", import.meta.url), "utf8");
-    await pool.query(schema);
-    app.listen(port, "0.0.0.0", () => console.log(`FocusApp API listening on ${port}`));
-  } catch (error) {
-    console.error("FocusApp API could not connect to PostgreSQL:", error.message);
-    process.exitCode = 1;
-  }
-}
-start();
+const verifyPassword = (password, salt, expected) => { try { return crypto.timingSafeEqual(Buffer.from(hashPassword(password, salt).hash, "hex"), Buffer.from(expected, "hex")); } catch { return false; } };
+app.post("/api/auth/register", async (req, res) => { const name = asText(req.body?.name), email = asText(req.body?.email).toLowerCase(), password = String(req.body?.password || ""); if (name.length < 2 || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8) return res.status(400).json({ error: "Nome, e-mail e senha válidos são obrigatórios." }); try { const { salt, hash } = hashPassword(password); const q = await pool.query("insert into users (name,email,password_hash,organization_id) values ($1,$2,$3,$4) returning id,name,email,organization_id", [name, email, `${salt}:${hash}`, DEFAULT_ORGANIZATION_ID]); res.status(201).json({ user: q.rows[0] }); } catch (e) { res.status(e.code === "23505" ? 409 : 503).json({ error: e.code === "23505" ? "Este e-mail já está cadastrado." : "Não foi possível criar a conta." }); } });
+app.post("/api/auth/login", async (req, res) => { const email = asText(req.body?.email).toLowerCase(), password = String(req.body?.password || ""); try { const q = await pool.query("select id,name,email,password_hash,organization_id from users where email=$1", [email]); const u = q.rows[0], [salt, hash] = u?.password_hash?.split(":") || []; if (!u || !salt || !verifyPassword(password, salt, hash)) return res.status(401).json({ error: "E-mail ou senha inválidos." }); res.json({ user: { id: u.id, name: u.name, email: u.email, organization_id: u.organization_id } }); } catch { res.status(503).json({ error: "Serviço indisponível." }); } });
+app.get("/api/health", async (_req, res) => { try { const q = await pool.query("select now() as time"); res.json({ ok: true, database: "connected", time: q.rows[0].time }); } catch (e) { res.status(503).json({ ok: false, database: "unavailable", error: e.message }); } });
+
+const entities = {
+  contacts: { fields: ["name", "email", "phone", "role", "notes"], required: ["name"] }, companies: { fields: ["name", "document", "email", "phone", "website", "address"], required: ["name"] },
+  leads: { fields: ["name", "company", "company_id", "contact_id", "email", "phone", "source", "status"], required: ["name"] }, opportunities: { fields: ["name", "lead_id", "company_id", "stage", "amount", "expected_close"], required: ["name"] },
+  clients: { fields: ["name", "company_id", "contact_id", "email", "phone", "status"], required: ["name"] }, contracts: { fields: ["name", "client_id", "opportunity_id", "status", "value", "starts_on", "ends_on"], required: ["name", "client_id"] },
+  projects: { fields: ["name", "contract_id", "client_id", "status", "progress"], required: ["name"] }, tasks: { fields: ["title", "project_id", "status", "priority", "due_at", "tags", "parent_id"], required: ["title"] },
+  revenues: { fields: ["description", "contract_id", "amount", "due_at", "paid_at"], required: ["description", "amount"] }, expenses: { fields: ["description", "project_id", "amount", "due_at", "paid_at"], required: ["description", "amount"] },
+  receivables: { fields: ["description", "client_id", "contract_id", "amount", "due_at", "status", "paid_at"], required: ["description", "amount", "due_at"] }, charges: { fields: ["receivable_id", "provider", "external_id", "status", "amount", "due_at"], required: ["amount"] }, payments: { fields: ["receivable_id", "charge_id", "amount", "paid_at", "method", "external_id"], required: ["amount"] }
+};
+const normalize = (table, body) => { const spec = entities[table]; const values = {}; for (const key of spec.fields) if (body?.[key] !== undefined) values[key] = body[key]; if (table === "tasks" && typeof values.tags === "string") values.tags = values.tags.split(",").map(asText).filter(Boolean).slice(0, 8); if (["amount", "value"].some((k) => values[k] !== undefined) && !["amount", "value"].every((k) => values[k] === undefined || amount(Number(values[k])) || (table === "projects" && k === "value"))) throw new Error("amount must be a positive number"); return values; };
+const createCrud = (table) => {
+  const route = `/api/${table}`; app.post(route, async (req, res) => { const org = tenant(req, res); if (!org) return; let values; try { values = normalize(table, req.body); } catch (e) { return res.status(400).json({ error: e.message }); } const missing = entities[table].required.find((k) => values[k] === undefined || values[k] === ""); if (missing) return res.status(400).json({ error: `${missing} is required.` }); const keys = Object.keys(values), cols = ["organization_id", ...keys], params = [org, ...keys.map((k) => values[k])], marks = cols.map((_, i) => `$${i + 1}`); try { const q = await pool.query(`insert into ${table} (${cols.join(",")}) values (${marks.join(",")}) returning *`, params); res.status(201).json({ [table.slice(0, -1)]: q.rows[0] }); } catch (e) { res.status(503).json({ error: "Não foi possível criar o registro.", detail: e.message }); } });
+  app.get(route, async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query(`select * from ${table} where organization_id=$1 order by created_at desc`, [org]); res.json({ [table]: q.rows }); } catch (e) { res.status(503).json({ error: "Não foi possível carregar os registros.", detail: e.message }); } });
+  app.delete(`${route}/:id`, async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query(`delete from ${table} where id=$1 and organization_id=$2 returning id`, [req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Registro não encontrado." }); res.status(204).end(); } catch (e) { res.status(503).json({ error: "Não foi possível excluir o registro.", detail: e.message }); } });
+  app.patch(`${route}/:id`, async (req, res) => { const org = tenant(req, res); if (!org) return; let values; try { values = normalize(table, req.body); } catch (e) { return res.status(400).json({ error: e.message }); } const keys = Object.keys(values); if (!keys.length) return res.status(400).json({ error: "Nenhum campo válido informado." }); try { const q = await pool.query(`update ${table} set ${keys.map((k, i) => `${k}=$${i + 1}`).join(",")} where id=$${keys.length + 1} and organization_id=$${keys.length + 2} returning *`, [...keys.map((k) => values[k]), req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Registro não encontrado." }); res.json({ [table.slice(0, -1)]: q.rows[0] }); } catch (e) { res.status(503).json({ error: "Não foi possível atualizar o registro.", detail: e.message }); } });
+}; Object.keys(entities).forEach(createCrud);
+
+app.get("/api/dashboard", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const [tasks, leads, projects, revenue] = await Promise.all([pool.query("select count(*)::int total from tasks where organization_id=$1 and status <> 'done'", [org]), pool.query("select count(*)::int total from leads where organization_id=$1 and status <> 'won'", [org]), pool.query("select count(*)::int total from projects where organization_id=$1 and status='active'", [org]), pool.query("select coalesce(sum(amount),0) total from revenues where organization_id=$1 and paid_at >= date_trunc('month',current_date)", [org])]); res.json({ tasks: tasks.rows[0].total, leads: leads.rows[0].total, projects: projects.rows[0].total, revenue: revenue.rows[0].total }); } catch (e) { res.status(503).json({ error: e.message }); } });
+
+app.post("/api/events", async (req, res) => { const org = tenant(req, res); if (!org) return; const title = asText(req.body?.title), startsAt = req.body?.startsAt; if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return res.status(400).json({ error: "Informe título e horário válidos." }); const recurrence = ["none", "daily", "weekly", "monthly"].includes(req.body?.recurrence) ? req.body.recurrence : "none"; try { const q = await pool.query("insert into events (organization_id,title,starts_at,description,recurrence,reminder_minutes) values ($1,$2,$3,$4,$5,$6) returning *", [org, title, startsAt, asText(req.body?.description) || null, recurrence, Number(req.body?.reminderMinutes) || 0]); res.status(201).json({ event: q.rows[0] }); } catch (e) { res.status(503).json({ error: "Não foi possível criar o evento.", detail: e.message }); } });
+app.get("/api/events", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select * from events where organization_id=$1 order by starts_at", [org]); res.json({ events: expandRecurringEvents(q.rows) }); } catch (e) { res.status(503).json({ error: "Não foi possível carregar os eventos.", detail: e.message }); } });
+app.patch("/api/events/:id", async (req, res) => { const org = tenant(req, res); if (!org) return; const fields = { title: asText(req.body?.title), starts_at: req.body?.startsAt, description: asText(req.body?.description) || null }; if (!fields.title || !fields.starts_at || Number.isNaN(Date.parse(fields.starts_at))) return res.status(400).json({ error: "Informe título e data válidos." }); try { const q = await pool.query("update events set title=$1,starts_at=$2,description=$3 where id=$4 and organization_id=$5 returning *", [fields.title, fields.starts_at, fields.description, req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.json({ event: q.rows[0] }); } catch (e) { res.status(503).json({ error: "Não foi possível atualizar o evento.", detail: e.message }); } });
+
+async function start() { try { const schema = await readFile(new URL("./schema.sql", import.meta.url), "utf8"); await pool.query(schema); app.listen(port, "0.0.0.0", () => console.log(`FocusApp API listening on ${port}`)); } catch (e) { console.error("FocusApp API could not connect to PostgreSQL:", e.message); process.exitCode = 1; } }
+if (process.env.NODE_ENV !== "test") start();
