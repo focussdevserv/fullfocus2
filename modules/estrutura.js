@@ -130,6 +130,7 @@ const structuredMutationObserver = new MutationObserver(async () => {
       });
       actions.append(edit, remove);
       if (key === "contas-a-pagar" && !["paid", "cancelled"].includes(row.status)) { const pay = document.createElement("button"); pay.type = "button"; pay.className = "compact-action"; pay.textContent = "Registrar pagamento"; pay.addEventListener("click", async () => { pay.disabled = true; try { await api(`/api/payables/${row.id}/record-payment`, { method: "POST", body: {} }); ui.toast("Pagamento registrado como despesa.", "success"); renderEstrutura(key); } catch (error) { pay.disabled = false; ui.toast(error.message, "error"); } }); actions.append(pay); }
+      if (key === "contas-bancarias") { const movement = document.createElement("button"); movement.type = "button"; movement.className = "compact-action"; movement.textContent = "Movimentar"; movement.addEventListener("click", () => ui.form({ title: `Movimentar · ${row.name}`, subtitle: "Conta bancária", fields: [{ name: "kind", label: "Tipo", type: "select", options: [["credit", "Entrada"], ["debit", "Saída"]] }, { name: "amount", label: "Valor", type: "number", min: 0.01, step: 0.01 }, { name: "description", label: "Descrição" }], onSubmit: async (values) => { await api(`/api/bank_accounts/${row.id}/transactions`, { method: "POST", body: values }); ui.toast("Movimentação registrada.", "success"); renderEstrutura(key); } })); actions.append(movement); }
       article.append(actions);
     });
   } catch {}

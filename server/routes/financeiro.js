@@ -43,6 +43,14 @@ export function register(app, ctx) {
     } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível registrar o pagamento da conta."); }
     finally { db.release?.(); }
   });
+  app.get("/api/bank_accounts/:id/transactions", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select * from bank_account_transactions where bank_account_id=$1 and organization_id=$2 order by occurred_at desc,id desc", [req.params.id, org]); res.json({ transactions: q.rows }); } catch (e) { error(res, e, "Não foi possível carregar as movimentações da conta."); } });
+  app.post("/api/bank_accounts/:id/transactions", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const kind = asText(req.body?.kind), description = asText(req.body?.description), amount = Number(req.body?.amount);
+    if (!['credit', 'debit'].includes(kind) || !description || !Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Informe tipo, descrição e valor válidos." });
+    const db = pool.connect ? await pool.connect() : pool;
+    try { await db.query("begin"); const account = await db.query("select * from bank_accounts where id=$1 and organization_id=$2 for update", [req.params.id, org]); if (!account.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Conta bancária não encontrada." }); } const transaction = await db.query("insert into bank_account_transactions (organization_id,bank_account_id,kind,amount,description) values ($1,$2,$3,$4,$5) returning *", [org, req.params.id, kind, amount, description]); const delta = kind === "credit" ? amount : -amount; const updated = await db.query("update bank_accounts set current_balance=coalesce(current_balance,0)+$1,updated_at=now() where id=$2 and organization_id=$3 returning *", [delta, req.params.id, org]); await db.query("commit"); res.status(201).json({ transaction: transaction.rows[0], bank_account: updated.rows[0] }); } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível registrar a movimentação."); } finally { db.release?.(); }
+  });
   app.post("/api/receivables/:id/create-charge", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const channel = ["pix", "boleto", "card", "link", "transfer"].includes(req.body?.channel) ? req.body.channel : "link";
