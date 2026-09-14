@@ -1,4 +1,4 @@
-const recurrenceKinds = new Set(["none", "daily", "weekly", "monthly"]);
+const recurrenceKinds = new Set(["none", "daily", "weekly", "monthly", "yearly"]);
 
 export function addMonths(date, amount) {
   const next = new Date(date);
@@ -15,6 +15,7 @@ export function nextOccurrence(date, recurrence) {
   if (recurrence === "daily") next.setDate(next.getDate() + 1);
   if (recurrence === "weekly") next.setDate(next.getDate() + 7);
   if (recurrence === "monthly") return addMonths(next, 1);
+  if (recurrence === "yearly") next.setFullYear(next.getFullYear() + 1);
   return next;
 }
 
@@ -27,7 +28,8 @@ export function expandRecurringEvents(events, { from = new Date(), months = 12 }
     if (Number.isNaN(base.getTime()) || recurrence === "none") return [event];
     const occurrences = [];
     let occurrence = base;
-    while (occurrence < until) {
+    const recurrenceUntil = event.recurrence_until ? new Date(event.recurrence_until + "T23:59:59.999Z") : until;
+    while (occurrence < until && occurrence <= recurrenceUntil) {
       if (occurrence >= start) occurrences.push({ ...event, id: `${event.id}-${occurrence.toISOString()}`, source_id: event.id, occurrence_start: occurrence.toISOString(), starts_at: occurrence.toISOString() });
       occurrence = nextOccurrence(occurrence, recurrence);
     }

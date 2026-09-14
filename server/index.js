@@ -20,6 +20,7 @@ import { registerCrmFollowupRoutes } from "./routes/crm-followups.js";
 import { registerFinanceOverviewRoutes } from "./routes/finance-overview.js";
 import { registerDeliveryWorkflowRoutes } from "./routes/delivery-workflow.js";
 import { registerAutomationRunRoutes } from "./routes/automation-runs.js";
+import { register as registerEventRoutes } from "./routes/events.js";
 import { startAutomationRunner } from "./automations-runner.js";
 const { Pool } = pg;
 export const app = express();
@@ -291,6 +292,7 @@ app.use("/api/tasks", async (req, res, next) => {
   return next();
 });
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
+registerEventRoutes(app, { pool, tenant, classifyDbError });
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
