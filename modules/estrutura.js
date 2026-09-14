@@ -70,6 +70,21 @@ const briefingLinkObserver = new MutationObserver(async () => {
   } catch {}
 });
 briefingLinkObserver.observe(dashboardGrid, { childList: true, subtree: true });
+const formLinkObserver = new MutationObserver(async () => {
+  if (location.hash.replace(/^#/, "") !== "formularios") return;
+  const list = dashboardGrid.querySelector(".automation-list");
+  if (!list || list.dataset.formLinks === "1") return;
+  list.dataset.formLinks = "1";
+  try {
+    const rows = (await api("/api/forms")).forms || [];
+    list.querySelectorAll("article").forEach((article, index) => {
+      const form = rows[index]; if (!form) return;
+      const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = form.public_token ? "Copiar link" : "Gerar link";
+      button.addEventListener("click", async () => { button.disabled = true; try { const data = form.public_token ? { path: `/form/${form.public_token}` } : await (await fetch(`/api/forms/${form.id}/public-link`, { method: "POST", credentials: "same-origin" })).json(); if (!data.path) throw new Error(data.error || "Não foi possível gerar o link."); await navigator.clipboard?.writeText(`${location.origin}${data.path}`); button.textContent = "Link copiado"; toast("Link do formulário copiado.", "success"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); article.append(button);
+    });
+  } catch {}
+});
+formLinkObserver.observe(dashboardGrid, { childList: true, subtree: true });
 const operationActionObserver = new MutationObserver(async () => {
   const key = location.hash.replace(/^#/, "");
   if (!["alteracoes", "entregas"].includes(key)) return;
