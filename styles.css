@@ -1244,16 +1244,19 @@ body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.da
 
 /* Cards visuais com as imagens de referência do usuário */
 .priorities-card, .activity-card, .agenda-card { position: relative; overflow: hidden; color: #fff; background-position: center; background-size: cover; }
-.priorities-card { background-image: linear-gradient(105deg, rgb(3 8 18 / 94%), rgb(3 8 18 / 72%)), url("assets/card-mask.png"); background-position: center, 76% center; }
-.activity-card { background-image: linear-gradient(105deg, rgb(3 8 18 / 92%), rgb(3 8 18 / 60%)), url("assets/card-web.png"); background-position: center, 70% center; }
-.agenda-card { background-image: linear-gradient(105deg, rgb(3 8 18 / 90%), rgb(3 8 18 / 56%)), url("assets/card-bridge.png"); background-position: center, 64% center; }
+.priorities-card { background-image: linear-gradient(105deg, rgb(2 6 15 / 97%), rgb(2 6 15 / 86%)), url("assets/card-mask.png"); background-position: center, 76% center; }
+.activity-card { background-image: linear-gradient(105deg, rgb(2 6 15 / 96%), rgb(2 6 15 / 80%)), url("assets/card-web.png"); background-position: center, 70% center; }
+.agenda-card { background-image: linear-gradient(105deg, rgb(2 6 15 / 95%), rgb(2 6 15 / 76%)), url("assets/card-bridge.png"); background-position: center, 64% center; }
 .priorities-card .card-kicker, .activity-card .card-kicker, .agenda-card .card-kicker,
 .priorities-card h2, .activity-card h2, .agenda-card h2,
 .priorities-card .task-progress, .activity-card .text-action, .agenda-card .icon-action { color: #fff; }
-.priorities-card .priority-item, .activity-card .activity-item, .agenda-card .agenda-item { border-color: rgb(255 255 255 / 18%); background: rgb(0 0 0 / 24%); }
-.priorities-card .priority-text strong, .priorities-card .priority-text small, .activity-card .activity-item strong, .activity-card .activity-item small, .agenda-card .agenda-item strong, .agenda-card .agenda-item small { color: #fff; }
+.priorities-card .section-heading, .activity-card .section-heading, .agenda-card .section-heading, .priorities-card .task-progress, .activity-card .activity-item, .agenda-card .agenda-item { text-shadow: 0 1px 3px rgb(0 0 0 / 72%); }
+.priorities-card .priority-item, .activity-card .activity-item, .agenda-card .agenda-item { border-color: rgb(255 255 255 / 28%); background: rgb(0 0 0 / 48%); box-shadow: inset 0 1px rgb(255 255 255 / 8%); }
+.priorities-card .priority-text strong, .priorities-card .priority-text small, .activity-card .activity-item strong, .activity-card .activity-item small, .agenda-card .agenda-item strong, .agenda-card .agenda-item small { color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / 80%); }
+.priorities-card .priority-text small, .activity-card .activity-item small, .agenda-card .agenda-item small { opacity: .92; }
 .priorities-card .task-progress > div { background: rgb(255 255 255 / 22%); }
 .priorities-card .task-progress i { background: #f3132d; }
+.metric-card .metric-copy, .metric-card .metric-label, .metric-card strong, .metric-card small { text-shadow: 0 1px 4px rgb(0 0 0 / 72%); }
 
 .app-sidebar {
   background-color: #050b18;
