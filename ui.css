@@ -98,3 +98,34 @@ button.ui-stat { cursor: pointer; }
 .ui-facts dd { margin: 0; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
 
 @media (max-width: 900px) { .ui-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ui-modal-fields { grid-template-columns: 1fr; } .ui-field.is-half { grid-column: 1 / -1; } }
+
+/* Design tokens FocusDev: tecnologia, movimento e contraste sem excessos. */
+body.dark-mode {
+  --focus-bg: #070b14;
+  --focus-surface: #0d1424;
+  --focus-card: #111b2e;
+  --focus-elevated: #162238;
+  --focus-red: #e62429;
+  --focus-red-hover: #ff3540;
+  --focus-blue: #2563eb;
+  --focus-cyan: #38bdf8;
+  --focus-text: #f8fafc;
+  --focus-muted: #94a3b8;
+  --focus-border: rgb(148 163 184 / 16%);
+  background: var(--focus-bg);
+  color: var(--focus-text);
+}
+body.dark-mode .ui-toolbar { gap: 12px; margin-bottom: 20px; }
+body.dark-mode .ui-search, body.dark-mode .ui-select { min-height: 46px; border-color: var(--focus-border); background: var(--focus-surface); color: var(--focus-text); }
+body.dark-mode .ui-search:focus, body.dark-mode .ui-select:focus,
+body.dark-mode .ui-field input:focus, body.dark-mode .ui-field select:focus, body.dark-mode .ui-field textarea:focus { border-color: var(--focus-cyan); box-shadow: 0 0 0 3px rgb(56 189 248 / 16%); }
+body.dark-mode .ui-field input, body.dark-mode .ui-field select, body.dark-mode .ui-field textarea { min-height: 46px; border-color: var(--focus-border); background: var(--focus-surface); }
+body.dark-mode .ui-field textarea { min-height: 110px; }
+body.dark-mode .ui-modal, body.dark-mode .ui-drawer { border-color: var(--focus-border); background: linear-gradient(145deg, var(--focus-elevated), var(--focus-card)); }
+body.dark-mode .ui-stat, body.dark-mode .ui-table-wrap { border-color: var(--focus-border); background: var(--focus-card); }
+body.dark-mode .ui-badge-red { background: rgb(230 36 41 / 18%); color: #ff9a9e; }
+body.dark-mode .ui-badge-blue { background: rgb(37 99 235 / 20%); color: #93c5fd; }
+body.dark-mode .ui-badge-purple { background: rgb(56 189 248 / 14%); color: #7dd3fc; }
+body.dark-mode .ui-empty { position: relative; overflow: hidden; border: 1px dashed var(--focus-border); border-radius: 12px; background: linear-gradient(145deg, rgb(22 34 56 / 72%), rgb(13 20 36 / 72%)); }
+body.dark-mode .ui-empty::after { position: absolute; right: -28px; bottom: -42px; width: 150px; height: 150px; border: 1px solid rgb(56 189 248 / 18%); border-radius: 50%; content: ""; box-shadow: 0 0 0 18px rgb(56 189 248 / 5%), 0 0 0 36px rgb(230 36 41 / 5%); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
