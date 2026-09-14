@@ -195,6 +195,20 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     );
     return { action: "request_satisfaction", request_id: request.rows[0].id, token: request.rows[0].token, project_id: source.id || null };
   }
+  if (automation.action === "create_calendar_event") {
+    if (automation.trigger === "meeting_scheduled" && SOURCE_TABLES[automation.trigger] === "events") return { action: "create_calendar_event", event_id: source.id, reused: true };
+    const startsAt = config.starts_at || source.starts_at || source.due_at || null;
+    if (!startsAt || Number.isNaN(Date.parse(startsAt))) throw new Error("O evento precisa ter data e horário válidos.");
+    const projectId = config.project_id || source.project_id || null;
+    const clientId = config.client_id || source.client_id || null;
+    await assertOrganizationRelation(client, "projects", projectId, automation.organization_id, "O projeto");
+    await assertOrganizationRelation(client, "clients", clientId, automation.organization_id, "O cliente");
+    const event = await client.query(
+      "insert into events (organization_id,title,starts_at,description,event_type,client_id,project_id,reminder_minutes) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id",
+      [automation.organization_id, String(config.title || message).slice(0, 240), startsAt, String(config.description || message).slice(0, 4000), String(config.event_type || "other").slice(0, 40), clientId, projectId, Math.max(0, Number(config.reminder_minutes ?? 30) || 0)],
+    );
+    return { action: "create_calendar_event", event_id: event.rows[0].id, project_id: projectId, client_id: clientId };
+  }
   if (automation.action === "update_status") {
     const tables = new Set(["leads", "opportunities", "proposals", "contracts", "projects", "tasks", "tickets", "clients", "receivables"]);
     const table = String(config.table || SOURCE_TABLES[automation.trigger] || "");

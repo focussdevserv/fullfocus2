@@ -8,7 +8,7 @@ function poolFor(automation, source) {
     async query(sql, params) {
       calls.push({ sql, params });
       if (sql.startsWith("select * from automations")) return { rows: [automation] };
-      if (sql.includes("from leads s") || sql.includes("from proposals s") || sql.includes("from contracts s") || sql.includes("from projects s")) return { rows: [source] };
+      if (sql.includes("from leads s") || sql.includes("from proposals s") || sql.includes("from contracts s") || sql.includes("from projects s") || sql.includes("from tasks s")) return { rows: [source] };
       if (sql.startsWith("select id from leads")) return { rowCount: 1, rows: [{ id: source.id }] };
       if (sql.startsWith("insert into automation_runs")) return { rowCount: 1, rows: [{ id: 90 }] };
       if (sql.startsWith("insert into followups")) return { rowCount: 1, rows: [{ id: 91 }] };
@@ -17,6 +17,7 @@ function poolFor(automation, source) {
       if (sql.startsWith("insert into projects")) return { rowCount: 1, rows: [{ id: 94 }] };
       if (sql.startsWith("insert into files")) return { rowCount: 1, rows: [{ id: 95 }] };
       if (sql.startsWith("insert into satisfaction_requests")) return { rowCount: 1, rows: [{ id: 96, token: "token" }] };
+      if (sql.startsWith("insert into events")) return { rowCount: 1, rows: [{ id: 97 }] };
       return { rowCount: 1, rows: [] };
     },
     release() {},
@@ -66,4 +67,10 @@ test("cria pesquisa de satisfação vinculada ao projeto concluído", async () =
   const { client, calls } = poolFor({ id: 55, organization_id: "org", trigger: "project_completed", action: "request_satisfaction", config: {} }, { id: 56, name: "Site", client_id: 57 });
   assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
   assert.equal(calls.filter((call) => call.sql.startsWith("insert into satisfaction_requests")).length, 1);
+});
+
+test("cria evento de calendário para uma tarefa", async () => {
+  const { client, calls } = poolFor({ id: 58, organization_id: "org", trigger: "task_due_soon", action: "create_calendar_event", config: { starts_at: "2026-09-15T14:00:00Z" } }, { id: 59, title: "Revisar entrega" });
+  assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
+  assert.equal(calls.filter((call) => call.sql.startsWith("insert into events")).length, 1);
 });
