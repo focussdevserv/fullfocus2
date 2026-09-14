@@ -13,6 +13,16 @@ export function register(app, ctx) {
   const fail = (res, error, message) => { const out = classifyDbError(error, message); res.status(out.status).json({ error: out.error }); };
   app.get("/api/catalog-items", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
+    const search = text(req.query?.search || req.query?.q), kind = text(req.query?.kind), active = text(req.query?.active); const params = [org], where = ["organization_id=$1"];
+    const add = (sql, value) => { params.push(value); where.push(sql.replace("$VALUE", `$${params.length}`)); };
+    if (search) add("(name ilike '%' || $VALUE || '%' or coalesce(description,'') ilike '%' || $VALUE || '%')", search);
+    if (KINDS.includes(kind)) add("kind=$VALUE", kind);
+    if (["true", "false"].includes(active)) add("active=$VALUE", active === "true");
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 250, 1), 250), offset = Math.max(Number(req.query?.offset) || 0, 0); params.push(limit, offset);
+    try { const q = await pool.query(`select * from catalog_items where ${where.join(" and ")} order by created_at desc limit $${params.length - 1} offset $${params.length}`, params); res.json({ catalog_items: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (error) { fail(res, error, "Não foi possível carregar o catálogo."); }
+  });
+  app.get("/api/catalog-items", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
     try { const q = await pool.query("select * from catalog_items where organization_id=$1 order by created_at desc", [org]); res.json({ catalog_items: q.rows }); } catch (error) { fail(res, error, "Não foi possível carregar o catálogo."); }
   });
   app.post("/api/catalog-items", async (req, res) => {
