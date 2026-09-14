@@ -52,6 +52,12 @@ const sourceMessage = (trigger, row) => {
   return `Novo ticket: ${row.title}`;
 };
 
+async function assertOrganizationRelation(client, table, id, organizationId, label) {
+  if (!id) return;
+  const result = await client.query(`select id from ${table} where id=$1 and organization_id=$2`, [id, organizationId]);
+  if (!result.rowCount) throw new Error(`${label} não pertence ao workspace.`);
+}
+
 async function findSources(client, automation, now) {
   const table = SOURCE_TABLES[automation.trigger];
   const where = sourceWhere[automation.trigger];
@@ -88,12 +94,54 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
   }
   if (automation.action === "create_task") {
     const title = String(config.title || message).trim().slice(0, 240);
-    const priority = ["low", "medium", "high"].includes(config.priority) ? config.priority : "medium";
+    const priority = ["low", "medium", "high", "urgent"].includes(config.priority) ? config.priority : "medium";
+    const projectId = config.project_id || source.project_id || null;
+    const clientId = config.client_id || source.client_id || null;
+    const assigneeId = config.assignee_id || source.assignee_id || null;
+    await assertOrganizationRelation(client, "projects", projectId, automation.organization_id, "O projeto");
+    await assertOrganizationRelation(client, "clients", clientId, automation.organization_id, "O cliente");
+    await assertOrganizationRelation(client, "users", assigneeId, automation.organization_id, "O responsável");
     const task = await client.query(
-      "insert into tasks (organization_id,title,status,priority,tags) values ($1,$2,'todo',$3,$4) returning id",
-      [automation.organization_id, title, priority, ["automation", automation.trigger]],
+      "insert into tasks (organization_id,title,status,priority,project_id,client_id,assignee_id,due_at,tags) values ($1,$2,'todo',$3,$4,$5,$6,$7,$8) returning id",
+      [automation.organization_id, title, priority, projectId, clientId, assigneeId, config.due_at || source.due_at || null, ["automation", automation.trigger]],
     );
     return { action: "create_task", task_id: task.rows[0].id, message: title };
+  }
+  if (automation.action === "create_followup") {
+    const leadId = config.lead_id || source.lead_id || (automation.trigger === "lead_created" ? source.id : null);
+    if (!leadId) throw new Error("O follow-up precisa estar vinculado a um lead.");
+    const lead = await client.query("select id from leads where id=$1 and organization_id=$2", [leadId, automation.organization_id]);
+    if (!lead.rowCount) throw new Error("O lead do follow-up não pertence ao workspace.");
+    const dueAt = config.due_at || source.next_action_at || new Date(Date.now() + 2 * 86400000).toISOString();
+    const followup = await client.query(
+      "insert into followups (organization_id,lead_id,due_at,channel,note) values ($1,$2,$3,$4,$5) returning id",
+      [automation.organization_id, leadId, dueAt, String(config.channel || "whatsapp").slice(0, 40), String(config.note || message).slice(0, 4000)],
+    );
+    return { action: "create_followup", followup_id: followup.rows[0].id, lead_id: leadId };
+  }
+  if (automation.action === "create_charge") {
+    const amount = Number(config.amount ?? source.amount ?? source.value ?? source.total_value ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("A cobrança precisa ter um valor válido.");
+    const clientId = config.client_id || source.client_id || null;
+    const projectId = config.project_id || source.project_id || null;
+    const contractId = config.contract_id || source.contract_id || null;
+    await assertOrganizationRelation(client, "clients", clientId, automation.organization_id, "O cliente");
+    await assertOrganizationRelation(client, "projects", projectId, automation.organization_id, "O projeto");
+    await assertOrganizationRelation(client, "contracts", contractId, automation.organization_id, "O contrato");
+    const charge = await client.query(
+      "insert into receivables (organization_id,client_id,project_id,contract_id,description,amount,due_at,status) values ($1,$2,$3,$4,$5,$6,$7,'pending') returning id",
+      [automation.organization_id, clientId, projectId, contractId, String(config.description || message).slice(0, 240), amount, config.due_at || source.due_at || new Date().toISOString().slice(0, 10)],
+    );
+    return { action: "create_charge", receivable_id: charge.rows[0].id, amount };
+  }
+  if (automation.action === "update_status") {
+    const tables = new Set(["leads", "opportunities", "proposals", "contracts", "projects", "tasks", "tickets", "clients", "receivables"]);
+    const table = String(config.table || SOURCE_TABLES[automation.trigger] || "");
+    const status = String(config.status || "").trim().slice(0, 40);
+    if (!tables.has(table) || !source.id || !status) throw new Error("Informe uma tabela e um status válidos para a automação.");
+    const updated = await client.query(`update ${table} set status=$1,updated_at=now() where id=$2 and organization_id=$3`, [status, source.id, automation.organization_id]);
+    if (!updated.rowCount) throw new Error("O registro da automação não pertence ao workspace.");
+    return { action: "update_status", table, id: source.id, status };
   }
   if (automation.action === "send_message") {
     const subject = String(config.subject || `Automação: ${automation.name}`).trim().slice(0, 240);
