@@ -557,6 +557,8 @@ function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   document.title = `${key === "inicio" ? "Início" : label} · FocusDev`;
   appTitle.textContent = key === "inicio" ? homeGreeting : label;
   document.querySelector(".eyebrow").textContent = navItem?.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
+  document.body.dataset.route = key;
+  dashboardGrid?.setAttribute("data-route", key);
   renderWorkspaceView(hash, label);
   closeSidebar();
 }
@@ -658,14 +660,37 @@ async function api(path, { method = "GET", body, headers } = {}) {
     headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
+  const data = response.status === 204 ? {} : await response.json().catch(() => null);
   if (!response.ok) {
-    const error = new Error(data.error || (response.status === 401 ? "Sua sessão expirou. Entre novamente." : "Não foi possível concluir a operação."));
+    // Resposta sem JSON em 5xx = servidor reiniciando (deploy) ou proxy indisponível: avisa e tenta de novo sozinho.
+    const transient = data === null && (response.status >= 500 || response.status === 0);
+    const error = new Error(data?.error || (response.status === 401 ? "Sua sessão expirou. Entre novamente." : transient ? "O servidor está indisponível no momento (pode estar sendo atualizado). Tentando novamente em instantes…" : "Não foi possível concluir a operação."));
     error.status = response.status;
+    error.transient = transient;
+    if (transient && method === "GET") scheduleTransientRetry();
     throw error;
   }
-  return data;
+  return data || {};
 }
+
+/* Quando a API cai durante uma atualização, re-renderiza a tela atual sozinho (até 4 vezes, a cada 5 s). */
+let transientRetryTimer = null, transientRetryCount = 0;
+function scheduleTransientRetry() {
+  if (transientRetryTimer || transientRetryCount >= 4) return;
+  transientRetryTimer = window.setTimeout(() => {
+    transientRetryTimer = null; transientRetryCount += 1;
+    if (!appShell.hidden) renderHashRoute(window.location.hash || "#inicio");
+  }, 5000);
+}
+window.addEventListener("hashchange", () => { transientRetryCount = 0; });
+/* "Tentar novamente" universal: qualquer botão dentro de um estado de erro re-renderiza a tela atual,
+   mesmo quando o módulo usou uma classe própria (audit-retry, infra-retry…) sem registrar o clique. */
+document.addEventListener("click", (event) => {
+  const button = event.target.closest?.(".state-error button, .state-error .compact-action");
+  if (!button || !dashboardGrid?.contains(button) || button.dataset.retryBound === "1") return;
+  transientRetryCount = 0;
+  window.setTimeout(() => { if (dashboardGrid.contains(button)) renderHashRoute(window.location.hash || "#inicio"); }, 0);
+});
 
 /* Blocos de estado compartilhados pelas telas (carregando / vazio / erro). */
 const stateBlock = {

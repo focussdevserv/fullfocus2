@@ -1,0 +1,366 @@
+/* ==========================================================================
+   FocusDev — camada de consistência visual
+   Carregada por último: normaliza layout, controles, botões, barras de
+   filtro, listas, paginação e estados em TODAS as telas, sem depender de
+   cada módulo. Tokens abaixo valem para tema claro e escuro.
+   ========================================================================== */
+
+:root {
+  --control-bg: #ffffff;
+  --control-bg-hover: #f3f7ff;
+  --control-border: #cfd9e8;
+  --control-border-strong: #b5c4da;
+  --control-text: var(--ink);
+  --control-placeholder: #8593ad;
+  --control-radius: 10px;
+  --control-height: 40px;
+  --control-height-sm: 34px;
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-border: #c7d5ea;
+  --btn-secondary-text: #1f3a6e;
+  --btn-secondary-hover-bg: #eaf1ff;
+  --btn-secondary-hover-border: #7ea2e0;
+  --chip-bg: rgb(13 79 194 / 8%);
+  --chip-text: #35507f;
+  --row-line: #e3e9f2;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7a99' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+body.dark-mode {
+  --control-bg: rgb(10 22 44 / 78%);
+  --control-bg-hover: rgb(24 41 70 / 90%);
+  --control-border: rgb(145 180 230 / 22%);
+  --control-border-strong: rgb(145 180 230 / 36%);
+  --control-text: #eff5ff;
+  --control-placeholder: #7f92b3;
+  --btn-secondary-bg: rgb(255 255 255 / 4%);
+  --btn-secondary-border: rgb(145 180 230 / 34%);
+  --btn-secondary-text: #dbe7ff;
+  --btn-secondary-hover-bg: rgb(120 174 251 / 14%);
+  --btn-secondary-hover-border: rgb(120 174 251 / 62%);
+  --chip-bg: rgb(255 255 255 / 7%);
+  --chip-text: #c2d0e4;
+  --row-line: rgb(145 180 230 / 14%);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2391a4bf' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* --------------------------------------------------------------------------
+   1. Layout da área de trabalho
+   Telas internas ocupam a largura inteira (uma coluna). Só o Início mantém
+   a grade de duas colunas do painel.
+   -------------------------------------------------------------------------- */
+.dashboard-grid { row-gap: 20px; }
+body:not([data-route="inicio"]) .dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+body:not([data-route="inicio"]) .dashboard-grid > * { grid-column: 1 / -1; min-width: 0; max-width: none; }
+body:not([data-route="inicio"]) .dashboard-grid > .data-card { padding: 22px 24px; }
+.page-intro { padding: 6px 0 2px; }
+.page-intro > div > p:last-child { max-width: 720px; line-height: 1.5; }
+.page-intro .ui-header-actions, .page-intro .page-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+.data-card > h2:first-child, .data-card > .section-heading:first-child h2 { margin-top: 0; }
+.data-card > h2 { margin: 0 0 14px; font-size: 17px; letter-spacing: -0.02em; }
+.section-heading { align-items: center; }
+.section-heading h2 { margin: 3px 0 0; }
+.section-heading .card-kicker + h2 { margin-top: 4px; }
+
+/* --------------------------------------------------------------------------
+   2. Controles: inputs, selects e textareas de todas as telas e diálogos
+   -------------------------------------------------------------------------- */
+.app-shell .dashboard-grid input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),
+.app-shell .dashboard-grid select,
+.app-shell .dashboard-grid textarea,
+.ui-modal input:not([type="checkbox"]):not([type="radio"]), .ui-modal select, .ui-modal textarea,
+.ui-drawer input:not([type="checkbox"]):not([type="radio"]), .ui-drawer select, .ui-drawer textarea,
+.create-dialog input:not([type="checkbox"]):not([type="radio"]), .create-dialog select, .create-dialog textarea,
+.notification-panel select, .dashboard-toolbar select, .task-toolbar select, .calendar-toolbar select {
+  min-height: var(--control-height);
+  padding: 8px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background-color: var(--control-bg);
+  color: var(--control-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  outline: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.app-shell .dashboard-grid textarea, .ui-modal textarea, .ui-drawer textarea, .create-dialog textarea { min-height: 96px; padding-top: 10px; resize: vertical; line-height: 1.5; }
+.app-shell .dashboard-grid input::placeholder, .app-shell .dashboard-grid textarea::placeholder, .ui-modal input::placeholder, .ui-modal textarea::placeholder, .ui-drawer input::placeholder { color: var(--control-placeholder); font-weight: 400; }
+.app-shell .dashboard-grid input:hover, .app-shell .dashboard-grid select:hover, .app-shell .dashboard-grid textarea:hover { border-color: var(--control-border-strong); }
+.app-shell .dashboard-grid input:focus, .app-shell .dashboard-grid select:focus, .app-shell .dashboard-grid textarea:focus,
+.ui-modal input:focus, .ui-modal select:focus, .ui-modal textarea:focus, .ui-drawer input:focus, .ui-drawer select:focus, .ui-drawer textarea:focus,
+.create-dialog input:focus, .create-dialog select:focus, .create-dialog textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgb(13 79 194 / 18%);
+}
+body.dark-mode .app-shell .dashboard-grid input:focus, body.dark-mode .app-shell .dashboard-grid select:focus, body.dark-mode .app-shell .dashboard-grid textarea:focus,
+body.dark-mode .ui-modal input:focus, body.dark-mode .ui-modal select:focus, body.dark-mode .ui-modal textarea:focus,
+body.dark-mode .ui-drawer input:focus, body.dark-mode .ui-drawer select:focus, body.dark-mode .ui-drawer textarea:focus,
+body.dark-mode .create-dialog input:focus, body.dark-mode .create-dialog select:focus, body.dark-mode .create-dialog textarea:focus { border-color: #78aefb; box-shadow: 0 0 0 3px rgb(120 174 251 / 22%); }
+.app-shell .dashboard-grid input:disabled, .app-shell .dashboard-grid select:disabled, .app-shell .dashboard-grid textarea:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Selects nativos com aparência própria (seta desenhada) em vez do controle cinza do sistema. */
+.app-shell select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 36px;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px 14px;
+  cursor: pointer;
+}
+.app-shell select:not([multiple]):not([size]) { background-color: var(--control-bg); }
+.app-shell select option { color: #0f1f45; background: #ffffff; font-weight: 500; }
+body.dark-mode .app-shell select option { color: #eff5ff; background: #111a2d; }
+.app-shell input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
+.app-shell input[type="date"], .app-shell input[type="datetime-local"], .app-shell input[type="time"], .app-shell input[type="month"] { color-scheme: light; }
+body.dark-mode .app-shell input[type="date"], body.dark-mode .app-shell input[type="datetime-local"], body.dark-mode .app-shell input[type="time"], body.dark-mode .app-shell input[type="month"] { color-scheme: dark; }
+.app-shell input[type="checkbox"], .app-shell input[type="radio"] { width: 16px; height: 16px; margin: 0; accent-color: var(--blue); cursor: pointer; }
+body.dark-mode .app-shell input[type="checkbox"], body.dark-mode .app-shell input[type="radio"] { accent-color: #78aefb; }
+
+/* Rótulos que envolvem controles (label > input) viram campo com legenda. */
+.dashboard-grid label:has(> input, > select, > textarea) {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dashboard-grid label:has(> input[type="checkbox"]), .dashboard-grid label:has(> input[type="radio"]) { display: inline-flex; align-items: center; gap: 8px; color: inherit; font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.dashboard-grid label > input, .dashboard-grid label > select, .dashboard-grid label > textarea { width: 100%; color: var(--control-text); font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+/* --------------------------------------------------------------------------
+   3. Botões
+   -------------------------------------------------------------------------- */
+.dashboard-grid .button, .page-intro .button, .ui-modal .button, .ui-drawer .button, .create-dialog .button, .notification-panel .button, .section-heading .button {
+  width: auto;
+  min-height: var(--control-height);
+  margin: 0;
+  padding: 0 18px;
+  border-radius: var(--control-radius);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.dashboard-grid .button-primary, .page-intro .button-primary { box-shadow: 0 8px 18px rgb(243 19 45 / 22%); }
+.dashboard-grid .button-secondary, .page-intro .button-secondary, .ui-modal .button-secondary, .ui-drawer .button-secondary, .create-dialog .button-secondary {
+  border: 1px solid var(--btn-secondary-border);
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+}
+.dashboard-grid .button-secondary:hover, .page-intro .button-secondary:hover, .ui-modal .button-secondary:hover, .ui-drawer .button-secondary:hover, .create-dialog .button-secondary:hover { border-color: var(--btn-secondary-hover-border); background: var(--btn-secondary-hover-bg); color: var(--btn-secondary-text); }
+.compact-action { min-width: 0; min-height: 36px; padding: 0 14px; font-size: 12.5px; }
+.ui-modal-actions .compact-action, .dialog-actions .compact-action { min-height: 40px; padding: 0 18px; }
+
+/* Botão "compact-action" sem variante (o padrão em tabelas e listas) = botão secundário. */
+.app-shell button.compact-action:not(.button):not(.text-action):not(.ui-icon):not(.filter-button):not(.icon-action),
+.app-shell a.compact-action:not(.button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: 9px;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.app-shell button.compact-action:not(.button):not(.text-action):not(.ui-icon):not(.filter-button):not(.icon-action):hover,
+.app-shell a.compact-action:not(.button):hover { border-color: var(--btn-secondary-hover-border); background: var(--btn-secondary-hover-bg); }
+.app-shell button.compact-action:not(.button):active { transform: translateY(1px); }
+.app-shell button.compact-action:disabled, .app-shell .button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+/* Variantes semânticas usadas pelas telas. */
+.app-shell button.compact-action.success, .app-shell button.compact-action.approval-accept { border-color: rgb(18 118 76 / 45%); color: #1f9d6a; }
+body.dark-mode .app-shell button.compact-action.success, body.dark-mode .app-shell button.compact-action.approval-accept { color: #6fe0b4; }
+.app-shell button.compact-action.success:hover, .app-shell button.compact-action.approval-accept:hover { border-color: #1f9d6a; background: rgb(18 118 76 / 12%); }
+.app-shell button.compact-action.danger, .app-shell button.compact-action.approval-reject, .app-shell button.compact-action.is-danger { border-color: rgb(230 36 41 / 40%); color: #d0182f; }
+body.dark-mode .app-shell button.compact-action.danger, body.dark-mode .app-shell button.compact-action.approval-reject, body.dark-mode .app-shell button.compact-action.is-danger { color: #ff8a97; }
+.app-shell button.compact-action.danger:hover, .app-shell button.compact-action.approval-reject:hover, .app-shell button.compact-action.is-danger:hover { border-color: #e62429; background: rgb(230 36 41 / 12%); }
+/* Botões de linha em tabelas: mais compactos. */
+.dashboard-grid td .compact-action, .dashboard-grid td .button { min-height: 30px; padding: 0 10px; font-size: 11.5px; }
+.dashboard-grid td .text-action { font-size: 12px; }
+/* Grupos de ações: espaçamento uniforme e quebra elegante. */
+.structured-actions, .structured-record-actions, .finance-actions, .template-actions, .card-actions, .bank-account-actions, .approval-inline-actions, .tasks-actions, .notification-inbox-actions, .day-event-actions, .crm-items-actions, .ui-row-actions, .dashboard-grid td:last-child:has(.compact-action) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.dashboard-grid td:last-child:has(.compact-action) { display: table-cell; }
+/* Células de ações: botões lado a lado, quebrando em duas linhas quando há muitos, sem esmagar as outras colunas. */
+.dashboard-grid td:has(.compact-action) { min-width: 200px; white-space: normal; }
+.dashboard-grid td:has(.compact-action) .compact-action { margin: 2px 6px 2px 0; }
+.dashboard-grid td:has(.compact-action) .compact-action:last-child { margin-right: 0; }
+.dashboard-grid td:first-child { min-width: 150px; }
+.text-action { border-radius: 6px; }
+.text-action:hover { text-decoration: underline; }
+.filter-button { min-height: 34px; padding: 0 13px; border-radius: 9px; font-size: 12px; }
+body.dark-mode .filter-button { border-color: var(--btn-secondary-border); background: var(--btn-secondary-bg); color: var(--btn-secondary-text); }
+body.dark-mode .filter-button:hover { border-color: var(--btn-secondary-hover-border); background: var(--btn-secondary-hover-bg); }
+body.dark-mode .filter-button.is-active { border-color: #78aefb; background: rgb(120 174 251 / 18%); color: #eff5ff; }
+
+/* --------------------------------------------------------------------------
+   4. Barras de busca e filtros (kit e legado)
+   -------------------------------------------------------------------------- */
+.ui-toolbar, .finance-toolbar, .operations-toolbar, .catalog-toolbar, .tasks-toolbar, .calendar-toolbar, .conta-list-filters, .dashboard-toolbar, .inbox-filters, .filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 0;
+}
+.ui-toolbar { gap: 10px; }
+.finance-toolbar input, .operations-toolbar input, .catalog-toolbar input, .tasks-toolbar input, .filters-bar input, .ui-search, .conta-list-filters label:first-child { flex: 1 1 240px; min-width: 200px; }
+.finance-toolbar select, .operations-toolbar select, .catalog-toolbar select, .tasks-toolbar select, .ui-select, .finance-toolbar input[data-structured-status] { flex: 0 1 200px; min-width: 150px; }
+.conta-list-filters label { flex: 0 1 200px; }
+.ui-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+body.dark-mode .ui-search, body.dark-mode .ui-select { min-height: var(--control-height); }
+.contas-list .section-heading { flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; margin-bottom: 6px; }
+.contas-list .section-heading h2 { margin: 0 0 10px; }
+.contas-list .conta-list-filters { flex: 1 1 420px; margin: 0; justify-content: flex-end; }
+/* Legendas curtas de filtros (ex.: "Status") em barras legadas */
+.dashboard-toolbar label { gap: 6px; }
+
+/* --------------------------------------------------------------------------
+   5. Listas de registros (legado .automation-list) e linhas de contas
+   -------------------------------------------------------------------------- */
+.automation-list { display: block; padding: 22px 24px; }
+.automation-list > article {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 13px 4px;
+  border: 0;
+  border-top: 1px solid var(--row-line);
+}
+.automation-list > article:first-of-type { border-top: 0; }
+.automation-list > .finance-toolbar + article, .automation-list > .ui-toolbar + article { border-top: 0; }
+.automation-list > article > strong { flex: 1 1 220px; min-width: 0; overflow: hidden; font-size: 13.5px; text-overflow: ellipsis; }
+.automation-list > article > span, .automation-list > article > .status-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: var(--chip-bg); color: var(--chip-text); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+.automation-list > article > small, .automation-list > article > time { color: var(--muted); font-size: 11.5px; }
+.automation-list > article > p { flex: 1 1 100%; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.automation-list > article > .structured-actions, .automation-list > article > .structured-record-actions, .automation-list > article > .template-actions, .automation-list > article > button.compact-action:first-of-type { margin-left: auto; }
+.automation-list > article > button.compact-action { margin-left: 0; }
+.automation-list > article > button.compact-action:first-of-type { margin-left: auto; }
+.automation-list > article > .structured-actions ~ button, .automation-list > article > .structured-record-actions ~ button { margin-left: 0; }
+.conta-row { padding: 12px 4px; border-top: 1px solid var(--row-line); }
+.conta-rows > .conta-row:first-child { border-top: 0; }
+.status-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; border: 0; background: var(--chip-bg); color: var(--chip-text); font-size: 11px; font-weight: 700; white-space: nowrap; }
+
+/* --------------------------------------------------------------------------
+   6. Tabelas
+   -------------------------------------------------------------------------- */
+.dashboard-grid table { width: 100%; border-collapse: collapse; }
+.dashboard-grid th { padding: 0 12px 10px; border-bottom: 1px solid var(--row-line); color: var(--muted); font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.dashboard-grid td { padding: 12px; border-bottom: 1px solid var(--row-line); font-size: 12.5px; vertical-align: middle; }
+.dashboard-grid tbody tr:last-child td { border-bottom: 0; }
+.dashboard-grid tbody tr:hover td { background: rgb(120 174 251 / 5%); }
+.dashboard-grid td:first-child { font-weight: 700; }
+.dashboard-grid td small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.dashboard-grid td b { display: block; margin-top: 3px; color: #ffc46b; font-size: 11px; font-weight: 700; }
+.table-wrap { overflow-x: auto; }
+
+/* --------------------------------------------------------------------------
+   7. Paginação
+   -------------------------------------------------------------------------- */
+.table-pagination, .ui-pagination, .finance-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--row-line);
+}
+.table-pagination > span, .ui-pagination > span, .finance-pagination > span { min-width: 84px; color: var(--muted); font-size: 12px; font-weight: 600; text-align: center; }
+.table-pagination .compact-action, .ui-pagination .compact-action, .finance-pagination .compact-action { min-width: 96px; }
+
+/* --------------------------------------------------------------------------
+   8. Estados: carregando, vazio e erro
+   -------------------------------------------------------------------------- */
+.state-card { display: grid; gap: 8px; justify-items: start; min-height: 0; padding: 30px 28px; }
+.state-card h2 { margin: 0; font-size: 17px; letter-spacing: -0.02em; }
+.state-card p { margin: 0; max-width: 560px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.state-card .compact-action { margin-top: 8px; }
+.state-loading { grid-auto-flow: column; align-items: center; justify-content: start; gap: 12px; padding: 26px 28px; }
+.state-loading p { font-size: 13px; }
+.state-error { border-color: rgb(230 36 41 / 38%); background-image: linear-gradient(135deg, rgb(230 36 41 / 12%), transparent 55%); }
+.state-error h2 { color: #ff8a97; }
+body:not(.dark-mode) .state-error h2 { color: #c8102e; }
+.state-empty::after, .ui-empty::after { display: none; }
+.ui-empty { padding: 26px 22px; border: 1px dashed var(--control-border-strong); border-radius: 12px; background: transparent; }
+.ui-empty-inline { padding: 28px 12px; border: 1px dashed var(--control-border); border-radius: 12px; color: var(--muted); font-size: 13px; text-align: center; }
+/* Estado vazio dentro de cards de lista: alinhado com o conteúdo, sem "cartão dentro de cartão". */
+.automation-list > .state-card, .contas-list .state-card, .conta-rows > .state-card, .operations-table > .state-card, .finance-list > .state-card { margin: 4px 0; padding: 26px 22px; border-style: dashed; background: transparent; box-shadow: none; }
+
+/* --------------------------------------------------------------------------
+   9. Métricas / KPIs (cartões numéricos de todas as telas)
+   -------------------------------------------------------------------------- */
+.ui-stats, .finance-metrics { gap: 14px; }
+.ui-stat, .finance-metric, .metric-card { display: grid; gap: 6px; align-content: start; padding: 18px 20px; }
+.finance-metric span:first-child, .metric-card span:first-child { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.finance-metric strong, .metric-card strong { font-size: 24px; letter-spacing: -0.04em; line-height: 1.1; }
+/* O quadradinho de ícone do painel inicial só faz sentido quando há ícone; fora do Início ele some. */
+.metric-card:not(.metric-pink):not(.metric-blue):not(.metric-purple):not(.metric-orange)::before { display: none; }
+body:not([data-route="inicio"]) .metric-card { display: grid; min-height: 0; align-items: start; }
+body:not([data-route="inicio"]) .metric-card::before { display: none; }
+body:not([data-route="inicio"]) .metrics { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.metric-card .metric-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.metric-card small { color: var(--muted); font-size: 11.5px; }
+
+/* Formulários embutidos em cards (ex.: novo cargo, convite de membro, configurações). */
+.config-card form, .dashboard-grid form[data-invite], .dashboard-grid form[data-new-team-role] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.config-card form textarea, .config-card form output, .config-card form > .button, .config-card form input[name="hidden_fields"], .config-card form > label:has(textarea) { grid-column: 1 / -1; }
+.config-card form > .button { justify-self: end; min-width: 160px; }
+.config-category-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 4px; }
+.config-category-nav a, .config-category-nav button { display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border: 1px solid var(--btn-secondary-border); border-radius: 999px; background: var(--btn-secondary-bg); color: var(--btn-secondary-text); font-size: 12px; font-weight: 700; text-decoration: none; }
+.config-category-nav a:hover, .config-category-nav button:hover, .config-category-nav .is-active { border-color: var(--btn-secondary-hover-border); background: var(--btn-secondary-hover-bg); }
+.config-card > h3 { margin: 0 0 4px; font-size: 16px; }
+.config-card > p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.config-card form output:empty { display: none; }
+.config-card form output { color: var(--muted); font-size: 12.5px; }
+.config-member { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 12px 4px; border-top: 1px solid var(--row-line); }
+.config-members > .config-member:first-child { border-top: 0; }
+.config-member > div:first-child, .config-member > strong:first-child { flex: 1 1 260px; min-width: 0; }
+.config-member .compact-action { margin-left: 0; }
+
+/* --------------------------------------------------------------------------
+   10. Diálogos e painéis laterais
+   -------------------------------------------------------------------------- */
+.ui-modal-actions { margin-top: 6px; }
+.ui-drawer-body dl:not(.ui-facts) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 0; margin: 0; }
+.ui-drawer-body dl:not(.ui-facts) dt { margin-top: 12px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.ui-drawer-body dl:not(.ui-facts) dd { margin: 3px 0 0; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.conta-drawer dt { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.conta-drawer dd { font-weight: 600; }
+
+/* --------------------------------------------------------------------------
+   11. Responsivo
+   -------------------------------------------------------------------------- */
+@media (max-width: 780px) {
+  .compact-action { width: auto; }
+  .page-intro .button, .page-intro .compact-action { width: 100%; }
+  .finance-toolbar input, .operations-toolbar input, .catalog-toolbar input, .tasks-toolbar input, .ui-search, .finance-toolbar select, .operations-toolbar select, .catalog-toolbar select, .ui-select, .conta-list-filters label { flex: 1 1 100%; min-width: 0; }
+  .ui-toolbar-actions { width: 100%; margin-left: 0; }
+  .ui-toolbar-actions .button, .ui-toolbar-actions .compact-action { flex: 1 1 auto; }
+  .table-pagination { justify-content: space-between; }
+  .automation-list { padding: 16px; }
+  body:not([data-route="inicio"]) .dashboard-grid > .data-card { padding: 16px; }
+}

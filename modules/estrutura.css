@@ -1,0 +1,34 @@
+/* Estilos das telas de estrutura (Cofre, Aprovações, Alterações, Entregas). Tokens: var(--blue), var(--red), var(--muted), var(--line). */
+.dashboard-grid > .state-card, .dashboard-grid > .automation-list, .dashboard-grid > .vault-list, .dashboard-grid > .approval-workspace-grid, .dashboard-grid > .change-list, .dashboard-grid > .delivery-list { grid-column: 1 / -1; min-width: 0; width: 100%; }
+.dashboard-grid > .state-card { min-height: 180px; align-content: center; }
+.approval-workspace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.approval-workspace-card, .vault-card { min-width: 0; }
+.approval-workspace-item { min-width: 0; }
+.vault-summary { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; width: 100%; }
+.vault-list { width: 100%; }
+.vault-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.change-summary, .delivery-summary { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; width: 100%; }
+.change-summary .data-card, .delivery-summary .data-card { display: grid; gap: 7px; min-width: 0; padding: 18px 20px; }
+.change-summary span, .delivery-summary span, .change-impact small { color: var(--muted); font-size: 11px; }
+.change-summary strong, .delivery-summary strong { color: #eff5ff; font-size: 24px; }
+.change-list, .delivery-list { grid-column: 1 / -1; min-width: 0; width: 100%; }
+.change-list .finance-toolbar, .delivery-list .finance-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 10px; }
+.change-rows, .delivery-rows { display: grid; gap: 10px; margin-top: 14px; }
+.change-row, .delivery-row { display: grid; gap: 14px; min-width: 0; padding: 17px 18px; border: 1px solid rgb(145 180 230 / 16%); border-radius: 14px; background: rgb(8 19 38 / 44%); }
+.change-row-main, .delivery-row-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; min-width: 0; }
+.change-row-main h3, .delivery-row-main h3 { margin: 9px 0 4px; overflow: hidden; color: #eff5ff; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.change-row-main p, .delivery-row-main p { margin: 0; color: var(--muted); font-size: 11px; }
+.change-impact { display: grid; flex: 0 0 auto; gap: 4px; text-align: right; }
+.change-impact strong { color: #8de1bb; font-size: 15px; }
+.change-row-actions, .delivery-row-actions { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 12px; border-top: 1px solid rgb(145 180 230 / 11%); }
+.change-empty, .delivery-empty { margin-top: 14px; }
+.delivery-checks { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 11px; }
+.delivery-checks span { padding: 6px 9px; border: 1px solid rgb(145 180 230 / 16%); border-radius: 8px; }
+.delivery-checks .is-done { border-color: rgb(71 213 160 / 38%); color: #79e0bc; }
+.change-row .finance-status.success, .delivery-row .finance-status.success { border-color: rgb(71 213 160 / 30%); background: rgb(71 213 160 / 12%); color: #79e0bc; }
+.change-row .finance-status.warning, .delivery-row .finance-status.warning { border-color: rgb(245 164 61 / 30%); background: rgb(245 164 61 / 12%); color: #f7bb62; }
+.change-row .finance-status.neutral, .delivery-row .finance-status.neutral { border-color: rgb(145 180 230 / 18%); background: rgb(145 180 230 / 8%); color: #a9bddd; }
+.delivery-row .finance-status.info { border-color: rgb(94 156 255 / 30%); background: rgb(94 156 255 / 12%); color: #7cafef; }
+@media (max-width: 900px) { .change-summary, .delivery-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 780px) { .approval-workspace-grid, .vault-summary, .vault-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .change-summary, .delivery-summary, .change-list .finance-toolbar, .delivery-list .finance-toolbar { grid-template-columns: 1fr; } .change-row-main, .delivery-row-main { flex-direction: column; gap: 10px; } .change-impact { text-align: left; } }

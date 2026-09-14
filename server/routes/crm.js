@@ -26,7 +26,7 @@ export function register(app, ctx) {
     for (const field of ["status", "source", "owner_id", "company_id", "contact_id"]) if (req.query[field] !== undefined && req.query[field] !== "" && !(field === "status" && req.query.status === "open")) add(`l.${field}=$VALUE`, String(req.query[field]));
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250), offset = Math.max(Number(req.query.offset) || 0, 0);
     values.push(limit, offset);
-    try { const q = await pool.query(`select l.* from leads l where ${where.join(" and ")} order by l.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ leads: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "NÃ£o foi possÃ­vel carregar os leads."); }
+    try { const q = await pool.query(`select l.* from leads l where ${where.join(" and ")} order by l.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ leads: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "Não foi possível carregar os leads."); }
   });
   app.get("/api/opportunities", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
@@ -38,7 +38,7 @@ export function register(app, ctx) {
     for (const field of ["stage", "owner_id", "lead_id", "company_id", "contact_id"]) if (req.query[field] !== undefined && req.query[field] !== "" && !(field === "stage" && req.query.stage === "open")) add(`o.${field}=$VALUE`, String(req.query[field]));
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250), offset = Math.max(Number(req.query.offset) || 0, 0);
     values.push(limit, offset);
-    try { const q = await pool.query(`select o.*, l.name lead_name, co.name company_name from opportunities o left join leads l on l.id=o.lead_id and l.organization_id=o.organization_id left join companies co on co.id=o.company_id and co.organization_id=o.organization_id where ${where.join(" and ")} order by o.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ opportunities: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "NÃ£o foi possÃ­vel carregar as oportunidades."); }
+    try { const q = await pool.query(`select o.*, l.name lead_name, co.name company_name from opportunities o left join leads l on l.id=o.lead_id and l.organization_id=o.organization_id left join companies co on co.id=o.company_id and co.organization_id=o.organization_id where ${where.join(" and ")} order by o.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ opportunities: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "Não foi possível carregar as oportunidades."); }
   });
 
   /* ---------------------------------------------------------------- resumo */
@@ -163,7 +163,7 @@ export function register(app, ctx) {
     for (const field of ["client_id", "project_id", "opportunity_id", "lead_id", "status"]) if (req.query[field] !== undefined && req.query[field] !== "") add(`p.${field}=$VALUE`, String(req.query[field]));
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250), offset = Math.max(Number(req.query.offset) || 0, 0);
     values.push(limit, offset);
-    try { const q = await pool.query(`select p.*, o.name opportunity_name, l.name lead_name, (select coalesce(sum(quantity*unit_price),0)::float8 from proposal_items i where i.proposal_id=p.id and i.organization_id=p.organization_id) items_total, (select count(*)::int from proposal_items i where i.proposal_id=p.id and i.organization_id=p.organization_id) items_count from proposals p left join opportunities o on o.id=p.opportunity_id and o.organization_id=p.organization_id left join leads l on l.id=p.lead_id and l.organization_id=p.organization_id where ${where.join(" and ")} order by p.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ proposals: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "NÃ£o foi possÃ­vel carregar as propostas."); }
+    try { const q = await pool.query(`select p.*, o.name opportunity_name, l.name lead_name, (select coalesce(sum(quantity*unit_price),0)::float8 from proposal_items i where i.proposal_id=p.id and i.organization_id=p.organization_id) items_total, (select count(*)::int from proposal_items i where i.proposal_id=p.id and i.organization_id=p.organization_id) items_count from proposals p left join opportunities o on o.id=p.opportunity_id and o.organization_id=p.organization_id left join leads l on l.id=p.lead_id and l.organization_id=p.organization_id where ${where.join(" and ")} order by p.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ proposals: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "Não foi possível carregar as propostas."); }
   });
   const proposalTotal = async (id, org) => Number((await pool.query("select coalesce(sum(quantity*unit_price),0)::float8 total from proposal_items where proposal_id=$1 and organization_id=$2", [id, org])).rows[0].total);
   app.post("/api/proposals/:id/recalculate", async (req, res) => {

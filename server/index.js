@@ -432,14 +432,14 @@ Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
   const org = tenant(req, res); if (!org) return;
-  if (!(["owner", "admin"].includes(req.user?.role))) return res.status(403).json({ error: "Apenas proprietÃ¡rios e administradores restauram registros." });
-  const client = await pool.connect().catch(() => null); if (!client) return res.status(503).json({ error: "ServiÃ§o indisponÃ­vel." });
+  if (!(["owner", "admin"].includes(req.user?.role))) return res.status(403).json({ error: "Apenas proprietários e administradores restauram registros." });
+  const client = await pool.connect().catch(() => null); if (!client) return res.status(503).json({ error: "Serviço indisponível." });
   try {
     await client.query("begin");
     const deleted = await client.query("select * from trash where id=$1 and organization_id=$2 and (restore_until is null or restore_until > now()) for update", [req.params.id, org]);
-    if (!deleted.rowCount) { await client.query("rollback"); return res.status(404).json({ error: "Registro nÃ£o encontrado ou prazo de restauraÃ§Ã£o encerrado." }); }
+    if (!deleted.rowCount) { await client.query("rollback"); return res.status(404).json({ error: "Registro não encontrado ou prazo de restauração encerrado." }); }
     const item = deleted.rows[0], table = item.entity_type, spec = entities[table] || archiveSpecs[table];
-    if (!spec) { await client.query("rollback"); return res.status(400).json({ error: "Tipo de registro nÃ£o restaurÃ¡vel." }); }
+    if (!spec) { await client.query("rollback"); return res.status(400).json({ error: "Tipo de registro não restaurável." }); }
     const payload = typeof item.payload === "string" ? JSON.parse(item.payload) : item.payload || {};
     const keys = ["id", ...spec.fields, "created_at", "updated_at"].filter((key, index, all) => all.indexOf(key) === index && payload[key] !== undefined);
     const columns = ["organization_id", ...keys], values = [org, ...keys.map((key) => payload[key])];
@@ -448,7 +448,7 @@ app.post("/api/trash/:id/restore", async (req, res) => {
     await client.query("delete from trash where id=$1 and organization_id=$2", [req.params.id, org]);
     await client.query("commit");
     res.status(201).json({ ok: true, entity_type: table, entity_id: payload.id || null });
-  } catch (error) { await client.query("rollback").catch(() => {}); const out = classifyDbError(error, "NÃ£o foi possÃ­vel restaurar o registro."); res.status(out.status).json({ error: out.error }); }
+  } catch (error) { await client.query("rollback").catch(() => {}); const out = classifyDbError(error, "Não foi possível restaurar o registro."); res.status(out.status).json({ error: out.error }); }
   finally { client.release(); }
 });
 
