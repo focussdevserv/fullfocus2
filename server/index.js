@@ -286,13 +286,14 @@ const refreshProjectProgress = async (projectId, org) => {
 };
 app.use("/api/tasks", async (req, res, next) => {
   const org = tenant(req, res); if (!org) return;
-  let projectId = req.body?.project_id || null;
+  const projectIds = new Set();
+  if (req.body?.project_id) projectIds.add(String(req.body.project_id));
   const taskId = req.path.split("/").filter(Boolean)[0];
   if (["PATCH", "DELETE"].includes(req.method) && /^\d+$/.test(taskId || "")) {
     const existing = await pool.query("select project_id from tasks where id=$1 and organization_id=$2", [taskId, org]).catch(() => ({ rows: [] }));
-    projectId = projectId || existing.rows[0]?.project_id || null;
+    if (existing.rows[0]?.project_id) projectIds.add(String(existing.rows[0].project_id));
   }
-  res.on("finish", () => { if (res.statusCode >= 200 && res.statusCode < 300 && projectId) refreshProjectProgress(projectId, org).catch(() => {}); });
+  res.on("finish", () => { if (res.statusCode >= 200 && res.statusCode < 300) for (const projectId of projectIds) refreshProjectProgress(projectId, org).catch(() => {}); });
   return next();
 });
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
