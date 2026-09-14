@@ -49,7 +49,7 @@ const PRIORITY = { urgent: ["Urgente", "priority-high"], high: ["Alta", "priorit
 const SOURCES = {
   revenues: "/api/revenues", expenses: "/api/expenses", receivables: "/api/receivables",
   leads: "/api/leads", opportunities: "/api/opportunities", tasks: "/api/tasks", events: "/api/events",
-  projects: "/api/projects", tickets: "/api/tickets", contacts: "/api/contacts", companies: "/api/companies",
+  projects: "/api/projects", tickets: "/api/tickets", contacts: "/api/contacts", companies: "/api/companies", activity: "/api/activity",
 };
 
 async function loadWorkspace() {
@@ -58,7 +58,7 @@ async function loadWorkspace() {
   const data = {}; const failed = [];
   keys.forEach((key, index) => {
     const result = results[index];
-    if (result.status === "fulfilled") data[key] = result.value[key] || [];
+    if (result.status === "fulfilled") data[key] = key === "activity" ? result.value.activities || [] : result.value[key] || [];
     else { data[key] = null; failed.push(key); }
   });
   return { data, failed };
@@ -313,7 +313,7 @@ function renderActivity(data) {
   const card = dashboardGrid.querySelector(".activity-card");
   if (!card) return;
   const list = card.querySelector(".activity-list"), toggle = card.querySelector(".text-action");
-  const items = ACTIVITY_KINDS.flatMap(([key, kind, tone, label, hash]) => (data[key] || []).map((x) => ({ kind, tone, hash, label: label(x) || kind, at: x.updated_at || x.created_at }))).filter((x) => x.at).sort((a, b) => new Date(b.at) - new Date(a.at));
+  const items = data.activity?.length ? data.activity.map((x) => ({ kind: x.entity_type || "Atividade", tone: x.action === "deleted" ? "orange" : "blue", hash: `#${x.entity_type || "inicio"}`, label: `${x.actor_name || "Workspace"} · ${x.action || "ação"}`, at: x.created_at })) : ACTIVITY_KINDS.flatMap(([key, kind, tone, label, hash]) => (data[key] || []).map((x) => ({ kind, tone, hash, label: label(x) || kind, at: x.updated_at || x.created_at }))).filter((x) => x.at).sort((a, b) => new Date(b.at) - new Date(a.at));
   let expanded = false;
   const draw = () => {
     const shown = items.slice(0, expanded ? 15 : 5);
