@@ -1502,6 +1502,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .lead-value { text-align: right; }
 @media (max-width: 780px) { .lead-funnel { grid-template-columns: repeat(2, 1fr); } .lead-row { grid-template-columns: 36px minmax(0, 1fr) auto; } .lead-row > .lead-stage-name, .lead-row > .lead-value, .lead-row > .inbox-tag { grid-column: 2 / -1; text-align: left; } }
 
+/* Campanhas: desempenho, criativos e status em um unico fluxo */
+.campaign-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.campaign-metrics .data-card { display: grid; gap: 6px; padding: 17px 19px; border-color: rgb(56 117 219 / 36%); background: linear-gradient(135deg, rgb(31 53 86 / 78%), rgb(8 19 38 / 72%)); }
+.campaign-metrics span, .campaign-metrics small { color: #aebed4; font-size: 11px; }
+.campaign-metrics strong { color: #eff5ff; font-size: 24px; }
+.campaigns-card { border-color: rgb(243 19 45 / 32%); background-color: rgb(14 31 57 / 78%); background-image: linear-gradient(135deg, rgb(3 8 18 / 90%), rgb(8 19 38 / 74%)), url("assets/spiderman-card-bg.png"); background-position: center, 78% center; background-size: cover; }
+.campaign-list { display: grid; gap: 9px; }
+.campaign-row { display: grid; grid-template-columns: 58px minmax(190px, 1fr) 125px 75px auto auto; gap: 13px; align-items: center; padding: 12px; border: 1px solid rgb(145 180 230 / 18%); border-radius: 13px; background: rgb(8 19 38 / 66%); }
+.campaign-thumb { width: 58px; height: 52px; border-radius: 10px; border: 1px solid rgb(120 174 251 / 32%); background-image: linear-gradient(135deg, rgb(3 8 18 / 28%), rgb(243 19 45 / 35%)), var(--campaign-image); background-position: center; background-size: cover; }
+.campaign-main { min-width: 0; }
+.campaign-main > strong, .campaign-stat strong { color: #eff5ff; font-size: 13px; }
+.campaign-main small, .campaign-stat small { display: block; margin-top: 4px; color: #91a4bf; font-size: 11px; }
+.campaign-progress { height: 4px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: rgb(145 180 230 / 18%); }
+.campaign-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f3132d, #78aefb); }
+.campaign-status { padding: 5px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+.campaign-status.is-active { border: 1px solid rgb(91 208 164 / 28%); background: rgb(21 150 106 / 18%); color: #79e0bc; }
+.campaign-status.is-draft { border: 1px solid rgb(245 158 11 / 30%); background: rgb(245 158 11 / 15%); color: #ffd38a; }
+@media (max-width: 780px) { .campaign-metrics { grid-template-columns: 1fr; } .campaign-row { grid-template-columns: 48px minmax(0, 1fr) auto; } .campaign-thumb { width: 48px; height: 48px; } .campaign-stat, .campaign-status { grid-column: 2 / -1; } }
+
 /* Barra superior integrada ao novo fundo escuro */
 .app-topbar {
   position: relative;
