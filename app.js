@@ -866,4 +866,8 @@ openEditDialog = function openEditDialogWithCorrectTitle(kind, item, endpoint) {
   baseOpenEditDialog(kind, item, endpoint);
   const title = createConfig[kind]?.title;
   if (title) dialogTitle.textContent = title.replace(/^Novo\s+/i, "Editar ");
+  Object.entries(item || {}).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field?.type === "checkbox") field.checked = value === true || value === "true" || value === "on"; });
 };
+dialogForm.addEventListener("formdata", (event) => {
+  dialogForm.querySelectorAll('input[type="checkbox"][name]').forEach((input) => { event.formData.delete(input.name); event.formData.append(input.name, input.checked ? "true" : "false"); });
+});
