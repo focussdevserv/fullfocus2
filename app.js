@@ -534,7 +534,7 @@ async function renderAgendaView() {
   });
 }
 
-function renderInboxView() {
+function renderInboxLegacyView() {
   const messages = [
     { sender: "Marina Lopes", subject: "Aprovacao do briefing", preview: "O cliente respondeu e pediu apenas dois ajustes no escopo.", time: "09:42", tag: "Cliente", unread: true },
     { sender: "Equipe FocusDev", subject: "Resumo da semana", preview: "Confira os principais avanços e os proximos marcos do time.", time: "Ontem", tag: "Interno", unread: false },
