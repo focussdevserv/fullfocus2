@@ -681,8 +681,8 @@ function renderModulePage(key, view) {
   const search = dashboardGrid.querySelector(".operations-search input"), filter = dashboardGrid.querySelector(".operations-filter"), tbody = dashboardGrid.querySelector(".operations-tbody");
   const refresh = () => { tbody.innerHTML = makeRows(search.value, filter.value); };
   search.addEventListener("input", refresh); filter.addEventListener("change", refresh);
-  dashboardGrid.querySelector(".operations-new").addEventListener("click", () => window.alert(`${view.action} · formulário pronto para receber os dados do workspace.`));
-  dashboardGrid.querySelector(".operations-export").addEventListener("click", () => window.alert(`Exportação de ${view.title.toLocaleLowerCase("pt-BR")} iniciada.`));
+  dashboardGrid.querySelector(".operations-new").addEventListener("click", () => { if (window.ui?.toast) ui.toast(`${view.action} disponível no módulo correspondente.`, "info"); else dashboardGrid.querySelector("[data-page-status]")?.replaceChildren(document.createTextNode(`${view.action} disponível no módulo correspondente.`)); });
+  dashboardGrid.querySelector(".operations-export").addEventListener("click", () => { const rows = [...dashboardGrid.querySelectorAll(".operations-tbody tr")].map((row) => [...row.children].map((cell) => cell.textContent.trim())); if (window.ui?.downloadCsv) ui.downloadCsv(`${key}.csv`, view.columns, rows); else dashboardGrid.querySelector("[data-page-status]")?.replaceChildren(document.createTextNode("Exportação indisponível nesta tela.")); });
 }
 
 const DASHBOARD_PROFILE_KEY = "focusdev_dashboard_profile";
@@ -713,6 +713,10 @@ function renderWorkspaceView(hash, label) {
     return;
   }
   const render = routeRenderers[key];
+  if (!render) {
+    dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Workspace</p><h2>${escapeHtml(label || "Módulo")}</h2><p>Este módulo ainda não está conectado ao banco nesta versão.</p></div></section>${stateBlock.empty("Nenhum dado disponível", "A tela será habilitada quando o fluxo persistente estiver implementado.")}`;
+    return;
+  }
   if (render) {
     try {
       const result = render(key, label);
