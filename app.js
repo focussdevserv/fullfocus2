@@ -849,6 +849,9 @@ openCreateDialog = function openCreateDialogWithRichFields(kind) {
     const input = dialogFields.querySelector(`[name="${field.name}"]`);
     if (!input) return;
     const label = input.closest("label");
+    if (field.required !== false) input.setAttribute("aria-required", "true");
+    if (field.type === "email") input.setAttribute("autocomplete", "email");
+    if (field.type === "tel") input.setAttribute("autocomplete", "tel");
     if (field.type === "textarea") {
       const area = document.createElement("textarea");
       [...input.attributes].forEach((attribute) => area.setAttribute(attribute.name, attribute.value));
