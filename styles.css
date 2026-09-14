@@ -1265,3 +1265,17 @@ body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.da
   background-repeat: no-repeat;
   background-size: cover, 94% auto;
 }
+
+/* Fundo compartilhado por Dashboard, Tarefas, Agenda e todas as telas internas */
+.app-shell {
+  background-color: #030812;
+  background-image: linear-gradient(105deg, rgb(3 8 18 / 96%) 0%, rgb(3 8 18 / 88%) 52%, rgb(3 8 18 / 62%) 100%), url("assets/menu-spider.png");
+  background-position: center, right bottom;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-size: cover, min(46vw, 620px) auto;
+}
+.app-content { background: transparent; }
+@media (max-width: 780px) {
+  .app-shell { background-position: center, center bottom; background-size: cover, min(78vw, 420px) auto; }
+}
