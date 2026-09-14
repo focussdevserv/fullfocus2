@@ -1046,6 +1046,11 @@ svg {
 .hero-link { flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: #fff; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .hero-link span, .text-action span { margin-left: 4px; font-size: 15px; }
 .hero-character { position: absolute; top: -16px; right: -4px; width: 220px; height: 210px; object-fit: contain; object-position: top right; filter: drop-shadow(0 12px 12px rgb(4 27 85 / 22%)); pointer-events: none; }
+.dashboard-toolbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 2px 0; color: var(--ink); }
+.dashboard-toolbar > div { display: grid; gap: 3px; }
+.dashboard-toolbar strong { font-size: 13px; }
+.dashboard-toolbar label { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.dashboard-toolbar select { min-height: 34px; padding: 0 28px 0 10px; border: 1px solid rgb(145 180 230 / 34%); border-radius: 9px; background: rgb(12 27 51 / 72%); color: #eaf2ff; font: inherit; }
 .metric-card { position: relative; display: flex; min-height: 132px; align-items: flex-start; justify-content: space-between; overflow: hidden; border: 0; color: #fff; transition: transform .18s ease, box-shadow .18s ease; }
 .metric-card:hover { border-color: transparent; box-shadow: 0 14px 28px rgb(21 54 94 / 16%); transform: translateY(-3px); }
 .metric-pink { background: linear-gradient(135deg, #d34b92, #e165a2); }
@@ -1060,6 +1065,12 @@ svg {
 .metric-purple { background-image: linear-gradient(135deg, rgb(64 40 151 / 45%), rgb(3 6 18 / 38%)), url("assets/spiderman-card-web.png"); background-position: center, center center; background-size: cover; }
 .metric-blue { background-image: linear-gradient(135deg, rgb(20 116 177 / 45%), rgb(2 8 18 / 38%)), url("assets/spiderman-card-duo.png"); background-position: center, center center; background-size: cover; }
 .metric-orange { background-image: linear-gradient(135deg, rgb(194 72 23 / 45%), rgb(3 6 16 / 38%)), url("assets/spiderman-card-bg.png"); background-position: center, center center; background-size: cover; }
+.metric-green { background: linear-gradient(135deg, #138866, #1eae81); }
+.metric-red { background: linear-gradient(135deg, #9d263b, #dc4557); }
+.metric-cyan { background: linear-gradient(135deg, #176b97, #248fb5); }
+.metric-gold { background: linear-gradient(135deg, #9b6925, #c58a35); }
+.metric-green, .metric-red, .metric-cyan, .metric-gold { background-image: linear-gradient(135deg, rgb(3 10 24 / 32%), rgb(3 10 24 / 58%)), url("assets/spiderman-card-bg.png"); background-position: center, center; background-size: cover; }
+.metric-glyph { position: relative; z-index: 1; display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgb(255 255 255 / 38%); border-radius: 10px; color: #fff; font-size: 17px; font-weight: 800; }
 .metric-card::before { content: ""; background-repeat: no-repeat; background-position: center; background-size: 21px; }
 .metric-pink::before, .metric-blue::before { background-image: url("assets/icons8-spiderman-head.png"); }
 .metric-purple::before, .metric-orange::before { background-image: url("assets/icons8-spiderman-new.png"); }
@@ -1084,6 +1095,15 @@ svg {
 .quick-icon { background-repeat: no-repeat; background-position: center; background-size: 19px; font-size: 0; }
 .quick-actions button:nth-child(odd) .quick-icon { background-image: url("assets/icons8-spiderman-head.png"); }
 .quick-actions button:nth-child(even) .quick-icon { background-image: url("assets/icons8-spiderman-new.png"); }
+.dashboard-pulse { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.pulse-card { display: grid; min-height: 160px; gap: 8px; padding: 18px 20px; background-image: linear-gradient(135deg, rgb(20 43 76 / 88%), rgb(8 19 38 / 78%)), url("assets/spiderman-card-web.png"); background-position: center, 86% center; background-size: cover; border-color: rgb(111 164 246 / 28%); }
+.pulse-card h2 { margin: 0; font-size: 15px; }
+.pulse-card > strong { font-size: 28px; letter-spacing: -.05em; }
+.pulse-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.pulse-card a { color: #8ebcff; font-size: 11px; font-weight: 800; text-decoration: none; }
+.pulse-danger { color: #ff7180; }
+.pulse-breakdown { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 10px; }
+.pulse-breakdown b { margin-left: 3px; color: #eef5ff; }
 .quick-icon.blue { background-color: rgb(63 118 214 / 28%); color: #8bb9ff; } .quick-icon.pink { background-color: rgb(211 82 135 / 28%); color: #ff9fc5; } .quick-icon.orange { background-color: rgb(213 138 34 / 28%); color: #ffc66d; } .quick-icon.green { background-color: rgb(21 150 106 / 28%); color: #79e0bc; }
 .quick-actions button:nth-child(odd) .quick-icon { background-image: url("assets/icons8-spiderman-head.png"); }
 .quick-actions button:nth-child(even) .quick-icon { background-image: url("assets/icons8-spiderman-new.png"); }
@@ -1110,6 +1130,7 @@ svg {
 .task-progress > div { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: 20px; background: #edf2f9; }
 .task-progress i { display: block; width: 33%; height: 100%; border-radius: inherit; background: var(--blue); }
 @media (max-width: 780px) { .topbar-create { display: none; } .hero-character { top: -8px; right: -28px; width: 142px; height: 145px; opacity: .9; } .hero-weather { right: 14px; bottom: 14px; min-width: 158px; padding: 7px 9px; } .weather-symbol { width: 26px; height: 26px; font-size: 17px; } .hero-weather strong { font-size: 15px; } .hero-actions { gap: 12px; } .metric-card { min-height: 116px; padding: 15px; } .metric-card strong { font-size: 19px; } .metric-chart { width: 65%; } }
+@media (max-width: 780px) { .dashboard-toolbar { align-items: flex-start; flex-direction: column; } .dashboard-toolbar label { width: 100%; justify-content: space-between; } .dashboard-toolbar select { flex: 1; } .dashboard-pulse { grid-template-columns: 1fr; } }
 @media (max-width: 780px) { .topbar-profile { display: none; } }
 @media (max-width: 780px) { .dashboard-hero { min-height: 205px; } .hero-message { max-width: calc(100% - 145px); } .hero-weather { right: 14px; bottom: 14px; } }
 @media (max-width: 480px) { .hero-message { max-width: 100%; } .hero-weather { top: 14px; right: 14px; bottom: auto; transform: scale(.88); transform-origin: top right; } .dashboard-hero h2 { max-width: 230px; } .dashboard-hero .hero-actions { margin-top: 15px; } }

@@ -780,11 +780,29 @@ function bindCustomerInteractions(key) {
   dashboardGrid.querySelector(".cnpj-form")?.addEventListener("submit", (event) => { event.preventDefault(); const input = dashboardGrid.querySelector("#cnpj-input"); const digits = input.value.replace(/\D/g, ""); const result = dashboardGrid.querySelector(".cnpj-result"); result.innerHTML = digits.length >= 14 ? `<div class="cnpj-company-result"><span class="company-logo">A</span><div><p class="card-kicker">Empresa encontrada</p><h2>Acme Inc.</h2><p>12.345.678/0001-90 · Comércio e serviços digitais</p></div><span class="status-pill">Ativa</span><button class="button button-secondary" type="button" data-toast="Acme Inc. salva na sua base de empresas.">Salvar empresa</button></div>` : `<div class="cnpj-error"><strong>CNPJ incompleto</strong><p>Confira os 14 dígitos e tente novamente.</p></div>`; bindCustomerInteractions(key); });
 }
 
+const DASHBOARD_PROFILE_KEY = "focusdev_dashboard_profile";
+function applyDashboardProfile(profile = localStorage.getItem(DASHBOARD_PROFILE_KEY) || "manager") {
+  const selector = document.querySelector("#dashboard-profile");
+  const label = document.querySelector("#dashboard-profile-label");
+  if (!selector || !label) return;
+  selector.value = profile;
+  selector.onchange = (event) => { localStorage.setItem(DASHBOARD_PROFILE_KEY, event.target.value); applyDashboardProfile(event.target.value); };
+  const labels = { manager: "Visão geral do gestor", sales: "Foco comercial do vendedor", finance: "Controle financeiro", operations: "Execução operacional" };
+  label.textContent = labels[profile] || labels.manager;
+  const cards = [...document.querySelectorAll(".metrics .metric-card")];
+  cards.forEach((card, index) => {
+    const finance = [4, 5, 6].includes(index), commercial = index === 1, operational = [2, 3, 7].includes(index);
+    card.hidden = profile === "sales" ? finance : profile === "finance" ? commercial || index === 3 : profile === "operations" ? commercial || finance : false;
+  });
+  document.querySelectorAll(".dashboard-pulse .pulse-card").forEach((card, index) => { card.hidden = profile === "sales" ? index === 1 : profile === "finance" ? index === 0 : false; });
+}
+
 function renderWorkspaceView(hash, label) {
   if (!dashboardGrid) return;
   const key = hash?.replace("#", "");
   if (key === "inicio") {
     dashboardGrid.innerHTML = initialDashboardMarkup;
+    applyDashboardProfile();
     return;
   }
   if (key === "crm") { renderCRMView(); return; }
