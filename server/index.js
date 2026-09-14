@@ -239,6 +239,23 @@ app.use("/api", async (req, res, next) => {
     return next();
   } catch { return res.status(503).json({ error: "Não foi possível preparar a exclusão recuperável." }); }
 });
+const refreshProjectProgress = async (projectId, org) => {
+  if (!projectId || !org) return;
+  const totals = await pool.query("select count(*)::int total,count(*) filter (where status='done')::int completed from tasks where project_id=$1 and organization_id=$2", [projectId, org]);
+  const total = Number(totals.rows[0]?.total || 0), completed = Number(totals.rows[0]?.completed || 0), progress = total ? Math.round((completed / total) * 100) : 0;
+  await pool.query("update projects set progress=$1,updated_at=now() where id=$2 and organization_id=$3", [progress, projectId, org]);
+};
+app.use("/api/tasks", async (req, res, next) => {
+  const org = tenant(req, res); if (!org) return;
+  let projectId = req.body?.project_id || null;
+  const taskId = req.path.split("/").filter(Boolean)[0];
+  if (["PATCH", "DELETE"].includes(req.method) && /^\d+$/.test(taskId || "")) {
+    const existing = await pool.query("select project_id from tasks where id=$1 and organization_id=$2", [taskId, org]).catch(() => ({ rows: [] }));
+    projectId = projectId || existing.rows[0]?.project_id || null;
+  }
+  res.on("finish", () => { if (res.statusCode >= 200 && res.statusCode < 300 && projectId) refreshProjectProgress(projectId, org).catch(() => {}); });
+  return next();
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
