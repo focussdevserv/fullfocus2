@@ -93,13 +93,15 @@ const ui = (() => {
     </form>`;
     document.body.append(backdrop);
     const formEl = backdrop.querySelector("form"), status = backdrop.querySelector(".ui-modal-status");
-    const close = () => { backdrop.remove(); document.removeEventListener("keydown", onKey); };
+    let dirty = false;
+    const close = (force = false) => { const saving = formEl.querySelector("[type=submit]")?.disabled; if (!force && !saving && dirty && !window.confirm("Existem alterações não salvas. Sair mesmo assim?")) return; backdrop.remove(); document.removeEventListener("keydown", onKey); };
     const onKey = (event) => { if (event.key === "Escape") close(); };
     document.addEventListener("keydown", onKey);
     backdrop.querySelector(".ui-modal-close").addEventListener("click", close);
     backdrop.querySelector("[data-cancel]").addEventListener("click", close);
     backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
-    backdrop.querySelector("[data-danger]")?.addEventListener("click", async () => { status.textContent = ""; try { await danger.onClick(); close(); } catch (error) { status.textContent = error.message; } });
+    formEl.addEventListener("input", () => { dirty = true; });
+    backdrop.querySelector("[data-danger]")?.addEventListener("click", async () => { status.textContent = ""; try { await danger.onClick(); close(true); } catch (error) { status.textContent = error.message; } });
     formEl.addEventListener("submit", async (event) => {
       event.preventDefault();
       const missing = fields.find((f) => f.required !== false && f.type !== "checkbox" && !String(formEl.elements[f.name]?.value ?? "").trim());
