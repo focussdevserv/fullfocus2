@@ -1,3 +1,5 @@
+import { normalizeNumber, sendWhatsappText } from "./routes/whatsapp.js";
+
 const SOURCE_TABLES = {
   lead_created: "leads",
   task_overdue: "tasks",
@@ -30,7 +32,7 @@ async function findSources(client, automation, now) {
   return result.rows;
 }
 
-async function executeAction(client, automation, source) {
+async function executeAction(client, automation, source, { sendWhatsApp = sendWhatsappText, pool } = {}) {
   const config = automation.config && typeof automation.config === "object" ? automation.config : {};
   const message = sourceMessage(automation.trigger, source);
   if (automation.action === "notify") {
@@ -56,6 +58,12 @@ async function executeAction(client, automation, source) {
   }
   if (automation.action === "send_message") {
     const subject = String(config.subject || `Automação: ${automation.name}`).trim().slice(0, 240);
+    if (config.channel === "whatsapp") {
+      const number = normalizeNumber(config.number || source.phone || source.remote_number);
+      if (number.length < 10) throw new Error("A automação WhatsApp precisa de um número de destino válido.");
+      await sendWhatsApp(pool, automation.organization_id, number, String(config.body || message).slice(0, 4000));
+      return { action: "send_message", channel: "whatsapp", number, message };
+    }
     let conversationId = Number(config.conversation_id);
     if (!Number.isSafeInteger(conversationId) || conversationId < 1) {
       const conversation = await client.query(
@@ -100,7 +108,7 @@ export async function runSubscriptionBillingCycle(pool, today = new Date()) {
   return created;
 }
 
-export async function runAutomationCycle(pool, now = new Date()) {
+export async function runAutomationCycle(pool, now = new Date(), options = {}) {
   const client = await pool.connect();
   let processed = 0;
   try {
@@ -115,7 +123,7 @@ export async function runAutomationCycle(pool, now = new Date()) {
             [automation.organization_id, automation.id, automation.trigger, source.id],
           );
           if (!claim.rowCount) { await client.query("rollback"); continue; }
-          const result = await executeAction(client, automation, source);
+          const result = await executeAction(client, automation, source, { ...options, pool });
           await client.query("update automation_runs set result=$1 where id=$2", [result, claim.rows[0].id]);
           await client.query("update automations set runs=coalesce(runs,0)+1,updated_at=now() where id=$1 and organization_id=$2", [automation.id, automation.organization_id]);
           await client.query("commit");

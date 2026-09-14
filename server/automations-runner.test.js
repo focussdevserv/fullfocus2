@@ -36,3 +36,21 @@ test("gera recebível de assinatura vencida e avança o período", async () => {
   assert.equal(calls.filter((call) => call.sql.startsWith("insert into receivables")).length, 1);
   assert.match(calls.find((call) => call.sql.startsWith("update subscriptions")).sql, /1 month/);
 });
+
+test("envia automação WhatsApp para o telefone da origem", async () => {
+  const calls = []; const sent = [];
+  const client = {
+    async query(sql, params) {
+      calls.push({ sql, params });
+      if (sql.startsWith("select * from automations")) return { rows: [{ id: 5, organization_id: "org", trigger: "lead_created", action: "send_message", config: { channel: "whatsapp", body: "Olá lead" } }] };
+      if (sql.startsWith("select s.* from leads")) return { rows: [{ id: 10, name: "Lead WhatsApp", phone: "+55 (11) 99999-0000" }] };
+      if (sql.startsWith("insert into automation_runs")) return { rowCount: 1, rows: [{ id: 13 }] };
+      return { rowCount: 1, rows: [] };
+    }, release() {},
+  };
+  const processed = await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z"), {
+    sendWhatsApp: async (...args) => { sent.push(args); return { id: "msg-1" }; },
+  });
+  assert.equal(processed, 1);
+  assert.deepEqual(sent[0].slice(1), ["org", "5511999990000", "Olá lead"]);
+});
