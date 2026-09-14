@@ -19,7 +19,7 @@ async function renderFormsScreen() {
     dashboardGrid.querySelectorAll("[data-form-preview]").forEach((button) => button.addEventListener("click", () => { const item = items.find((entry) => String(entry.id) === String(button.dataset.formPreview)); if (!item) return; const schema = Array.isArray(item.schema) ? item.schema : Array.isArray(item.schema?.fields) ? item.schema.fields : []; ui.drawer({ title: item.name, subtitle: formKind[item.kind] || item.kind || "Formulário", html: `<div class="template-drawer-content"><h3>Campos</h3>${schema.length ? `<ol>${schema.map((field) => `<li>${formEsc(typeof field === "string" ? field : field?.label || field?.name || "Campo")}</li>`).join("")}</ol>` : "<p>Nenhum campo configurado.</p>"}${item.automation_config ? `<h3>Automação</h3><pre>${formEsc(JSON.stringify(item.automation_config, null, 2))}</pre>` : ""}</div>` }); }));
     dashboardGrid.querySelectorAll("[data-form-responses]").forEach((button) => button.addEventListener("click", async () => { button.disabled = true; try { const data = await api(`/api/forms/${button.dataset.formResponses}/responses`), rows = data.responses || []; const html = rows.length ? rows.map((entry, index) => `<article class="data-card"><h4>Envio ${data.pagination.total - data.pagination.offset - index}</h4><pre>${formEsc(JSON.stringify(entry.responses || {}, null, 2))}</pre></article>`).join("") : "<p>Nenhuma resposta recebida ainda.</p>"; ui.drawer({ title: data.form?.name || "Respostas", subtitle: `${data.pagination.total || 0} envio(s)`, html: `<div class="template-drawer-content">${html}</div>` }); } catch (error) { toast(error.message, "error"); } finally { button.disabled = false; } }));
     dashboardGrid.querySelectorAll("[data-form-open]").forEach((button) => button.addEventListener("click", () => window.open(`${location.origin}/form/${encodeURIComponent(button.dataset.formOpen)}`, "_blank", "noopener,noreferrer")));
-    dashboardGrid.querySelectorAll("[data-form-edit]").forEach((button) => button.addEventListener("click", () => { const item = items.find((entry) => String(entry.id) === String(button.dataset.formEdit)); if (item) openEditDialog("form", item, `/api/forms/${item.id}`); }));
+    dashboardGrid.querySelectorAll("[data-form-edit]").forEach((button) => button.addEventListener("click", () => { const item = items.find((entry) => String(entry.id) === String(button.dataset.formEdit)); if (item) { const editable = { ...item }; ["schema", "automation_config"].forEach((key) => { if (editable[key] && typeof editable[key] === "object") editable[key] = JSON.stringify(editable[key], null, 2); }); openEditDialog("form", editable, `/api/forms/${item.id}`); } }));
     dashboardGrid.querySelectorAll("[data-form-delete]").forEach((button) => button.addEventListener("click", () => ui.confirmInline(button, { text: "Excluir formulário?", onConfirm: async () => { await api(`/api/forms/${button.dataset.formDelete}`, { method: "DELETE" }); toast("Formulário excluído.", "success"); renderFormsScreen(); } })));
   } catch (error) { dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Automações</p><h2>${title}</h2></div></section>${stateBlock.error(error.message, "form-retry")}`; dashboardGrid.querySelector(".state-retry")?.addEventListener("click", renderFormsScreen); }
 }
@@ -29,6 +29,15 @@ dashboardGrid.addEventListener("click", (event) => { if (event.target.closest(".
 
 const formPublishObserver = new MutationObserver(() => {
   if (location.hash.replace(/^#/, "") !== "formularios") return;
+  const list = dashboardGrid.querySelector(".automation-list");
+  // A estrutura.js também oferece o link público; marcar a lista evita
+  // duplicar a ação e mantém aqui a versão que abre o formulário.
+  if (list) {
+    list.dataset.formLinks = "1";
+    list.querySelectorAll(".template-actions button:not([data-form-preview]):not([data-form-open]):not([data-form-edit]):not([data-form-delete]):not([data-form-responses]):not([data-form-publish])").forEach((button) => {
+      if (["Gerar link", "Copiar link"].includes(button.textContent.trim())) button.remove();
+    });
+  }
   dashboardGrid.querySelectorAll("[data-form-row]").forEach((row) => {
     const actions = row.querySelector(".template-actions"); if (!actions || actions.querySelector("[data-form-publish]")) return;
     const edit = row.querySelector("[data-form-edit]"); if (!edit) return;
