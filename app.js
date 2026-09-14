@@ -80,6 +80,7 @@ window.setInterval(pollBrowserNotifications, 60000);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SESSION_KEY = "focusdev_session";
+let authTransition = 0;
 // Simula a latência da API enquanto o endpoint de autenticação não existe.
 const FAKE_REQUEST_MS = 650;
 
@@ -186,11 +187,20 @@ function saveSession(user) {
   try { localStorage.setItem(SESSION_KEY, JSON.stringify({ id: user.id, name: user.name, email: user.email })); } catch { /* armazenamento indisponível */ }
 }
 
-function restoreSession() {
+async function restoreSession() {
+  const transition = authTransition;
   try {
-    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-    if (session?.id && session?.name) showApp(session);
-  } catch { localStorage.removeItem(SESSION_KEY); }
+    const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    if (transition !== authTransition) return;
+    saveSession(data.user);
+    showApp(data.user);
+  } catch {
+    if (transition !== authTransition) return;
+    localStorage.removeItem(SESSION_KEY);
+    showLogin();
+  }
 }
 
 async function syncDashboard() {
@@ -283,7 +293,7 @@ loginForm.addEventListener("submit", async (event) => {
     const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: emailInput.value.trim(), password: passwordInput.value }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Não foi possível entrar.");
-    setLoading(loginSubmit, false); clearForm(loginForm, loginStatus); passwordInput.type = "password"; passwordToggle.setAttribute("aria-pressed", "false"); passwordToggle.setAttribute("aria-label", "Mostrar senha"); saveSession(data.user); showApp(data.user);
+    setLoading(loginSubmit, false); clearForm(loginForm, loginStatus); passwordInput.type = "password"; passwordToggle.setAttribute("aria-pressed", "false"); passwordToggle.setAttribute("aria-label", "Mostrar senha"); authTransition += 1; saveSession(data.user); showApp(data.user);
   } catch (error) { setLoading(loginSubmit, false); setStatus(loginStatus, error.message, "error"); }
 });
 
@@ -409,17 +419,26 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+const navItemsByHash = new Map([...document.querySelectorAll(".nav-item")].map((item) => [item.getAttribute("href"), item]));
+function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
+  const hash = requestedHash || "#inicio";
+  const item = navItemsByHash.get(hash) || navItemsByHash.get("#inicio");
+  if (!item) return;
+  if (window.location.hash !== item.getAttribute("href")) history.replaceState(null, "", item.getAttribute("href"));
+  document.querySelector(".nav-item.is-active")?.classList.remove("is-active");
+  item.classList.add("is-active");
+  const label = item.textContent.trim();
+  appTitle.textContent = item.getAttribute("href") === "#inicio" ? "Bom dia, FocusDev" : label;
+  document.querySelector(".eyebrow").textContent = item.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
+  renderWorkspaceView(item.getAttribute("href"), label);
+  closeSidebar();
+}
 document.querySelectorAll(".nav-item").forEach((item) => {
   item.addEventListener("click", () => {
-    document.querySelector(".nav-item.is-active")?.classList.remove("is-active");
-    item.classList.add("is-active");
-    const label = item.textContent.trim();
-    appTitle.textContent = item.getAttribute("href") === "#inicio" ? "Bom dia, FocusDev" : label;
-    document.querySelector(".eyebrow").textContent = item.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
-    renderWorkspaceView(item.getAttribute("href"), label);
-    closeSidebar();
+    renderHashRoute(item.getAttribute("href"));
   });
 });
+window.addEventListener("hashchange", renderHashRoute);
 
 const navIconPaths = {
   inicio: '<path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-6h6v6"/>',
@@ -463,7 +482,6 @@ document.querySelectorAll(".nav-item").forEach((item) => {
 
 const views = {
   tarefas: { kicker: "Meu dia", title: "Tarefas", intro: "Organize prioridades e acompanhe o trabalho da equipe.", columns: ["Tarefa", "Responsável", "Prazo", "Status"], rows: [["Revisar briefing do cliente", "Alex Martins", "Hoje, 14:00", "Em andamento"], ["Preparar relatório mensal", "Joana Silva", "Amanhã", "A fazer"], ["Publicar nova campanha", "Rafael Costa", "20 Jun", "Concluída"], ["Validar pagamentos pendentes", "Marina Lopes", "22 Jun", "A fazer"]] },
-  leads: { kicker: "CRM", title: "Leads", intro: "Gerencie oportunidades e acompanhe cada conversa.", columns: ["Lead", "Empresa", "Origem", "Etapa"], rows: [["Bruno Almeida", "Nexum", "Indicação", "Qualificação"], ["Carolina Mendes", "Vértice", "Site", "Proposta"], ["Diego Nunes", "Orbit", "Campanha", "Novo lead"], ["Fernanda Reis", "Acme Inc.", "Evento", "Negociação"]] },
   projetos: { kicker: "Operação", title: "Projetos", intro: "Veja o andamento dos projetos e os próximos marcos.", columns: ["Projeto", "Cliente", "Progresso", "Saúde"], rows: [["Website institucional", "Acme Inc.", "78%", "No prazo"], ["Aplicativo mobile", "Vértice", "46%", "Atenção"], ["Campanha de lançamento", "Nexum", "92%", "No prazo"], ["Portal do cliente", "Orbit", "28%", "No prazo"]] },
   receitas: { kicker: "Financeiro", title: "Receitas", intro: "Acompanhe entradas, vencimentos e recebimentos.", columns: ["Descrição", "Cliente", "Vencimento", "Valor"], rows: [["Mensalidade · Website", "Acme Inc.", "Hoje", "R$ 8.400"], ["Projeto · Aplicativo mobile", "Vértice", "22 Jun", "R$ 14.800"], ["Suporte mensal", "Nexum", "30 Jun", "R$ 5.200"], ["Consultoria", "Orbit", "05 Jul", "R$ 3.900"]] },
 };
@@ -579,11 +597,30 @@ function renderInboxView() {
 }
 
 function renderLeadsView() {
+  const stageConfig = [["new", "Novo lead", "#3b82f6"], ["contacted", "Contato", "#8b5cf6"], ["qualified", "Qualificação", "#8b5cf6"], ["proposal", "Proposta", "#f59e0b"], ["won", "Ganho", "#22c55e"], ["lost", "Perdido", "#f3132d"]];
+  const stageLabels = Object.fromEntries(stageConfig.map(([status, label]) => [status, label]));
+  const renderShell = (leads, message = "") => {
+    const counts = leads.reduce((result, lead) => { result[lead.status] = (result[lead.status] || 0) + 1; return result; }, {});
+    const stages = stageConfig.slice(0, 4).map(([status, name, color]) => [name, String(counts[status] || 0), color]);
+    const rows = message ? `<p class="agenda-empty" role="${message.includes("Não foi") ? "alert" : "status"}">${escapeHtml(message)}</p>` : leads.length ? leads.map((lead) => {
+      const name = String(lead.name || "Sem nome"), initials = name.split(" ").map((part) => part[0]).join("").slice(0, 2);
+      const stage = stageLabels[lead.status] || lead.status || "Novo lead";
+      const value = lead.amount == null || lead.amount === "" ? "—" : `R$ ${Number(lead.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+      return `<article class="lead-row"><span class="lead-avatar">${escapeHtml(initials)}</span><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(lead.company || "Sem empresa")}</small></div><span class="lead-stage-name">${escapeHtml(stage)}</span><strong class="lead-value">${escapeHtml(value)}</strong><span class="inbox-tag">${escapeHtml(lead.source || "Sem origem")}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`;
+    }).join("") : '<p class="agenda-empty" role="status">Nenhum lead cadastrado.</p>';
+    dashboardGrid.innerHTML = `<section class="page-intro leads-intro"><div><p class="card-kicker">CRM</p><h2>Leads</h2><p>Transforme conversas em oportunidades e mantenha cada etapa sob controle.</p></div><button class="button button-primary compact-action lead-new" type="button">+ Novo lead</button></section><section class="lead-funnel">${stages.map(([name, count, color]) => `<article class="lead-stage" style="--stage-color:${color}"><span>${name}</span><strong>${count}</strong><small>oportunidades</small></article>`).join("")}</section><section class="data-card leads-card"><div class="section-heading"><div><p class="card-kicker">Pipeline comercial</p><h2>Oportunidades recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="lead-list">${rows}</div></section>`;
+    dashboardGrid.querySelector(".lead-new")?.addEventListener("click", () => openCreateDialog("lead"));
+  };
+  renderShell([], "Carregando leads...");
+  fetch("/api/leads", { credentials: "same-origin" }).then(async (response) => {
+    const data = response.ok ? await response.json() : {};
+    if (!response.ok) throw new Error(data.error || "Não foi possível carregar os leads.");
+    renderShell(Array.isArray(data.leads) ? data.leads : []);
+  }).catch((error) => renderShell([], error.message || "Não foi possível carregar os leads."));
+}
+
+function renderLeadsLegacyView() {
   const leads = [
-    ["Bruno Almeida", "Nexum", "Qualificacao", "R$ 24.000", "Novo lead"],
-    ["Carolina Mendes", "Vertice", "Proposta", "R$ 18.500", "Proposta"],
-    ["Diego Nunes", "Orbit", "Negociacao", "R$ 31.200", "Negociacao"],
-    ["Fernanda Reis", "Acme Inc.", "Contato", "R$ 9.800", "Novo lead"]
   ];
   const stages = [["Novo lead", "2", "#3b82f6"], ["Qualificacao", "4", "#8b5cf6"], ["Proposta", "2", "#f59e0b"], ["Negociacao", "1", "#f3132d"]];
   dashboardGrid.innerHTML = `<section class="page-intro leads-intro"><div><p class="card-kicker">CRM</p><h2>Leads</h2><p>Transforme conversas em oportunidades e mantenha cada etapa sob controle.</p></div><button class="button button-primary compact-action lead-new" type="button">+ Novo lead</button></section><section class="lead-funnel">${stages.map(([name, count, color]) => `<article class="lead-stage" style="--stage-color:${color}"><span>${name}</span><strong>${count}</strong><small>oportunidades</small></article>`).join("")}</section><section class="data-card leads-card"><div class="section-heading"><div><p class="card-kicker">Pipeline comercial</p><h2>Oportunidades recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="lead-list">${leads.map(([name, company, stage, value, tag]) => `<article class="lead-row"><span class="lead-avatar">${name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div><strong>${name}</strong><small>${company}</small></div><span class="lead-stage-name">${stage}</span><strong class="lead-value">${value}</strong><span class="inbox-tag">${tag}</span><button class="inbox-more" type="button" aria-label="Mais opcoes">•••</button></article>`).join("")}</div></section>`;
@@ -870,14 +907,16 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-topLogoutButton?.addEventListener("click", () => {
+topLogoutButton?.addEventListener("click", async () => {
+  authTransition += 1;
   closeAccountMenu();
+  await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
   localStorage.removeItem(SESSION_KEY);
   showLogin();
   emailInput.focus();
 });
 
-restoreSession();
-const initialRoute = document.querySelector(`.nav-item[href="${window.location.hash || "#inicio"}"]`);
-if (initialRoute) initialRoute.click();
+restoreSession().then(() => {
+  renderHashRoute();
+});
 }

@@ -1774,3 +1774,52 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .global-search input::placeholder { color: rgb(221 232 249 / 62%); }
 .topbar-profile .account-name small, .topbar-profile .account-chevron { color: rgb(205 220 243 / 70%); }
 .notification-button span { border-color: #091832; }
+
+/* Estado de sincronização: torna a origem dos dados explícita sem alterar os
+   contratos de renderização mantidos por app.js. */
+.workspace-data-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 8px 0 0;
+  color: rgb(205 220 243 / 74%);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.workspace-data-status strong { color: #8de1bb; font-weight: 700; }
+.status-indicator { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #55e0a6; box-shadow: 0 0 0 3px rgb(85 224 166 / 16%); }
+.workspace-availability {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 16px;
+  border: 1px solid rgb(255 205 100 / 25%);
+  border-radius: 13px;
+  background: rgb(70 49 18 / 35%);
+  color: #f9e3ae;
+}
+.availability-mark { display: grid; width: 22px; height: 22px; flex: 0 0 22px; place-items: center; border-radius: 7px; background: rgb(255 205 100 / 16%); color: #ffd267; font-size: 12px; font-weight: 800; }
+.workspace-availability strong { display: block; font-size: 12px; }
+.workspace-availability p { margin: 3px 0 0; color: #cbbd9d; font-size: 11px; line-height: 1.45; }
+.data-scope-note { display: block; margin-top: 4px; color: #94a9ca; font-size: 10px; font-weight: 500; }
+.is-loading { position: relative; overflow: hidden; color: transparent !important; }
+.is-loading::after { position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 10%) 45%, transparent 70%); content: ""; animation: state-shimmer 1.5s ease-in-out infinite; }
+.is-empty, .unavailable { display: grid; min-height: 96px; place-items: center; padding: 20px; border: 1px dashed rgb(145 180 230 / 30%); border-radius: 12px; background: rgb(8 19 38 / 28%); color: #9aacc7; font-size: 12px; text-align: center; }
+.is-empty strong, .unavailable strong { display: block; margin-bottom: 4px; color: #d9e5f7; font-size: 13px; }
+.is-empty p, .unavailable p { max-width: 42ch; margin: 0; line-height: 1.5; }
+.is-error { border-color: rgb(243 19 45 / 42%) !important; background: rgb(88 18 36 / 24%) !important; color: #ffabb5 !important; }
+@keyframes state-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+@media (max-width: 780px) {
+  .app-content { padding: 24px 16px 36px; }
+  .app-topbar { align-items: flex-start; padding-top: 6px; }
+  .workspace-data-status { max-width: 34ch; }
+  .workspace-availability { padding: 12px; }
+}
+
+@media (max-width: 420px) {
+  .workspace-data-status span:last-child { flex-basis: 100%; padding-left: 15px; }
+  .workspace-availability p { font-size: 10px; }
+}

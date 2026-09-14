@@ -1,5 +1,7 @@
 # FullFocuss API
 
+As rotas de domÃ­nio exigem sessÃ£o autenticada. O login emite o cookie HttpOnly `focus_session`; o contexto da organizaÃ§Ã£o vem da sessÃ£o, e `organization_id` nÃ£o Ã© aceito no corpo. `POST /api/auth/register` e `POST /api/auth/login` sÃ£o pÃºblicos; `GET /api/auth/me` e `POST /api/auth/logout` gerenciam a sessÃ£o. Defina `SESSION_SECRET` forte em ambientes compartilhados.
+
 Todas as entidades pertencem a uma organização. Envie `x-organization-id` (UUID) em cada requisição; para compatibilidade com o cliente legado, a ausência do cabeçalho usa a organização interna `00000000-0000-0000-0000-000000000001`. Nenhuma rota aceita `organization_id` no corpo para evitar que o cliente altere o tenant do registro.
 
 ## Rotas
