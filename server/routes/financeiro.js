@@ -118,8 +118,11 @@ export function register(app, ctx) {
   app.get("/api/finance/summary", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const months = Math.min(24, Math.max(1, Number.parseInt(req.query.months, 10) || 6));
+    const values = [org, months], filters = [];
+    for (const field of ["client_id", "project_id"]) if (req.query?.[field] && /^\d+$/.test(String(req.query[field]))) { values.push(String(req.query[field])); filters.push(`${field}=$${values.length}`); }
+    const filterSql = filters.length ? ` and ${filters.join(" and ")}` : "";
     try {
-      const q = await pool.query(`with months as (select (date_trunc('month', now()) - make_interval(months => n))::date as month from generate_series(0, $2::int - 1) as n), rev as (select date_trunc('month', coalesce(paid_at, due_at))::date as month, sum(amount) as amount from revenues where organization_id=$1 and paid_at is not null group by 1), exp as (select date_trunc('month', coalesce(paid_at, due_at))::date as month, sum(amount) as amount from expenses where organization_id=$1 and paid_at is not null group by 1) select to_char(m.month, 'YYYY-MM') as month, coalesce(r.amount, 0)::float8 as revenue, coalesce(e.amount, 0)::float8 as expense, (coalesce(r.amount, 0) - coalesce(e.amount, 0))::float8 as result from months m left join rev r on r.month = m.month left join exp e on e.month = m.month order by m.month`, [org, months]);
+      const q = await pool.query(`with months as (select (date_trunc('month', now()) - make_interval(months => n))::date as month from generate_series(0, $2::int - 1) as n), rev as (select date_trunc('month', coalesce(paid_at, due_at))::date as month, sum(amount) as amount from revenues where organization_id=$1 and paid_at is not null${filterSql} group by 1), exp as (select date_trunc('month', coalesce(paid_at, due_at))::date as month, sum(amount) as amount from expenses where organization_id=$1 and paid_at is not null${filterSql} group by 1) select to_char(m.month, 'YYYY-MM') as month, coalesce(r.amount, 0)::float8 as revenue, coalesce(e.amount, 0)::float8 as expense, (coalesce(r.amount, 0) - coalesce(e.amount, 0))::float8 as result from months m left join rev r on r.month = m.month left join exp e on e.month = m.month order by m.month`, values);
       res.json({ summary: q.rows });
     } catch (e) { error(res, e, "Não foi possível carregar o resumo financeiro."); }
   });
