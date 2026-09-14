@@ -8,7 +8,7 @@
 const CHANNEL = { internal: ["Interno", "💬"], email: ["E-mail", "✉"], whatsapp: ["WhatsApp", "🟢"] };
 const FILTERS = [["all", "Todas"], ["unread", "Não lidas"], ["whatsapp", "WhatsApp"], ["email", "E-mail"], ["internal", "Internas"], ["archived", "Arquivadas"]];
 
-const box = { conversations: [], filter: "all", query: "", selected: null, messages: [], composing: false, byContact: false, contacts: null, clients: null };
+const box = { conversations: [], filter: "all", query: "", selected: null, messages: [], composing: false, byContact: false, contacts: null, clients: null, offset: 0, searchTimer: null };
 
 const esc = (v) => escapeHtml(v == null ? "" : String(v));
 const nameOf = (c) => c.contact_name || c.client_name || (c.remote_number ? `+${c.remote_number}` : "") || c.subject || "Sem nome";
@@ -28,7 +28,9 @@ function when(value) {
 
 async function load() {
   const status = box.filter === "archived" ? "archived" : "all";
-  const data = await api(`/api/conversations?status=${status}`);
+  const params = new URLSearchParams({ status, limit: "100", offset: String(box.offset) });
+  if (box.query.trim()) params.set("search", box.query.trim()); if (["whatsapp", "email", "internal"].includes(box.filter)) params.set("channel", box.filter); if (box.filter === "unread") params.set("unread", "true");
+  const data = await api(`/api/conversations?${params}`);
   box.conversations = (data.conversations || []).filter((c) => box.filter === "archived" ? c.status === "archived" : c.status !== "archived");
 }
 
@@ -244,9 +246,9 @@ async function bindNewForm() {
 
 function bind() {
   dashboardGrid.querySelectorAll("[data-inbox-new]").forEach((b) => b.addEventListener("click", () => { box.composing = true; draw(); bindNewForm(); }));
-  dashboardGrid.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("click", async () => { box.filter = b.dataset.filter; try { await load(); } catch (error) { dashboardGrid.querySelector(".page-intro p").textContent = error.message; } draw(); if (box.selected) openThread(box.selected, { silent: true }); }));
+  dashboardGrid.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("click", async () => { box.filter = b.dataset.filter; box.offset = 0; try { await load(); } catch (error) { dashboardGrid.querySelector(".page-intro p").textContent = error.message; } draw(); if (box.selected) openThread(box.selected, { silent: true }); }));
   const search = dashboardGrid.querySelector(".inbox-search");
-  search?.addEventListener("input", () => { box.query = search.value; const pos = search.selectionStart; draw(); const again = dashboardGrid.querySelector(".inbox-search"); again?.focus(); again?.setSelectionRange(pos, pos); if (box.selected) openThread(box.selected, { silent: true }); });
+  search?.addEventListener("input", () => { box.query = search.value; const pos = search.selectionStart; draw(); const again = dashboardGrid.querySelector(".inbox-search"); again?.focus(); again?.setSelectionRange(pos, pos); clearTimeout(box.searchTimer); box.searchTimer = setTimeout(async () => { try { await load(); draw(); if (box.selected) openThread(box.selected, { silent: true }); } catch (error) { toast(error.message, "error"); } }, 250); });
   dashboardGrid.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => openThread(b.dataset.open)));
   if (box.composing) bindNewForm();
 }
