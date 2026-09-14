@@ -314,6 +314,14 @@ for (const table of ["revenues", "expenses", "receivables"]) app.get(`/api/${tab
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select * from ${table} where ${where.join(" and ")} order by coalesce(due_at,paid_at,created_at) desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ [table]: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar os registros financeiros." }); }
 });
+app.get("/api/files", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["f.organization_id=$1"];
+  const search = String(req.query?.search || "").trim(); if (search) { values.push(search); const p = `$${values.length}`; where.push(`(f.name ilike '%' || ${p} || '%' or coalesce(f.description,'') ilike '%' || ${p} || '%' or coalesce(p.name,'') ilike '%' || ${p} || '%' or coalesce(c.name,'') ilike '%' || ${p} || '%')`); }
+  for (const field of ["project_id", "client_id", "kind"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`f.${field}=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select f.*,p.name project_name,c.name client_name from files f left join projects p on p.id=f.project_id and p.organization_id=f.organization_id left join clients c on c.id=f.client_id and c.organization_id=f.organization_id where ${where.join(" and ")} order by f.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ files: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os arquivos." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
