@@ -41,10 +41,16 @@ const dashboardGrid = document.querySelector(".dashboard-grid");
 const initialDashboardMarkup = dashboardGrid?.innerHTML || "";
 const notificationButton = document.querySelector(".notification-button");
 const themeButton = document.createElement("button"); themeButton.className = "theme-toggle"; themeButton.type = "button"; themeButton.setAttribute("aria-label", "Alternar tema"); themeButton.textContent = document.body.classList.contains("dark-mode") ? "☾" : "☀"; document.querySelector(".topbar-actions")?.insertBefore(themeButton, document.querySelector(".create-menu-wrap"));
-const notificationPanel = document.createElement("div"); notificationPanel.className = "notification-panel"; notificationPanel.hidden = true; notificationPanel.innerHTML = '<div class="section-heading"><h2>Notificações</h2><button type="button" class="notification-close" aria-label="Fechar">×</button></div><div class="notification-list"></div>'; document.body.append(notificationPanel);
+const notificationPanel = document.createElement("div"); notificationPanel.className = "notification-panel"; notificationPanel.hidden = true; notificationPanel.innerHTML = '<div class="section-heading"><h2>Notificações</h2><button type="button" class="notification-close" aria-label="Fechar">×</button></div><div class="notification-list" aria-live="polite"></div><button type="button" class="text-action notification-read-all">Marcar todas como lidas</button>'; document.body.append(notificationPanel);
 const THEME_KEY = "focusdev_theme_v2";
 themeButton.addEventListener("click", () => { document.body.classList.toggle("dark-mode"); localStorage.setItem(THEME_KEY, document.body.classList.contains("dark-mode") ? "dark" : "light"); themeButton.textContent = document.body.classList.contains("dark-mode") ? "☾" : "☀"; });
-notificationButton?.addEventListener("click", () => { notificationPanel.hidden = !notificationPanel.hidden; }); notificationPanel.querySelector(".notification-close").addEventListener("click", () => { notificationPanel.hidden = true; });
+notificationButton?.addEventListener("click", async () => { notificationPanel.hidden = !notificationPanel.hidden; if (!notificationPanel.hidden) await refreshInternalNotifications(); }); notificationPanel.querySelector(".notification-close").addEventListener("click", () => { notificationPanel.hidden = true; });
+const notificationTime = (value) => value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
+async function refreshInternalNotifications() {
+  const list = notificationPanel.querySelector(".notification-list"); if (!list || appShell.hidden) return;
+  try { const data = await api("/api/notifications?limit=30"); list.innerHTML = data.notifications?.length ? data.notifications.map((item) => `<button type="button" class="notification-item ${item.read_at ? "is-read" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}"><strong>${item.read_at ? "Notificação" : "Nova notificação"}</strong><span>${escapeHtml(item.message)}</span><time>${escapeHtml(notificationTime(item.created_at))}</time></button>`).join("") : '<p class="notification-empty">Tudo em dia.</p>'; list.querySelectorAll("[data-notification-id]").forEach((item) => item.addEventListener("click", async () => { await api(`/api/notifications/${item.dataset.notificationId}/read`, { method: "PATCH" }); item.classList.remove("is-unread"); item.classList.add("is-read"); await refreshInboxBadge(); })); } catch (error) { list.innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`; }
+}
+notificationPanel.querySelector(".notification-read-all").addEventListener("click", async () => { try { await api("/api/notifications/read-all", { method: "POST" }); await refreshInternalNotifications(); await refreshInboxBadge(); } catch (error) { notificationPanel.querySelector(".notification-list").innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`; } });
 
 const notificationEnable = document.createElement("button");
 notificationEnable.type = "button";
@@ -91,6 +97,7 @@ async function refreshInboxBadge() {
   } catch { /* badge é opcional */ }
 }
 window.setInterval(refreshInboxBadge, 45000);
+window.setInterval(() => { if (!notificationPanel.hidden) refreshInternalNotifications(); }, 30000);
 document.addEventListener("focus-inbox-changed", refreshInboxBadge);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

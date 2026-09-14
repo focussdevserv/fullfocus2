@@ -237,7 +237,7 @@ function bind() {
 
 /* Contador para o sino do núcleo. */
 window.FocusInbox = {
-  unreadCount: async () => { const data = await api("/api/conversations?status=open"); return (data.conversations || []).reduce((n, c) => n + Number(c.unread_count || 0), 0); },
+  unreadCount: async () => { const [conversations, notifications] = await Promise.all([api("/api/conversations?status=open"), api("/api/notifications/unread-count")]); return (conversations.conversations || []).reduce((n, c) => n + Number(c.unread_count || 0), 0) + Number(notifications.count || 0); },
   openNumber: async (number) => { box.filter = "whatsapp"; box.query = String(number || "").replace(/\D/g, ""); box.selected = null; await renderInbox("caixa-de-entrada"); },
 };
 
