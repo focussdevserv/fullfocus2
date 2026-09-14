@@ -75,7 +75,7 @@ const contractProjectObserver = new MutationObserver(async () => {
       receivablesButton.addEventListener("click", async () => { receivablesButton.disabled = true; receivablesButton.textContent = "Gerando..."; try { const result = await api(`/api/contracts/${contract.id}/create-receivables`, { method: "POST", body: {} }); toast(result.created ? "Parcelas geradas em Contas a receber." : "As parcelas deste contrato já existem.", "success"); } catch (error) { receivablesButton.disabled = false; receivablesButton.textContent = "Gerar parcelas"; toast(error.message, "error"); } });
       row.lastElementChild?.append(" ", receivablesButton);
     });
-  } catch {}
+  } catch (error) { table.dataset.workspaceActions = ""; toast(error.message, "error"); }
 });
 contractProjectObserver.observe(dashboardGrid, { childList: true, subtree: true });
 async function openProjectOverview(id) {

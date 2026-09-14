@@ -76,7 +76,7 @@ const approvalActionsObserver = new MutationObserver(async () => {
       const actions = document.createElement("div"); actions.className = "approval-actions";
       [ ["approved", "Aprovar", "success"], ["rejected", "Recusar", "danger"] ].forEach(([status, label, kind]) => { const button = document.createElement("button"); button.type = "button"; button.className = `compact-action ${kind}`; button.textContent = label; button.addEventListener("click", async () => { button.disabled = true; try { await api(`/api/approvals/${approval.id}`, { method: "PATCH", body: { status, decision: status, decided_at: new Date().toISOString() } }); toast(status === "approved" ? "Aprovação registrada." : "Recusa registrada.", status === "approved" ? "success" : "info"); renderEstrutura("aprovacoes"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); actions.append(button); }); article.append(actions);
     });
-  } catch {}
+  } catch (error) { list.dataset.approvalActions = ""; toast(error.message, "error"); }
 });
 approvalActionsObserver.observe(dashboardGrid, { childList: true, subtree: true });
 const briefingLinkObserver = new MutationObserver(async () => {
@@ -91,7 +91,7 @@ const briefingLinkObserver = new MutationObserver(async () => {
       const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = briefing.public_token ? "Copiar link" : "Gerar link";
       button.addEventListener("click", async () => { button.disabled = true; try { const data = briefing.public_token ? { path: `/briefing/${briefing.public_token}` } : await (await fetch(`/api/briefings/${briefing.id}/public-link`, { method: "POST", credentials: "same-origin" })).json(); if (!data.path) throw new Error(data.error || "Não foi possível gerar o link."); await navigator.clipboard?.writeText(`${location.origin}${data.path}`); button.textContent = "Link copiado"; toast("Link do briefing copiado.", "success"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); article.append(button);
     });
-  } catch {}
+  } catch (error) { list.dataset.briefingLinks = ""; toast(error.message, "error"); }
 });
 briefingLinkObserver.observe(dashboardGrid, { childList: true, subtree: true });
 const formLinkObserver = new MutationObserver(async () => {
@@ -106,7 +106,7 @@ const formLinkObserver = new MutationObserver(async () => {
       const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = form.public_token ? "Copiar link" : "Gerar link";
       button.addEventListener("click", async () => { button.disabled = true; try { const data = form.public_token ? { path: `/form/${form.public_token}` } : await (await fetch(`/api/forms/${form.id}/public-link`, { method: "POST", credentials: "same-origin" })).json(); if (!data.path) throw new Error(data.error || "Não foi possível gerar o link."); await navigator.clipboard?.writeText(`${location.origin}${data.path}`); button.textContent = "Link copiado"; toast("Link do formulário copiado.", "success"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); article.append(button);
     });
-  } catch {}
+  } catch (error) { list.dataset.formLinks = ""; toast(error.message, "error"); }
 });
 formLinkObserver.observe(dashboardGrid, { childList: true, subtree: true });
 const operationActionObserver = new MutationObserver(async () => {
@@ -126,7 +126,7 @@ const operationActionObserver = new MutationObserver(async () => {
       choices.forEach(([status, label]) => { const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = label; button.addEventListener("click", async () => { button.disabled = true; try { const body = key === "entregas" ? { client_approved: true, status: "approved" } : { status, approval_data: { decision: status, decided_at: new Date().toISOString() } }; await api(`/api/${table}/${item.id}`, { method: "PATCH", body }); toast("Atualização registrada.", "success"); renderEstrutura(key); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); actions.append(button); });
       if (actions.children.length) article.append(actions);
     });
-  } catch {}
+  } catch (error) { list.dataset.operationActions = ""; toast(error.message, "error"); }
 });
 operationActionObserver.observe(dashboardGrid, { childList: true, subtree: true });
 // Workspaces dedicados assumem as rotas que exigem telas próprias.
@@ -162,7 +162,7 @@ const structuredMutationObserver = new MutationObserver(async () => {
       if (key === "horas" && row.started_at && !row.ended_at) { const stop = document.createElement("button"); stop.type = "button"; stop.className = "compact-action"; stop.textContent = "Finalizar cronômetro"; stop.addEventListener("click", async () => { stop.disabled = true; try { await api(`/api/time-entry-timer/${row.id}/stop`, { method: "POST", body: {} }); toast("Cronômetro finalizado.", "success"); renderEstrutura(key); } catch (error) { stop.disabled = false; toast(error.message, "error"); } }); actions.append(stop); }
       article.append(actions);
     });
-  } catch {}
+  } catch (error) { list.dataset.maintenanceActions = ""; toast(error.message, "error"); }
 });
 structuredMutationObserver.observe(dashboardGrid, { childList: true, subtree: true });
 
@@ -179,6 +179,6 @@ const trashRestoreObserver = new MutationObserver(async () => {
       button.addEventListener("click", async () => { button.disabled = true; try { await api(`/api/trash/${item.id}/restore`, { method: "POST", body: {} }); toast("Registro restaurado.", "success"); renderEstrutura("lixeira"); } catch (error) { button.disabled = false; toast(error.message, "error"); } });
       article.append(button);
     });
-  } catch {}
+  } catch (error) { list.dataset.restoreActions = ""; toast(error.message, "error"); }
 });
 trashRestoreObserver.observe(dashboardGrid, { childList: true, subtree: true });
