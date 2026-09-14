@@ -140,7 +140,7 @@ function rowMarkup(t) {
       <div class="tasks-meta"><span class="${due.tone}">${esc(due.text)}</span>${project ? `<span class="tasks-project">◈ ${esc(project)}</span>` : ""}${(t.tags || []).map((tag) => `<span class="tasks-tag">#${esc(tag)}</span>`).join("")}${subs.length ? `<span class="tasks-subcount">${subsDone}/${subs.length} subtarefas</span>` : ""}</div>
       ${subs.length ? `<ul class="tasks-subtasks">${subs.map((s) => `<li class="${isDone(s) ? "is-done" : ""}"><label class="tasks-check small"><input type="checkbox" data-toggle="${esc(s.id)}" ${isDone(s) ? "checked" : ""} aria-label="Concluir ${esc(s.title)}" /><span></span></label><span>${esc(s.title)}</span><button class="tasks-icon" type="button" data-delete="${esc(s.id)}" aria-label="Excluir subtarefa">×</button></li>`).join("")}</ul>` : ""}
     </div>
-    <select class="tasks-status ${t.status}" data-status="${esc(t.id)}" aria-label="Situação">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+    <select class="tasks-status ${esc(t.status)}" data-status="${esc(t.id)}" aria-label="Situação">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>
     <em class="${pClass}">${pLabel}</em>
     <div class="tasks-actions"><button class="tasks-icon" type="button" data-subtask="${esc(t.id)}" title="Adicionar subtarefa">+</button><button class="tasks-icon" type="button" data-edit="${esc(t.id)}" title="Editar">✎</button><button class="tasks-icon" type="button" data-delete="${esc(t.id)}" title="Excluir">×</button></div>
   </article>`;

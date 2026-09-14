@@ -1,1 +1,78 @@
-/* Estilos do módulo "crm" — ownership: modules/crm.css. Use os tokens de styles.css (var(--blue), var(--paper), ...) e as classes existentes (data-card, section-heading, card-kicker, filter-button) antes de criar novas. */
+/* Estilos do módulo "crm" — ownership: modules/crm.css */
+
+.crm-card { grid-column: 1 / -1; }
+.crm-error { color: #ff8a97; font-weight: 700; }
+.crm-hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.crm-notes { margin: 0; color: #dbe5f7; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+.crm-inline-select { padding: 6px 8px; font-size: 11.5px; }
+.crm-cell-person { display: flex; align-items: center; gap: 10px; }
+.crm-cell-person small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 400; }
+
+/* Hub */
+.crm-hub-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.crm-hub-wide { grid-column: 1 / -1; }
+.crm-funnel { display: grid; gap: 10px; }
+.crm-funnel-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; font-size: 12px; }
+.crm-funnel-row span { color: var(--muted); }
+.crm-funnel-bar { height: 12px; border-radius: 999px; background: rgb(255 255 255 / 6%); overflow: hidden; }
+.crm-funnel-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--blue), #55e0a6); }
+.crm-funnel-row b { font-size: 12px; white-space: nowrap; }
+.crm-funnel-row small { min-width: 18px; color: var(--muted); text-align: right; }
+.crm-status-list { display: grid; gap: 8px; }
+.crm-status-list div { display: flex; align-items: center; gap: 10px; }
+.crm-status-list strong { margin-left: auto; font-size: 15px; }
+.crm-status-list small { min-width: 90px; color: var(--muted); font-size: 11px; text-align: right; }
+
+/* Follow-ups */
+.crm-followup-list { display: grid; gap: 6px; }
+.crm-followup { display: grid; grid-template-columns: auto 128px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid rgb(145 180 230 / 14%); border-radius: 12px; background: rgb(255 255 255 / 2%); }
+.crm-followup:not(:has(.crm-check)) { grid-template-columns: 128px minmax(0, 1fr) auto auto; }
+.crm-followup time { color: #8bb9ff; font-size: 11.5px; font-weight: 700; }
+.crm-followup strong { display: block; font-size: 13px; }
+.crm-followup small { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-followup.is-late { border-left: 3px solid #ff8a97; }
+.crm-followup.is-late time { color: #ff8a97; }
+.crm-followup.is-done { opacity: 0.55; }
+.crm-followup.is-done strong { text-decoration: line-through; }
+.crm-check { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; cursor: pointer; }
+.crm-check input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.crm-check span { width: 18px; height: 18px; border: 1.5px solid rgb(145 180 230 / 60%); border-radius: 6px; }
+.crm-check input:checked + span { border-color: #55e0a6; background: #55e0a6; box-shadow: inset 0 0 0 3px rgb(8 19 38 / 90%); }
+.crm-group + .crm-group { margin-top: 18px; }
+.crm-group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.crm-group h3 span { padding: 2px 7px; border-radius: 999px; background: rgb(255 255 255 / 8%); font-size: 10px; }
+.crm-group-late h3 { color: #ff8a97; }
+.crm-group-today h3 { color: #ffd38a; }
+
+/* Funil (kanban) */
+.crm-kanban { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.crm-column { display: grid; grid-template-rows: auto minmax(120px, 1fr); gap: 8px; padding: 10px; border: 1px solid rgb(145 180 230 / 16%); border-radius: 14px; background: rgb(255 255 255 / 2%); }
+.crm-column h3 { display: grid; gap: 2px; margin: 0; font-size: 12px; }
+.crm-column h3 span { color: var(--muted); font-size: 10.5px; font-weight: 600; }
+.crm-column-body { display: grid; gap: 6px; align-content: start; }
+.crm-column.is-drop-target { outline: 2px dashed var(--blue); outline-offset: 2px; }
+.crm-column-green h3 { color: #55e0a6; } .crm-column-red h3 { color: #ff8a97; } .crm-column-orange h3 { color: #ffc46b; } .crm-column-purple h3 { color: #c8b3ff; } .crm-column-blue h3 { color: #8bb9ff; }
+.crm-opp-card { display: grid; gap: 3px; padding: 10px; border: 1px solid rgb(145 180 230 / 20%); border-radius: 10px; background: rgb(13 79 194 / 12%); cursor: grab; }
+.crm-opp-card strong { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-opp-card b { font-size: 13px; }
+.crm-opp-card small { color: var(--muted); font-size: 10.5px; }
+.crm-opp-card.is-dragging { opacity: 0.5; }
+.crm-column-empty { margin: 8px 0; color: var(--muted); font-size: 11px; text-align: center; }
+
+/* Drawer (detalhes) */
+.crm-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.crm-drawer-head strong { font-size: 20px; letter-spacing: -0.03em; }
+.crm-drawer-title { margin: 0; font-size: 18px; letter-spacing: -0.03em; }
+.crm-drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.crm-items { display: grid; gap: 6px; }
+.crm-item { display: grid; grid-template-columns: minmax(0, 1fr) 70px 100px auto auto; gap: 6px; align-items: center; }
+.crm-item input { width: 100%; padding: 8px 10px; border: 1px solid rgb(145 180 230 / 30%); border-radius: 8px; background: rgb(255 255 255 / 5%); color: inherit; font: inherit; font-size: 12.5px; }
+.crm-item b { min-width: 84px; font-size: 12.5px; text-align: right; }
+.crm-items-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+.crm-items-actions span { flex: 1; }
+.crm-items-total { margin: 10px 0 0; text-align: right; color: var(--muted); font-size: 13px; }
+.crm-items-total strong { font-size: 16px; color: inherit; }
+
+@media (max-width: 1100px) { .crm-kanban { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .crm-hub-grid { grid-template-columns: 1fr; } .crm-followup { grid-template-columns: auto minmax(0, 1fr); } .crm-followup time, .crm-followup > span { grid-column: 2; } .crm-item { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .crm-kanban { grid-template-columns: 1fr 1fr; } }

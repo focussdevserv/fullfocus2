@@ -3,7 +3,7 @@ import { readdirSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
-const roots = ["app.js", "service-worker.js", "modules", "server"];
+const roots = ["app.js", "ui.js", "service-worker.js", "modules", "server"];
 const files = [];
 function walk(target) {
   const stats = statSync(target);

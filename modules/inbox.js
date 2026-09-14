@@ -78,7 +78,7 @@ function rowMarkup(c) {
   const [channelLabel, icon] = CHANNEL[c.channel] || CHANNEL.internal;
   const unread = Number(c.unread_count || 0);
   return `<button class="inbox-row ${String(c.id) === String(box.selected) ? "is-selected" : ""} ${unread ? "is-unread" : ""}" type="button" data-open="${esc(c.id)}">
-    <span class="inbox-avatar inbox-avatar-${c.channel}">${esc(initials(nameOf(c)))}</span>
+    <span class="inbox-avatar inbox-avatar-${esc(c.channel)}">${esc(initials(nameOf(c)))}</span>
     <span class="inbox-row-main"><span class="inbox-row-top"><strong>${esc(nameOf(c))}</strong><time>${esc(when(c.last_message_at || c.created_at))}</time></span><span class="inbox-row-subject">${esc(c.subject)}</span><span class="inbox-row-preview">${esc(c.last_message || "Sem mensagens")}</span></span>
     <span class="inbox-row-side"><span class="inbox-channel" title="${channelLabel}">${icon}</span>${unread ? `<b class="inbox-unread">${unread}</b>` : ""}</span>
   </button>`;
@@ -102,7 +102,7 @@ async function openThread(id, { silent = false } = {}) {
   const canReply = c.channel !== "whatsapp" || Boolean(c.remote_number);
   pane.innerHTML = `
     <header class="inbox-thread-head">
-      <span class="inbox-avatar inbox-avatar-${c.channel}">${esc(initials(nameOf(c)))}</span>
+      <span class="inbox-avatar inbox-avatar-${esc(c.channel)}">${esc(initials(nameOf(c)))}</span>
       <div class="inbox-thread-title"><strong>${esc(nameOf(c))}</strong><small>${esc(c.subject)} · ${channelLabel}${c.remote_number ? ` · +${esc(c.remote_number)}` : ""}${c.client_name ? ` · cliente ${esc(c.client_name)}` : ""}</small></div>
       <div class="inbox-thread-actions">
         ${c.contact_id ? `<a class="text-action" href="#contatos">Ver contato</a>` : `<button class="text-action" type="button" data-link-contact>Vincular contato</button>`}

@@ -1,0 +1,100 @@
+/* ==========================================================================
+   FocusDev — kit de UI compartilhado (par de ui.js)
+   ========================================================================== */
+
+.ui-header-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+
+.ui-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+.ui-badge-gray { background: rgb(255 255 255 / 8%); color: #c8d5ee; }
+.ui-badge-blue { background: rgb(13 79 194 / 22%); color: #8bb9ff; }
+.ui-badge-green { background: rgb(18 118 76 / 22%); color: #55e0a6; }
+.ui-badge-orange { background: rgb(240 140 20 / 20%); color: #ffc46b; }
+.ui-badge-red { background: rgb(243 19 45 / 18%); color: #ff8a97; }
+.ui-badge-purple { background: rgb(126 87 194 / 24%); color: #c8b3ff; }
+
+.ui-avatar { display: inline-grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 10px; font-size: 11px; font-weight: 800; }
+.ui-avatar-blue { background: rgb(13 79 194 / 22%); color: #8bb9ff; }
+.ui-avatar-green { background: rgb(18 118 76 / 22%); color: #55e0a6; }
+.ui-avatar-orange { background: rgb(240 140 20 / 20%); color: #ffc46b; }
+.ui-avatar-red { background: rgb(243 19 45 / 18%); color: #ff8a97; }
+.ui-avatar-purple { background: rgb(126 87 194 / 24%); color: #c8b3ff; }
+
+.ui-stats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(var(--ui-stats-count, 4), minmax(0, 1fr)); gap: 12px; }
+.ui-stat { display: grid; gap: 4px; padding: 16px 18px; border-radius: 14px; color: inherit; font: inherit; text-align: left; }
+button.ui-stat { cursor: pointer; }
+.ui-stat span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.ui-stat strong { font-size: 24px; letter-spacing: -0.04em; }
+.ui-stat small { color: var(--muted); font-size: 11px; }
+.ui-stat.is-active { border-color: rgb(139 185 255 / 60%); }
+.ui-stat-red strong { color: #ff8a97; }
+.ui-stat-green strong { color: #55e0a6; }
+.ui-stat-orange strong { color: #ffc46b; }
+
+.ui-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.ui-search { flex: 1 1 220px; min-width: 180px; }
+.ui-search, .ui-select { padding: 9px 12px; border: 1px solid rgb(145 180 230 / 30%); border-radius: 9px; background: rgb(255 255 255 / 4%); color: inherit; font: inherit; font-size: 12.5px; }
+.ui-select option { color: #0f1f45; }
+.ui-search:focus, .ui-select:focus { outline: 0; border-color: var(--blue); box-shadow: var(--focus-ring); }
+.ui-toolbar-actions { display: flex; gap: 6px; margin-left: auto; }
+
+.ui-table-wrap { overflow-x: auto; }
+.ui-table { width: 100%; min-width: 0; border-collapse: collapse; }
+.ui-table th { padding: 0 12px 10px; border-bottom: 1px solid rgb(255 255 255 / 10%); color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-align: left; text-transform: uppercase; }
+.ui-table td { padding: 12px; border-bottom: 1px solid rgb(255 255 255 / 6%); color: inherit; font-size: 12.5px; vertical-align: middle; }
+.ui-table tbody tr:last-child td { border-bottom: 0; }
+.ui-table tbody tr:hover td { background: rgb(255 255 255 / 3%); }
+.ui-table tr.is-clickable { cursor: pointer; }
+.ui-table td:first-child { font-weight: 700; }
+.ui-table .is-right { text-align: right; }
+.ui-table .is-center { text-align: center; }
+.ui-table small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 400; }
+@media (max-width: 800px) { .ui-hide-narrow { display: none; } }
+
+.ui-empty { display: grid; gap: 8px; justify-items: start; padding: 28px 8px; }
+.ui-empty h3 { margin: 0; font-size: 16px; }
+.ui-empty p { margin: 0 0 6px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.ui-empty-inline { padding: 18px 8px; color: var(--muted); font-size: 12.5px; }
+
+.ui-row-actions { display: inline-flex; gap: 2px; align-items: center; white-space: nowrap; }
+.ui-icon { width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 14px; cursor: pointer; }
+.ui-icon:hover { background: rgb(255 255 255 / 8%); color: inherit; }
+.ui-icon.is-danger:hover { background: rgb(243 19 45 / 14%); color: #ff8a97; }
+.ui-confirm { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.ui-danger-text { color: #ff8a97; }
+
+.ui-toast { position: fixed; bottom: 22px; left: 50%; z-index: 90; transform: translate(-50%, 20px); padding: 12px 18px; border-radius: 12px; background: #0f1f45; color: #f4f7ff; font-size: 13px; box-shadow: 0 18px 40px rgb(0 0 0 / 35%); opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; }
+.ui-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.ui-toast[data-tone="error"] { background: #7a1220; }
+.ui-toast[data-tone="success"] { background: #0f5a3a; }
+
+.ui-modal-backdrop, .ui-drawer-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; background: rgb(4 14 40 / 55%); backdrop-filter: blur(4px); }
+.ui-modal-backdrop { place-items: center; padding: 20px; overflow-y: auto; }
+.ui-modal { position: relative; width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; padding: 26px 28px; border: 1px solid rgb(145 180 230 / 25%); border-radius: 18px; background: linear-gradient(135deg, rgb(26 47 78 / 96%), rgb(8 19 38 / 98%)); color: #f4f7ff; box-shadow: 0 30px 80px rgb(0 0 0 / 45%); }
+.ui-modal h2 { margin: 4px 0 18px; font-size: 22px; letter-spacing: -0.04em; }
+.ui-modal-close { position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border: 0; border-radius: 8px; background: rgb(255 255 255 / 6%); color: inherit; font-size: 20px; cursor: pointer; }
+.ui-modal-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ui-field { display: grid; gap: 5px; grid-column: 1 / -1; font-size: 12.5px; font-weight: 600; }
+.ui-field.is-half { grid-column: auto; }
+.ui-field small { color: var(--muted); font-weight: 400; }
+.ui-field input, .ui-field select, .ui-field textarea { width: 100%; padding: 10px 12px; border: 1px solid rgb(145 180 230 / 30%); border-radius: 10px; background: rgb(255 255 255 / 5%); color: inherit; font: inherit; font-size: 13.5px; font-weight: 400; }
+.ui-field select option { color: #0f1f45; }
+.ui-field input:focus, .ui-field select:focus, .ui-field textarea:focus { outline: 0; border-color: var(--blue); box-shadow: var(--focus-ring); }
+.ui-check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+.ui-modal-status { min-height: 18px; margin: 12px 0 4px; color: #ff8a97; font-size: 12.5px; }
+.ui-modal-actions { display: flex; align-items: center; gap: 10px; }
+.ui-modal-actions span { flex: 1; }
+
+.ui-drawer-backdrop { justify-items: end; }
+.ui-drawer { width: min(520px, 100%); height: 100%; overflow-y: auto; padding: 24px 26px; border-left: 1px solid rgb(145 180 230 / 25%); background: linear-gradient(160deg, rgb(26 47 78 / 97%), rgb(8 19 38 / 99%)); color: #f4f7ff; box-shadow: -30px 0 80px rgb(0 0 0 / 40%); }
+.ui-drawer header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.ui-drawer h2 { margin: 4px 0 0; font-size: 20px; letter-spacing: -0.03em; }
+.ui-drawer .ui-modal-close { position: static; }
+.ui-drawer-body { display: grid; gap: 18px; }
+.ui-drawer-body h3 { margin: 0 0 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+.ui-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; margin: 0; }
+.ui-facts div { display: grid; gap: 3px; min-width: 0; }
+.ui-facts dt { color: var(--muted); font-size: 11px; font-weight: 600; }
+.ui-facts dd { margin: 0; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) { .ui-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ui-modal-fields { grid-template-columns: 1fr; } .ui-field.is-half { grid-column: 1 / -1; } }

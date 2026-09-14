@@ -1,53 +1,426 @@
-/* CRM: telas orientadas a dados reais. */
-const CRM_STAGES = ["prospecting", "proposal", "negotiation", "won", "lost"];
-const LEAD_STATUS = [["new", "Novo"], ["contacted", "Contatado"], ["qualified", "Qualificado"], ["won", "Ganho"], ["lost", "Perdido"]];
-const stageLabel = { prospecting: "Prospecção", proposal: "Proposta", negotiation: "Negociação", won: "Ganho", lost: "Perdido" };
-const money = (v) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const dateBR = (v) => v ? new Date(v).toLocaleDateString("pt-BR") : "—";
-const esc = (v) => escapeHtml(v == null ? "" : String(v));
-const set = (html) => { dashboardGrid.innerHTML = html; };
-const statusError = (e) => `<p class="agenda-empty" role="alert">${esc(e.message || "Não foi possível carregar os dados.")} <button class="button button-secondary compact-action" data-retry>Tentar novamente</button></p>`;
-const load = (label) => `<p class="agenda-empty" role="status">${esc(label)}</p>`;
-function config() {
-  createConfig.lead = { title: "Novo lead", endpoint: "/api/leads", fields: [{ name: "name", label: "Nome", type: "text" }, { name: "company", label: "Empresa", type: "text" }, { name: "source", label: "Origem", type: "text" }, { name: "status", label: "Status", type: "select", options: LEAD_STATUS }] };
-  createConfig.oportunidade = { title: "Nova oportunidade", endpoint: "/api/opportunities", fields: [{ name: "name", label: "Nome", type: "text" }, { name: "amount", label: "Valor", type: "number" }, { name: "stage", label: "Estágio", type: "select", options: CRM_STAGES.map(x => [x, stageLabel[x]]) }, { name: "expected_close", label: "Previsão", type: "date" }] };
-  createConfig.campanha = { title: "Nova campanha", endpoint: "/api/campaigns", fields: [{ name: "name", label: "Nome", type: "text" }, { name: "channel", label: "Canal", type: "select", options: [["email", "E-mail"], ["whatsapp", "WhatsApp"], ["ads", "Ads"], ["social", "Social"], ["other", "Outro"]] }, { name: "budget", label: "Orçamento", type: "number" }, { name: "starts_on", label: "Início", type: "date" }, { name: "ends_on", label: "Fim", type: "date" }] };
-  createConfig.proposta = { title: "Nova proposta", endpoint: "/api/proposals", fields: [{ name: "title", label: "Título", type: "text" }, { name: "opportunity_id", label: "Oportunidade", type: "number" }, { name: "amount", label: "Valor", type: "number" }, { name: "valid_until", label: "Válida até", type: "date" }, { name: "notes", label: "Observações", type: "textarea" }] };
-  createConfig.followup = { title: "Novo follow-up", endpoint: "/api/followups", fields: [{ name: "lead_id", label: "Lead", type: "number" }, { name: "due_at", label: "Quando", type: "datetime-local" }, { name: "channel", label: "Canal", type: "text" }, { name: "note", label: "Nota", type: "textarea" }] };
-}
-async function fetchData(path, key) { const d = await api(path); return d[key] || []; }
-function intro(kicker, title, text, kind) { return `<section class="page-intro leads-intro"><div><p class="card-kicker">${esc(kicker)}</p><h2>${esc(title)}</h2><p>${esc(text)}</p></div>${kind ? `<button class="button button-primary compact-action" data-create="${kind}">+ Novo</button>` : ""}</section>`; }
-function wire() { dashboardGrid.querySelectorAll("[data-create]").forEach(b => b.onclick = () => openCreateDialog(b.dataset.create)); dashboardGrid.querySelector("[data-retry]")?.addEventListener("click", () => renderHashRoute(location.hash)); }
-async function renderLeadsView() { set(intro("CRM", "Leads", "Transforme conversas em oportunidades.", "lead") + `<section class="data-card leads-card"><div class="section-heading"><h2>Leads</h2><input class="filter-button" id="lead-search" placeholder="Buscar"/><select class="filter-button" id="lead-filter"><option value="">Todos os status</option>${LEAD_STATUS.map(x => `<option value="${x[0]}">${x[1]}</option>`).join("")}</select></div><div class="lead-list">${load("Carregando leads...")}</div></section>`); wire(); try { const leads = await fetchData("/api/leads", "leads"); const list = dashboardGrid.querySelector(".lead-list"); const draw = () => { const q = (dashboardGrid.querySelector("#lead-search")?.value || "").toLowerCase(), f = dashboardGrid.querySelector("#lead-filter")?.value; const rows = leads.filter(l => (!f || l.status === f) && (!q || `${l.name} ${l.company || ""}`.toLowerCase().includes(q))); list.innerHTML = rows.length ? rows.map(l => `<article class="lead-row"><span class="lead-avatar">${esc((l.name || "?").slice(0, 2).toUpperCase())}</span><div><strong>${esc(l.name)}</strong><small>${esc(l.company || "Sem empresa")}</small></div><select data-status="${l.id}" class="filter-button">${LEAD_STATUS.map(x => `<option value="${x[0]}" ${x[0] === l.status ? "selected" : ""}>${x[1]}</option>`).join("")}</select><button class="button button-secondary compact-action" data-convert="${l.id}">Converter</button><button class="button button-secondary compact-action" data-delete="${l.id}">Excluir</button></article>`).join("") : `<p class="agenda-empty" role="status">Nenhum lead encontrado.</p>`; list.querySelectorAll("[data-status]").forEach(x => x.onchange = async () => { await api(`/api/leads/${x.dataset.status}`, { method: "PATCH", body: { status: x.value } }); }); list.querySelectorAll("[data-convert]").forEach(x => x.onclick = async () => { await api("/api/opportunities", { method: "POST", body: { lead_id: Number(x.dataset.convert), name: "Oportunidade — " + (leads.find(l => l.id == x.dataset.convert)?.name || "Lead"), stage: "prospecting", amount: 0 } }); x.textContent = "Convertido"; x.disabled = true; }); list.querySelectorAll("[data-delete]").forEach(x => x.onclick = async () => { if (x.dataset.confirm !== "1") { x.dataset.confirm = "1"; x.textContent = "Confirmar?"; return; } await api(`/api/leads/${x.dataset.delete}`, { method: "DELETE" }); renderLeadsView(); }); }; draw(); dashboardGrid.querySelector("#lead-search").oninput = draw; dashboardGrid.querySelector("#lead-filter").onchange = draw; } catch (e) { dashboardGrid.querySelector(".lead-list").innerHTML = statusError(e); wire(); } }
-async function renderFunnelView() { set(intro("CRM", "Funil de vendas", "Arraste oportunidades entre os estágios.", "oportunidade") + `<section class="funnel-board">${load("Carregando funil...")}</section>`); wire(); try { const ops = await fetchData("/api/opportunities", "opportunities"), board = dashboardGrid.querySelector(".funnel-board"); board.innerHTML = CRM_STAGES.map(s => { const items = ops.filter(o => o.stage === s); return `<section class="funnel-column" data-stage="${s}"><header><h3>${stageLabel[s]}</h3><strong>${money(items.reduce((a,o) => a + Number(o.amount || 0), 0))}</strong></header><div class="funnel-column-list">${items.map(o => `<article class="funnel-opportunity" draggable="true" data-id="${o.id}"><strong>${esc(o.name)}</strong><small>${esc(o.company_name || "")}</small><b>${money(o.amount)}</b></article>`).join("")}</div></section>`; }).join(""); board.querySelectorAll(".funnel-opportunity").forEach(c => c.ondragstart = e => e.dataTransfer.setData("text/plain", c.dataset.id)); board.querySelectorAll(".funnel-column").forEach(col => { col.ondragover = e => e.preventDefault(); col.ondrop = async e => { await api(`/api/opportunities/${e.dataTransfer.getData("text/plain")}`, { method: "PATCH", body: { stage: col.dataset.stage } }); renderFunnelView(); }; }); } catch (e) { dashboardGrid.querySelector(".funnel-board").innerHTML = statusError(e); wire(); } }
-async function renderOpportunitiesView() { set(intro("CRM", "Oportunidades", "Priorize negociações pelo valor e previsão.", "oportunidade") + `<section class="data-card opportunities-card"><div class="opportunity-list">${load("Carregando oportunidades...")}</div></section>`); wire(); try { const ops = await fetchData("/api/opportunities", "opportunities"), list = dashboardGrid.querySelector(".opportunity-list"); list.innerHTML = ops.length ? ops.map(o => `<article class="opportunity-row"><div class="opportunity-name"><strong>${esc(o.name)}</strong><small>${esc(o.company_name || "Sem empresa")}</small></div><div><small>Valor</small><strong>${money(o.amount)}</strong></div><div><small>Estágio</small><strong>${esc(stageLabel[o.stage] || o.stage)}</strong></div><div><small>Previsão</small><strong>${dateBR(o.expected_close)}</strong></div></article>`).join("") : `<p class="agenda-empty" role="status">Nenhuma oportunidade cadastrada.</p>`; } catch(e) { dashboardGrid.querySelector(".opportunity-list").innerHTML = statusError(e); wire(); } }
-async function renderCampaignsView() { set(intro("Marketing", "Campanhas", "Planeje suas ações comerciais.", "campanha") + `<section class="data-card campaigns-card"><div class="campaign-list">${load("Carregando campanhas...")}</div></section>`); wire(); try { const rows = await fetchData("/api/campaigns", "campaigns"), list = dashboardGrid.querySelector(".campaign-list"); list.innerHTML = rows.length ? rows.map(c => `<article class="campaign-row"><div class="campaign-main"><strong>${esc(c.name)}</strong><small>${esc(c.channel)} · ${money(c.budget)}</small></div><span class="campaign-status">${esc(c.status)}</span><button class="button button-secondary compact-action" data-campaign="${c.id}" data-next="${c.status === "active" ? "paused" : c.status === "paused" ? "active" : "active"}">${c.status === "active" ? "Pausar" : "Ativar"}</button><button class="button button-secondary compact-action" data-done="${c.id}">Concluir</button></article>`).join("") : `<p class="agenda-empty" role="status">Nenhuma campanha cadastrada.</p>`; list.querySelectorAll("[data-campaign]").forEach(b => b.onclick = async () => { await api(`/api/campaigns/${b.dataset.campaign}`, { method: "PATCH", body: { status: b.dataset.next } }); renderCampaignsView(); }); list.querySelectorAll("[data-done]").forEach(b => b.onclick = async () => { await api(`/api/campaigns/${b.dataset.done}`, { method: "PATCH", body: { status: "done" } }); renderCampaignsView(); }); } catch(e) { dashboardGrid.querySelector(".campaign-list").innerHTML = statusError(e); wire(); } }
-async function renderProposalsView() { set(intro("CRM", "Propostas", "Acompanhe documentos e respostas.", "proposta") + `<section class="data-card proposals-card"><div class="proposal-list">${load("Carregando propostas...")}</div></section>`); wire(); try { const rows = await fetchData("/api/proposals", "proposals"), list = dashboardGrid.querySelector(".proposal-list"); list.innerHTML = rows.length ? rows.map(p => `<article class="proposal-row"><div class="proposal-main"><strong>${esc(p.title)}</strong><small>${money(p.amount)} · ${esc(p.status)}</small></div>${p.status === "draft" ? `<button class="button button-secondary compact-action" data-prop="${p.id}" data-status="sent">Enviar</button>` : ""}${p.status === "sent" ? `<button class="button button-primary compact-action" data-prop="${p.id}" data-status="accepted">Aceitar</button><button class="button button-secondary compact-action" data-prop="${p.id}" data-status="rejected">Rejeitar</button>` : ""}</article>`).join("") : `<p class="agenda-empty" role="status">Nenhuma proposta cadastrada.</p>`; list.querySelectorAll("[data-prop]").forEach(b => b.onclick = async () => { await api(`/api/proposals/${b.dataset.prop}`, { method: "PATCH", body: { status: b.dataset.status } }); renderProposalsView(); }); } catch(e) { dashboardGrid.querySelector(".proposal-list").innerHTML = statusError(e); wire(); } }
-async function renderFollowupsView() {
-  set(intro("CRM", "Follow-ups", "Nunca perca o momento certo.", "followup") + `<section class="data-card followups-card"><div class="followup-list">${load("Carregando follow-ups...")}</div></section>`);
-  wire();
-  try {
-    const rows = await fetchData("/api/followups", "followups");
-    const list = dashboardGrid.querySelector(".followup-list");
-    const now = Date.now();
-    const day = 86400000;
-    const groups = [
-      ["Atrasados", rows.filter((x) => !x.done_at && new Date(x.due_at) < now - day)],
-      ["Hoje", rows.filter((x) => !x.done_at && new Date(x.due_at) >= now - day && new Date(x.due_at) < now + day)],
-      ["Próximos", rows.filter((x) => !x.done_at && new Date(x.due_at) >= now + day)]
-    ];
-    list.innerHTML = groups.map(([group, items]) => {
-      const markup = items.map((x) => `<article class="followup-row"><div class="followup-main"><strong>${esc(x.note || "Follow-up")}</strong><small>${esc(x.channel || "")} · ${new Date(x.due_at).toLocaleString("pt-BR")}</small></div><button class="button button-secondary compact-action" data-done="${x.id}">Marcar feito</button></article>`).join("");
-      return `<h3>${group}</h3>${markup || `<p class="agenda-empty" role="status">Nenhum follow-up pendente.</p>`}`;
-    }).join("");
-    list.querySelectorAll("[data-done]").forEach((button) => button.onclick = async () => {
-      await api(`/api/followups/${button.dataset.done}`, { method: "PATCH", body: { done_at: new Date().toISOString() } });
-      renderFollowupsView();
-    });
-  } catch (error) {
-    dashboardGrid.querySelector(".followup-list").innerHTML = statusError(error);
-    wire();
+/* ==========================================================================
+   FocusDev — módulo "crm"
+   Telas: CRM comercial (hub), Leads, Funil, Oportunidades, Campanhas,
+   Propostas, Follow-ups. Dados reais de /api/leads, /api/opportunities,
+   /api/campaigns, /api/proposals, /api/followups, /api/crm/summary.
+   Ownership: modules/crm.js, modules/crm.css
+   ========================================================================== */
+
+const LEAD_STATUS = { new: ["Novo", "blue"], contacted: ["Contatado", "purple"], qualified: ["Qualificado", "orange"], proposal: ["Em proposta", "orange"], won: ["Ganho", "green"], lost: ["Perdido", "red"] };
+const STAGES = { prospecting: ["Prospecção", "blue"], qualification: ["Qualificação", "purple"], proposal: ["Proposta", "orange"], negotiation: ["Negociação", "orange"], won: ["Ganho", "green"], lost: ["Perdido", "red"] };
+const CHANNELS = { email: "E-mail", whatsapp: "WhatsApp", ads: "Anúncios", social: "Redes sociais", other: "Outro" };
+const CAMPAIGN_STATUS = { draft: ["Rascunho", "gray"], active: ["Ativa", "green"], paused: ["Pausada", "orange"], done: ["Concluída", "blue"] };
+const PROPOSAL_STATUS = { draft: ["Rascunho", "gray"], sent: ["Enviada", "blue"], accepted: ["Aceita", "green"], rejected: ["Recusada", "red"] };
+const SOURCES = [["site", "Site"], ["indicacao", "Indicação"], ["instagram", "Instagram"], ["whatsapp", "WhatsApp"], ["google", "Google"], ["evento", "Evento"], ["outro", "Outro"]];
+
+const { esc, money, date, dateTime, relative, badge, avatar, header, button, stats, toolbar, table, empty, rowActions, confirmInline, toast, form, drawer, facts, keepSearchFocus, downloadCsv } = ui;
+const label = (map, key) => map[key]?.[0] || key || "—";
+const tone = (map, key) => map[key]?.[1] || "gray";
+const pageStatus = (text, isError = false) => { const p = dashboardGrid.querySelector("[data-page-status]"); if (p) { p.textContent = text; p.classList.toggle("crm-error", isError); } };
+const wrap = (title, kicker, promise) => promise.catch((error) => { dashboardGrid.innerHTML = header({ kicker, title }) + stateBlock.error(error.message, "crm-retry"); dashboardGrid.querySelector(".crm-retry")?.addEventListener("click", () => renderHashRoute(window.location.hash)); });
+
+/* Cache leve de listas usadas em selects. */
+const cache = { leads: null, opportunities: null, campaigns: null, catalog: null };
+async function options(kind) {
+  if (!cache[kind]) {
+    const path = { leads: "/api/leads", opportunities: "/api/opportunities", campaigns: "/api/campaigns", catalog: "/api/catalog-items" }[kind];
+    try { cache[kind] = (await api(path))[kind === "catalog" ? "catalog-items" : kind] || []; } catch { cache[kind] = []; }
   }
+  return cache[kind];
 }
-async function renderCRMView() { set(intro("Workspace comercial", "CRM FocusDev", "Relacionamento, pipeline e fechamento.", "lead") + `<section class="crm-overview">${load("Carregando resumo...")}</section><section class="data-card crm-hub"><h2>Módulos do CRM</h2><div class="crm-module-grid">${["leads", "funil", "oportunidades", "campanhas", "propostas", "follow-ups"].map(k => `<button class="crm-module-card" data-crm-module="${k}"><strong>${k[0].toUpperCase() + k.slice(1)}</strong><small>Abrir área</small></button>`).join("")}</div></section>`); wire(); dashboardGrid.querySelectorAll("[data-crm-module]").forEach(b => b.onclick = () => { location.hash = b.dataset.crmModule; }); try { const [leads, ops] = await Promise.all([fetchData("/api/leads", "leads"), fetchData("/api/opportunities", "opportunities")]); dashboardGrid.querySelector(".crm-overview").innerHTML = `<article class="data-card"><span>Leads</span><strong>${leads.length}</strong><small>${LEAD_STATUS.map(x => `${x[1]}: ${leads.filter(l => l.status === x[0]).length}`).join(" · ")}</small></article><article class="data-card"><span>Funil total</span><strong>${money(ops.reduce((a,o) => a + Number(o.amount || 0), 0))}</strong><small>${ops.length} oportunidades</small></article><article class="data-card"><span>Estágios</span><strong>${ops.filter(o => ["won", "lost"].includes(o.stage)).length}</strong><small>${CRM_STAGES.map(s => `${stageLabel[s]}: ${ops.filter(o => o.stage === s).length}`).join(" · ")}</small></article>`; } catch(e) { dashboardGrid.querySelector(".crm-overview").innerHTML = statusError(e); } }
-config(); registerRoutes({ crm: renderCRMView, leads: renderLeadsView, funil: renderFunnelView, oportunidades: renderOpportunitiesView, campanhas: renderCampaignsView, propostas: renderProposalsView, "follow-ups": renderFollowupsView });
+const invalidate = () => { Object.keys(cache).forEach((k) => (cache[k] = null)); };
+
+/* ==========================================================================
+   Hub
+   ========================================================================== */
+
+async function renderHub() {
+  dashboardGrid.innerHTML = header({ kicker: "CRM", title: "CRM comercial", description: "Carregando…" }) + stateBlock.loading("Carregando resumo…");
+  await wrap("CRM comercial", "CRM", (async () => {
+    const [summary, followups] = await Promise.all([api("/api/crm/summary"), api("/api/followups")]);
+    const leadsTotal = summary.leads.reduce((n, r) => n + r.total, 0), leadsOpen = summary.leads.filter((r) => !["won", "lost"].includes(r.status)).reduce((n, r) => n + r.total, 0);
+    const won = summary.opportunities.find((r) => r.stage === "won"), lost = summary.opportunities.find((r) => r.stage === "lost");
+    const openOpps = summary.opportunities.filter((r) => !["won", "lost"].includes(r.stage));
+    const pipeline = openOpps.reduce((n, r) => n + r.amount, 0), pipelineCount = openOpps.reduce((n, r) => n + r.total, 0);
+    const conversion = (won?.total || 0) + (lost?.total || 0) ? Math.round(((won?.total || 0) / ((won?.total || 0) + (lost?.total || 0))) * 100) : null;
+    const pending = (followups.followups || []).filter((f) => !f.done_at).sort((a, b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 6);
+    const proposalsSent = summary.proposals.find((r) => r.status === "sent");
+    dashboardGrid.innerHTML = header({ kicker: "CRM", title: "CRM comercial", description: `${leadsOpen} leads ativos · ${pipelineCount} oportunidades em aberto · ${money(pipeline)} no funil`, actions: button({ label: "+ Novo lead", attr: 'data-new-lead' }) + button({ label: "+ Oportunidade", kind: "secondary", attr: 'data-new-opp' }) })
+      + stats([
+        { label: "Leads ativos", value: String(leadsOpen), note: `${leadsTotal} no total`, attr: 'data-go="#leads"' },
+        { label: "Funil em aberto", value: money(pipeline), note: `${pipelineCount} oportunidades`, attr: 'data-go="#funil"' },
+        { label: "Conversão", value: conversion === null ? "—" : `${conversion}%`, note: `${won?.total || 0} ganhas · ${lost?.total || 0} perdidas`, tone: conversion !== null && conversion >= 50 ? "green" : undefined, attr: 'data-go="#oportunidades"' },
+        { label: "Follow-ups pendentes", value: String(summary.followups.open || 0), note: summary.followups.late ? `${summary.followups.late} atrasados` : `${summary.followups.today || 0} para hoje`, tone: summary.followups.late ? "red" : undefined, attr: 'data-go="#follow-ups"' },
+      ])
+      + `<section class="crm-hub-grid">
+        <article class="data-card"><div class="section-heading"><div><p class="card-kicker">Funil</p><h2>Valor por estágio</h2></div><a class="text-action" href="#funil">Abrir funil →</a></div>${funnelBars(summary.opportunities)}</article>
+        <article class="data-card"><div class="section-heading"><div><p class="card-kicker">Leads</p><h2>Por situação</h2></div><a class="text-action" href="#leads">Ver leads →</a></div><div class="crm-status-list">${Object.keys(LEAD_STATUS).map((k) => { const r = summary.leads.find((x) => x.status === k); return `<div><span>${badge(label(LEAD_STATUS, k), tone(LEAD_STATUS, k))}</span><strong>${r?.total || 0}</strong></div>`; }).join("")}</div></article>
+        <article class="data-card crm-hub-wide"><div class="section-heading"><div><p class="card-kicker">Próximos follow-ups</p><h2>Não deixe esfriar</h2></div><a class="text-action" href="#follow-ups">Todos →</a></div>${pending.length ? `<div class="crm-followup-list">${pending.map((f) => `<div class="crm-followup ${new Date(f.due_at) < new Date() ? "is-late" : ""}"><time>${esc(dateTime(f.due_at))}</time><div><strong>${esc(f.lead_name || "Lead")}</strong><small>${esc(f.note || f.channel || "Retomar contato")}</small></div><button class="text-action" type="button" data-done="${esc(f.id)}">Concluir</button></div>`).join("")}</div>` : empty({ title: "Nenhum follow-up pendente.", text: "Agende retornos a partir de um lead para nunca perder o momento certo." })}</article>
+        <article class="data-card"><div class="section-heading"><div><p class="card-kicker">Propostas</p><h2>Situação</h2></div><a class="text-action" href="#propostas">Ver propostas →</a></div><div class="crm-status-list">${Object.keys(PROPOSAL_STATUS).map((k) => { const r = summary.proposals.find((x) => x.status === k); return `<div><span>${badge(label(PROPOSAL_STATUS, k), tone(PROPOSAL_STATUS, k))}</span><strong>${r?.total || 0}</strong><small>${money(r?.amount || 0)}</small></div>`; }).join("")}</div>${proposalsSent?.total ? `<p class="crm-hint">${proposalsSent.total} proposta${proposalsSent.total === 1 ? "" : "s"} aguardando resposta (${money(proposalsSent.amount)}).</p>` : ""}</article>
+      </section>`;
+    dashboardGrid.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { location.hash = b.dataset.go; }));
+    dashboardGrid.querySelector("[data-new-lead]").addEventListener("click", () => leadForm(null, renderHub));
+    dashboardGrid.querySelector("[data-new-opp]").addEventListener("click", () => opportunityForm(null, renderHub));
+    dashboardGrid.querySelectorAll("[data-done]").forEach((b) => b.addEventListener("click", async () => { try { await api(`/api/followups/${b.dataset.done}`, { method: "PATCH", body: { done: true } }); toast("Follow-up concluído.", "success"); renderHub(); } catch (error) { toast(error.message, "error"); } }));
+  })());
+}
+
+function funnelBars(rows) {
+  const stages = Object.keys(STAGES).filter((k) => !["won", "lost"].includes(k));
+  const max = Math.max(1, ...stages.map((k) => rows.find((r) => r.stage === k)?.amount || 0));
+  return `<div class="crm-funnel">${stages.map((k) => { const r = rows.find((x) => x.stage === k); const amount = r?.amount || 0; return `<div class="crm-funnel-row"><span>${label(STAGES, k)}</span><div class="crm-funnel-bar"><i style="width:${Math.max(3, Math.round((amount / max) * 100))}%"></i></div><b>${money(amount)}</b><small>${r?.total || 0}</small></div>`; }).join("")}</div>`;
+}
+
+/* ==========================================================================
+   Leads
+   ========================================================================== */
+
+const leadsState = { query: "", status: "open", source: "all", sort: "recent" };
+
+async function renderLeads() {
+  dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Leads", description: "Carregando…" }) + stateBlock.loading("Carregando leads…");
+  await wrap("Leads", "CRM", (async () => {
+    const [leadsRes, campaignsRes] = await Promise.allSettled([api("/api/leads"), api("/api/campaigns")]);
+    if (leadsRes.status === "rejected") throw leadsRes.reason;
+    const leads = leadsRes.value.leads || [], campaigns = campaignsRes.status === "fulfilled" ? campaignsRes.value.campaigns || [] : [];
+    cache.campaigns = campaigns; cache.leads = leads;
+    drawLeads(leads, campaigns);
+  })());
+}
+
+function drawLeads(leads, campaigns) {
+  const s = leadsState;
+  const q = s.query.trim().toLocaleLowerCase("pt-BR");
+  const list = leads.filter((l) => (s.status === "all" || (s.status === "open" ? !["won", "lost"].includes(l.status) : l.status === s.status)) && (s.source === "all" || (l.source || "outro") === s.source) && (!q || `${l.name} ${l.company || ""} ${l.email || ""} ${l.phone || ""}`.toLocaleLowerCase("pt-BR").includes(q)))
+    .sort((a, b) => s.sort === "name" ? a.name.localeCompare(b.name, "pt-BR") : s.sort === "value" ? Number(b.value || 0) - Number(a.value || 0) : new Date(b.created_at) - new Date(a.created_at));
+  const open = leads.filter((l) => !["won", "lost"].includes(l.status));
+  const weekAgo = Date.now() - 7 * 86400e3;
+  dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Leads", description: `${open.length} ativos de ${leads.length}`, actions: button({ label: "Exportar CSV", kind: "secondary", attr: "data-export" }) + button({ label: "+ Novo lead", attr: "data-new" }) })
+    + stats([
+      { label: "Ativos", value: String(open.length), attr: 'data-quick="open"', active: s.status === "open" },
+      { label: "Novos (7 dias)", value: String(leads.filter((l) => new Date(l.created_at).getTime() >= weekAgo).length), attr: 'data-quick="new"' },
+      { label: "Ganhos", value: String(leads.filter((l) => l.status === "won").length), tone: "green", attr: 'data-quick="won"' },
+      { label: "Valor estimado", value: money(open.reduce((n, l) => n + Number(l.value || 0), 0)), note: "leads ativos" },
+    ])
+    + `<section class="data-card crm-card">${toolbar({ search: { value: s.query, placeholder: "Buscar por nome, empresa, e-mail ou telefone…" }, filters: [
+      { key: "status", value: s.status, options: [["open", "Ativos"], ["all", "Todos"], ...Object.entries(LEAD_STATUS).map(([k, [v]]) => [k, v])] },
+      { key: "source", value: s.source, options: [["all", "Toda origem"], ...SOURCES] },
+      { key: "sort", value: s.sort, options: [["recent", "Mais recentes"], ["name", "Por nome"], ["value", "Maior valor"]] },
+    ] })}
+    ${list.length ? table({ columns: [
+      { key: "name", label: "Lead", render: (l) => `<div class="crm-cell-person">${avatar(l.name, tone(LEAD_STATUS, l.status))}<div><strong>${esc(l.name)}</strong><small>${esc(l.company || "Sem empresa")}${l.email ? ` · ${esc(l.email)}` : ""}</small></div></div>` },
+      { key: "status", label: "Situação", render: (l) => `<select class="ui-select crm-inline-select" data-status="${esc(l.id)}">${Object.entries(LEAD_STATUS).map(([k, [v]]) => `<option value="${k}" ${l.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>` },
+      { key: "source", label: "Origem", hideOnNarrow: true, render: (l) => esc(SOURCES.find(([k]) => k === l.source)?.[1] || l.source || "—") },
+      { key: "value", label: "Valor", align: "right", hideOnNarrow: true, render: (l) => (l.value ? money(l.value) : "—") },
+      { key: "created_at", label: "Criado", hideOnNarrow: true, render: (l) => `<span title="${esc(dateTime(l.created_at))}">${esc(relative(l.created_at))}</span>` },
+      { key: "actions", label: "", align: "right", render: (l) => rowActions([{ label: "↗", title: "Converter em oportunidade", attr: `data-convert="${esc(l.id)}"` }, { label: "⏰", title: "Agendar follow-up", attr: `data-followup="${esc(l.id)}"` }, { label: "✎", title: "Editar", attr: `data-edit="${esc(l.id)}"` }, { label: "×", title: "Excluir", danger: true, attr: `data-delete="${esc(l.id)}"` }]) },
+    ], rows: list, rowClass: () => "is-clickable", rowAttr: (l) => `data-open="${esc(l.id)}"` }) : empty({ title: leads.length ? "Nenhum lead com esses filtros." : "Nenhum lead ainda.", text: leads.length ? "Ajuste a busca ou os filtros." : "Cadastre quem demonstrou interesse e acompanhe até o fechamento.", cta: leads.length ? "" : "Criar primeiro lead", attr: "data-new" })}
+    </section>`;
+  const refocus = keepSearchFocus(dashboardGrid);
+  const redraw = () => { drawLeads(leads, campaigns); };
+  dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { s.query = e.target.value; redraw(); refocus(); });
+  dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { s[el.dataset.filter] = el.value; redraw(); }));
+  dashboardGrid.querySelectorAll("[data-quick]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.quick; if (k === "new") { s.status = "all"; s.sort = "recent"; } else s.status = k; redraw(); }));
+  dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => leadForm(null, renderLeads)));
+  dashboardGrid.querySelector("[data-export]")?.addEventListener("click", () => downloadCsv("leads.csv", ["Nome", "Empresa", "E-mail", "Telefone", "Origem", "Situação", "Valor", "Criado em"], list.map((l) => [l.name, l.company || "", l.email || "", l.phone || "", l.source || "", label(LEAD_STATUS, l.status), l.value || "", dateTime(l.created_at)])));
+  dashboardGrid.querySelectorAll("[data-status]").forEach((sel) => sel.addEventListener("change", async () => { try { await api(`/api/leads/${sel.dataset.status}`, { method: "PATCH", body: { status: sel.value } }); const l = leads.find((x) => String(x.id) === sel.dataset.status); if (l) l.status = sel.value; toast("Situação atualizada.", "success"); redraw(); } catch (error) { toast(error.message, "error"); redraw(); } }));
+  dashboardGrid.querySelectorAll("tr[data-open]").forEach((row) => row.addEventListener("click", (event) => { if (event.target.closest("button, select, a")) return; leadDrawer(leads.find((l) => String(l.id) === row.dataset.open), campaigns, renderLeads); }));
+  dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => leadForm(leads.find((l) => String(l.id) === b.dataset.edit), renderLeads)));
+  dashboardGrid.querySelectorAll("[data-convert]").forEach((b) => b.addEventListener("click", () => convertLead(leads.find((l) => String(l.id) === b.dataset.convert), renderLeads)));
+  dashboardGrid.querySelectorAll("[data-followup]").forEach((b) => b.addEventListener("click", () => followupForm({ lead_id: b.dataset.followup }, renderLeads)));
+  dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/leads/${b.dataset.delete}`, { method: "DELETE" }); toast("Lead excluído."); renderLeads(); } })));
+}
+
+function leadForm(lead, after) {
+  const campaigns = cache.campaigns || [];
+  form({ title: lead ? "Editar lead" : "Novo lead", subtitle: "CRM", submitLabel: lead ? "Salvar" : "Criar lead", values: lead || { status: "new", source: "site" }, fields: [
+    { name: "name", label: "Nome", placeholder: "Nome do contato" },
+    { name: "company", label: "Empresa", placeholder: "Empresa (opcional)", required: false, half: true },
+    { name: "value", label: "Valor estimado (R$)", type: "number", required: false, half: true },
+    { name: "email", label: "E-mail", type: "email", required: false, half: true },
+    { name: "phone", label: "Telefone / WhatsApp", type: "tel", placeholder: "5511999990000", required: false, half: true },
+    { name: "source", label: "Origem", type: "select", options: SOURCES, half: true },
+    { name: "status", label: "Situação", type: "select", options: Object.entries(LEAD_STATUS).map(([k, [v]]) => [k, v]), half: true },
+    ...(campaigns.length ? [{ name: "campaign_id", label: "Campanha", type: "select", required: false, options: [["", "Sem campanha"], ...campaigns.map((c) => [String(c.id), c.name])] }] : []),
+    { name: "notes", label: "Observações", type: "textarea", required: false, rows: 3 },
+  ], onSubmit: async (values) => { if (lead) await api(`/api/leads/${lead.id}`, { method: "PATCH", body: values }); else await api("/api/leads", { method: "POST", body: values }); invalidate(); toast(lead ? "Lead atualizado." : "Lead criado.", "success"); after(); },
+  danger: lead ? { label: "Excluir lead", onClick: async () => { await api(`/api/leads/${lead.id}`, { method: "DELETE" }); invalidate(); toast("Lead excluído."); after(); } } : null });
+}
+
+function leadDrawer(lead, campaigns, after) {
+  if (!lead) return;
+  const campaign = campaigns.find((c) => String(c.id) === String(lead.campaign_id));
+  const d = drawer({ title: lead.name, subtitle: "Lead", html: `
+    <div class="crm-drawer-head">${badge(label(LEAD_STATUS, lead.status), tone(LEAD_STATUS, lead.status))}${lead.value ? `<strong>${money(lead.value)}</strong>` : ""}</div>
+    ${facts([["Empresa", lead.company], ["E-mail", lead.email], ["Telefone", lead.phone], ["Origem", SOURCES.find(([k]) => k === lead.source)?.[1] || lead.source], ["Campanha", campaign?.name], ["Criado em", dateTime(lead.created_at)], ["Atualizado", relative(lead.updated_at)]])}
+    ${lead.notes ? `<div><h3>Observações</h3><p class="crm-notes">${esc(lead.notes)}</p></div>` : ""}
+    <div class="crm-drawer-actions">${button({ label: "Converter em oportunidade", attr: "data-convert" })}${button({ label: "Agendar follow-up", kind: "secondary", attr: "data-followup" })}${button({ label: "Editar", kind: "secondary", attr: "data-edit" })}${lead.phone ? `<a class="button button-secondary compact-action" href="#caixa-de-entrada">Conversar</a>` : ""}</div>
+    <div><h3>Follow-ups</h3><div data-followups>${stateBlock.loading("Carregando…")}</div></div>`,
+    onOpen: async (body, close) => {
+      body.querySelector("[data-convert]").addEventListener("click", () => { close(); convertLead(lead, after); });
+      body.querySelector("[data-followup]").addEventListener("click", () => { close(); followupForm({ lead_id: lead.id }, after); });
+      body.querySelector("[data-edit]").addEventListener("click", () => { close(); leadForm(lead, after); });
+      try { const all = (await api("/api/followups")).followups || []; const mine = all.filter((f) => String(f.lead_id) === String(lead.id)); body.querySelector("[data-followups]").innerHTML = mine.length ? `<div class="crm-followup-list">${mine.map((f) => `<div class="crm-followup ${f.done_at ? "is-done" : new Date(f.due_at) < new Date() ? "is-late" : ""}"><time>${esc(dateTime(f.due_at))}</time><div><strong>${esc(f.channel || "Contato")}</strong><small>${esc(f.note || "")}</small></div><span>${f.done_at ? badge("Feito", "green") : badge("Pendente", "orange")}</span></div>`).join("")}</div>` : `<p class="crm-hint">Nenhum follow-up para este lead.</p>`; } catch (error) { body.querySelector("[data-followups]").innerHTML = `<p class="crm-hint">${esc(error.message)}</p>`; }
+    } });
+  void d;
+}
+
+function convertLead(lead, after) {
+  if (!lead) return;
+  form({ title: "Converter em oportunidade", subtitle: lead.name, submitLabel: "Converter", values: { name: `${lead.name}${lead.company ? ` · ${lead.company}` : ""}`, amount: lead.value || "", createContact: true, createCompany: Boolean(lead.company) }, fields: [
+    { name: "name", label: "Nome da oportunidade" },
+    { name: "amount", label: "Valor (R$)", type: "number", required: false, half: true },
+    { name: "expected_close", label: "Previsão de fechamento", type: "date", required: false, half: true },
+    { name: "createContact", label: "", type: "checkbox", text: "Criar contato com os dados do lead" },
+    { name: "createCompany", label: "", type: "checkbox", text: lead.company ? `Criar empresa "${lead.company}"` : "Criar empresa (lead sem empresa)" },
+  ], onSubmit: async (values) => { await api(`/api/leads/${lead.id}/convert`, { method: "POST", body: values }); invalidate(); toast("Oportunidade criada no funil.", "success"); after(); } });
+}
+
+/* ==========================================================================
+   Funil e Oportunidades
+   ========================================================================== */
+
+async function renderFunnel() {
+  dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Funil de vendas", description: "Carregando…" }) + stateBlock.loading("Carregando funil…");
+  await wrap("Funil de vendas", "CRM", (async () => {
+    const opps = (await api("/api/opportunities")).opportunities || []; cache.opportunities = opps;
+    const open = opps.filter((o) => !["won", "lost"].includes(o.stage));
+    dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Funil de vendas", description: `${open.length} em aberto · ${money(open.reduce((n, o) => n + Number(o.amount || 0), 0))} · arraste os cards entre os estágios`, actions: button({ label: "+ Oportunidade", attr: "data-new" }) })
+      + `<section class="crm-kanban">${Object.entries(STAGES).map(([stage, [name, t]]) => { const list = opps.filter((o) => o.stage === stage); return `<section class="crm-column crm-column-${t}" data-column="${stage}"><h3>${name}<span>${list.length} · ${money(list.reduce((n, o) => n + Number(o.amount || 0), 0))}</span></h3><div class="crm-column-body">${list.map((o) => `<article class="crm-opp-card" draggable="true" data-opp="${esc(o.id)}"><strong>${esc(o.name)}</strong><b>${money(o.amount)}</b><small>${o.expected_close ? `Fecha em ${esc(date(o.expected_close))}` : "Sem previsão"}${o.probability != null ? ` · ${esc(o.probability)}%` : ""}</small></article>`).join("") || `<p class="crm-column-empty">Solte aqui</p>`}</div></section>`; }).join("")}</section>`;
+    dashboardGrid.querySelector("[data-new]").addEventListener("click", () => opportunityForm(null, renderFunnel));
+    dashboardGrid.querySelectorAll("[data-opp]").forEach((card) => { card.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", card.dataset.opp); card.classList.add("is-dragging"); }); card.addEventListener("click", () => opportunityDrawer(opps.find((o) => String(o.id) === card.dataset.opp), renderFunnel)); });
+    dashboardGrid.querySelectorAll("[data-column]").forEach((col) => {
+      col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("is-drop-target"); });
+      col.addEventListener("dragleave", () => col.classList.remove("is-drop-target"));
+      col.addEventListener("drop", async (e) => { e.preventDefault(); col.classList.remove("is-drop-target"); const id = e.dataTransfer.getData("text/plain"); const o = opps.find((x) => String(x.id) === id); if (!o || o.stage === col.dataset.column) return; try { await api(`/api/opportunities/${id}`, { method: "PATCH", body: { stage: col.dataset.column } }); toast(`Movida para ${label(STAGES, col.dataset.column)}.`, "success"); renderFunnel(); } catch (error) { toast(error.message, "error"); } });
+    });
+  })());
+}
+
+const oppState = { query: "", stage: "open", sort: "amount" };
+async function renderOpportunities() {
+  dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Oportunidades", description: "Carregando…" }) + stateBlock.loading("Carregando oportunidades…");
+  await wrap("Oportunidades", "CRM", (async () => { const opps = (await api("/api/opportunities")).opportunities || []; cache.opportunities = opps; drawOpportunities(opps); })());
+}
+
+function drawOpportunities(opps) {
+  const s = oppState, q = s.query.trim().toLocaleLowerCase("pt-BR");
+  const list = opps.filter((o) => (s.stage === "all" || (s.stage === "open" ? !["won", "lost"].includes(o.stage) : o.stage === s.stage)) && (!q || o.name.toLocaleLowerCase("pt-BR").includes(q)))
+    .sort((a, b) => s.sort === "close" ? (a.expected_close ? new Date(a.expected_close) : Infinity) - (b.expected_close ? new Date(b.expected_close) : Infinity) : s.sort === "recent" ? new Date(b.created_at) - new Date(a.created_at) : Number(b.amount || 0) - Number(a.amount || 0));
+  const open = opps.filter((o) => !["won", "lost"].includes(o.stage)), won = opps.filter((o) => o.stage === "won");
+  const weighted = open.reduce((n, o) => n + Number(o.amount || 0) * (o.probability != null ? Number(o.probability) / 100 : 0.5), 0);
+  dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Oportunidades", description: `${open.length} em aberto`, actions: button({ label: "Exportar CSV", kind: "secondary", attr: "data-export" }) + button({ label: "+ Oportunidade", attr: "data-new" }) })
+    + stats([
+      { label: "Em aberto", value: money(open.reduce((n, o) => n + Number(o.amount || 0), 0)), note: `${open.length} oportunidades` },
+      { label: "Previsão ponderada", value: money(weighted), note: "valor × probabilidade" },
+      { label: "Ganhas", value: money(won.reduce((n, o) => n + Number(o.amount || 0), 0)), note: `${won.length} negócios`, tone: "green" },
+      { label: "Fecham em 30 dias", value: String(open.filter((o) => o.expected_close && new Date(o.expected_close) - Date.now() < 30 * 86400e3).length), note: "com previsão" },
+    ])
+    + `<section class="data-card crm-card">${toolbar({ search: { value: s.query, placeholder: "Buscar oportunidade…" }, filters: [
+      { key: "stage", value: s.stage, options: [["open", "Em aberto"], ["all", "Todas"], ...Object.entries(STAGES).map(([k, [v]]) => [k, v])] },
+      { key: "sort", value: s.sort, options: [["amount", "Maior valor"], ["close", "Fechamento próximo"], ["recent", "Mais recentes"]] },
+    ], actions: `<a class="filter-button" href="#funil">Ver como funil</a>` })}
+    ${list.length ? table({ columns: [
+      { key: "name", label: "Oportunidade", render: (o) => `<strong>${esc(o.name)}</strong><small>${o.notes ? esc(o.notes).slice(0, 80) : "Sem observações"}</small>` },
+      { key: "stage", label: "Estágio", render: (o) => `<select class="ui-select crm-inline-select" data-stage="${esc(o.id)}">${Object.entries(STAGES).map(([k, [v]]) => `<option value="${k}" ${o.stage === k ? "selected" : ""}>${v}</option>`).join("")}</select>` },
+      { key: "amount", label: "Valor", align: "right", render: (o) => `<strong>${money(o.amount)}</strong>` },
+      { key: "probability", label: "Prob.", align: "center", hideOnNarrow: true, render: (o) => (o.probability != null ? `${esc(o.probability)}%` : "—") },
+      { key: "expected_close", label: "Previsão", hideOnNarrow: true, render: (o) => esc(date(o.expected_close)) },
+      { key: "actions", label: "", align: "right", render: (o) => rowActions([{ label: "📄", title: "Criar proposta", attr: `data-proposal="${esc(o.id)}"` }, { label: "✎", title: "Editar", attr: `data-edit="${esc(o.id)}"` }, { label: "×", title: "Excluir", danger: true, attr: `data-delete="${esc(o.id)}"` }]) },
+    ], rows: list, rowClass: () => "is-clickable", rowAttr: (o) => `data-open="${esc(o.id)}"` }) : empty({ title: opps.length ? "Nada com esses filtros." : "Nenhuma oportunidade.", text: opps.length ? "" : "Converta um lead ou crie uma oportunidade direto aqui.", cta: opps.length ? "" : "Criar oportunidade", attr: "data-new" })}
+    </section>`;
+  const refocus = keepSearchFocus(dashboardGrid), redraw = () => drawOpportunities(opps);
+  dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { s.query = e.target.value; redraw(); refocus(); });
+  dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { s[el.dataset.filter] = el.value; redraw(); }));
+  dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => opportunityForm(null, renderOpportunities)));
+  dashboardGrid.querySelector("[data-export]")?.addEventListener("click", () => downloadCsv("oportunidades.csv", ["Nome", "Estágio", "Valor", "Probabilidade", "Previsão", "Criado em"], list.map((o) => [o.name, label(STAGES, o.stage), o.amount, o.probability ?? "", o.expected_close || "", dateTime(o.created_at)])));
+  dashboardGrid.querySelectorAll("[data-stage]").forEach((sel) => sel.addEventListener("change", async () => { try { await api(`/api/opportunities/${sel.dataset.stage}`, { method: "PATCH", body: { stage: sel.value } }); const o = opps.find((x) => String(x.id) === sel.dataset.stage); if (o) o.stage = sel.value; toast("Estágio atualizado.", "success"); redraw(); } catch (error) { toast(error.message, "error"); redraw(); } }));
+  dashboardGrid.querySelectorAll("tr[data-open]").forEach((row) => row.addEventListener("click", (event) => { if (event.target.closest("button, select, a")) return; opportunityDrawer(opps.find((o) => String(o.id) === row.dataset.open), renderOpportunities); }));
+  dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => opportunityForm(opps.find((o) => String(o.id) === b.dataset.edit), renderOpportunities)));
+  dashboardGrid.querySelectorAll("[data-proposal]").forEach((b) => b.addEventListener("click", () => proposalForm({ opportunity_id: b.dataset.proposal, title: `Proposta · ${opps.find((o) => String(o.id) === b.dataset.proposal)?.name || ""}` }, () => { location.hash = "#propostas"; })));
+  dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/opportunities/${b.dataset.delete}`, { method: "DELETE" }); toast("Oportunidade excluída."); renderOpportunities(); } })));
+}
+
+async function opportunityForm(opp, after) {
+  const leads = await options("leads");
+  form({ title: opp ? "Editar oportunidade" : "Nova oportunidade", subtitle: "CRM", submitLabel: opp ? "Salvar" : "Criar", values: opp ? { ...opp, lead_id: opp.lead_id ? String(opp.lead_id) : "" } : { stage: "prospecting", probability: 50 }, fields: [
+    { name: "name", label: "Nome" },
+    { name: "amount", label: "Valor (R$)", type: "number", half: true },
+    { name: "probability", label: "Probabilidade (%)", type: "number", step: 1, min: 0, max: 100, required: false, half: true },
+    { name: "stage", label: "Estágio", type: "select", options: Object.entries(STAGES).map(([k, [v]]) => [k, v]), half: true },
+    { name: "expected_close", label: "Previsão de fechamento", type: "date", required: false, half: true },
+    { name: "lead_id", label: "Lead de origem", type: "select", required: false, options: [["", "Sem lead"], ...leads.map((l) => [String(l.id), l.name])] },
+    { name: "notes", label: "Observações", type: "textarea", required: false },
+  ], onSubmit: async (values) => { if (values.lead_id === null) values.lead_id = null; if (opp) await api(`/api/opportunities/${opp.id}`, { method: "PATCH", body: values }); else await api("/api/opportunities", { method: "POST", body: values }); invalidate(); toast(opp ? "Oportunidade atualizada." : "Oportunidade criada.", "success"); after(); },
+  danger: opp ? { label: "Excluir", onClick: async () => { await api(`/api/opportunities/${opp.id}`, { method: "DELETE" }); invalidate(); toast("Excluída."); after(); } } : null });
+}
+
+function opportunityDrawer(opp, after) {
+  if (!opp) return;
+  drawer({ title: opp.name, subtitle: "Oportunidade", html: `
+    <div class="crm-drawer-head">${badge(label(STAGES, opp.stage), tone(STAGES, opp.stage))}<strong>${money(opp.amount)}</strong></div>
+    ${facts([["Probabilidade", opp.probability != null ? `${opp.probability}%` : null], ["Previsão", opp.expected_close ? date(opp.expected_close) : null], ["Criada em", dateTime(opp.created_at)], ["Atualizada", relative(opp.updated_at)]])}
+    ${opp.notes ? `<div><h3>Observações</h3><p class="crm-notes">${esc(opp.notes)}</p></div>` : ""}
+    <div class="crm-drawer-actions">${button({ label: "Criar proposta", attr: "data-proposal" })}${button({ label: "Editar", kind: "secondary", attr: "data-edit" })}${!["won", "lost"].includes(opp.stage) ? button({ label: "Marcar ganha", kind: "secondary", attr: "data-won" }) + button({ label: "Marcar perdida", kind: "secondary", attr: "data-lost" }) : ""}</div>
+    <div><h3>Propostas</h3><div data-proposals>${stateBlock.loading("Carregando…")}</div></div>`,
+    onOpen: async (body, close) => {
+      body.querySelector("[data-proposal]").addEventListener("click", () => { close(); proposalForm({ opportunity_id: opp.id, title: `Proposta · ${opp.name}`, amount: opp.amount }, () => { location.hash = "#propostas"; }); });
+      body.querySelector("[data-edit]").addEventListener("click", () => { close(); opportunityForm(opp, after); });
+      body.querySelector("[data-won]")?.addEventListener("click", async () => { try { await api(`/api/opportunities/${opp.id}`, { method: "PATCH", body: { stage: "won" } }); close(); toast("Negócio ganho! 🎉", "success"); after(); } catch (error) { toast(error.message, "error"); } });
+      body.querySelector("[data-lost]")?.addEventListener("click", async () => { try { await api(`/api/opportunities/${opp.id}`, { method: "PATCH", body: { stage: "lost" } }); close(); toast("Marcada como perdida."); after(); } catch (error) { toast(error.message, "error"); } });
+      try { const all = (await api("/api/proposals")).proposals || []; const mine = all.filter((p) => String(p.opportunity_id) === String(opp.id)); body.querySelector("[data-proposals]").innerHTML = mine.length ? mine.map((p) => `<div class="crm-followup"><time>${esc(date(p.created_at))}</time><div><strong>${esc(p.title)}</strong><small>${money(p.amount)}</small></div><span>${badge(label(PROPOSAL_STATUS, p.status), tone(PROPOSAL_STATUS, p.status))}</span></div>`).join("") : `<p class="crm-hint">Nenhuma proposta ainda.</p>`; } catch (error) { body.querySelector("[data-proposals]").innerHTML = `<p class="crm-hint">${esc(error.message)}</p>`; }
+    } });
+}
+
+/* ==========================================================================
+   Campanhas
+   ========================================================================== */
+
+async function renderCampaigns() {
+  dashboardGrid.innerHTML = header({ kicker: "Marketing", title: "Campanhas", description: "Carregando…" }) + stateBlock.loading("Carregando campanhas…");
+  await wrap("Campanhas", "Marketing", (async () => {
+    const campaigns = (await api("/api/campaigns")).campaigns || []; cache.campaigns = campaigns;
+    const active = campaigns.filter((c) => c.status === "active");
+    dashboardGrid.innerHTML = header({ kicker: "Marketing", title: "Campanhas", description: `${active.length} ativas · ${money(active.reduce((n, c) => n + Number(c.budget || 0), 0))} em orçamento ativo`, actions: button({ label: "+ Nova campanha", attr: "data-new" }) })
+      + stats([{ label: "Ativas", value: String(active.length) }, { label: "Orçamento total", value: money(campaigns.reduce((n, c) => n + Number(c.budget || 0), 0)) }, { label: "Leads gerados", value: String(campaigns.reduce((n, c) => n + Number(c.leads_count || 0), 0)), note: "leads com campanha" }, { label: "Concluídas", value: String(campaigns.filter((c) => c.status === "done").length) }])
+      + `<section class="data-card crm-card">${campaigns.length ? table({ columns: [
+        { key: "name", label: "Campanha", render: (c) => `<strong>${esc(c.name)}</strong><small>${esc(CHANNELS[c.channel] || c.channel)}${c.starts_on ? ` · ${esc(date(c.starts_on))}${c.ends_on ? ` → ${esc(date(c.ends_on))}` : ""}` : ""}</small>` },
+        { key: "status", label: "Situação", render: (c) => badge(label(CAMPAIGN_STATUS, c.status), tone(CAMPAIGN_STATUS, c.status)) },
+        { key: "budget", label: "Orçamento", align: "right", render: (c) => money(c.budget) },
+        { key: "leads_count", label: "Leads", align: "center", render: (c) => `<strong>${esc(c.leads_count || 0)}</strong>` },
+        { key: "cpl", label: "Custo por lead", align: "right", hideOnNarrow: true, render: (c) => (Number(c.leads_count) ? money(Number(c.budget || 0) / Number(c.leads_count)) : "—") },
+        { key: "actions", label: "", align: "right", render: (c) => rowActions([...(c.status === "active" ? [{ label: "⏸", title: "Pausar", attr: `data-set="${esc(c.id)}:paused"` }] : c.status !== "done" ? [{ label: "▶", title: "Ativar", attr: `data-set="${esc(c.id)}:active"` }] : []), ...(c.status !== "done" ? [{ label: "✔", title: "Concluir", attr: `data-set="${esc(c.id)}:done"` }] : []), { label: "✎", title: "Editar", attr: `data-edit="${esc(c.id)}"` }, { label: "×", title: "Excluir", danger: true, attr: `data-delete="${esc(c.id)}"` }]) },
+      ], rows: campaigns }) : empty({ title: "Nenhuma campanha.", text: "Registre ações de marketing e associe leads a elas para medir o custo por lead.", cta: "Criar campanha", attr: "data-new" })}</section>`;
+    dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => campaignForm(null, renderCampaigns)));
+    dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => campaignForm(campaigns.find((c) => String(c.id) === b.dataset.edit), renderCampaigns)));
+    dashboardGrid.querySelectorAll("[data-set]").forEach((b) => b.addEventListener("click", async () => { const [id, status] = b.dataset.set.split(":"); try { await api(`/api/campaigns/${id}`, { method: "PATCH", body: { status } }); toast("Campanha atualizada.", "success"); renderCampaigns(); } catch (error) { toast(error.message, "error"); } }));
+    dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/campaigns/${b.dataset.delete}`, { method: "DELETE" }); toast("Campanha excluída."); renderCampaigns(); } })));
+  })());
+}
+
+function campaignForm(c, after) {
+  form({ title: c ? "Editar campanha" : "Nova campanha", subtitle: "Marketing", submitLabel: c ? "Salvar" : "Criar", values: c || { channel: "email", status: "draft", budget: 0 }, fields: [
+    { name: "name", label: "Nome" },
+    { name: "channel", label: "Canal", type: "select", options: Object.entries(CHANNELS), half: true },
+    { name: "status", label: "Situação", type: "select", options: Object.entries(CAMPAIGN_STATUS).map(([k, [v]]) => [k, v]), half: true },
+    { name: "budget", label: "Orçamento (R$)", type: "number", half: true },
+    { name: "starts_on", label: "Início", type: "date", required: false, half: true },
+    { name: "ends_on", label: "Fim", type: "date", required: false, half: true },
+  ], onSubmit: async (values) => { if (c) await api(`/api/campaigns/${c.id}`, { method: "PATCH", body: values }); else await api("/api/campaigns", { method: "POST", body: values }); invalidate(); toast(c ? "Campanha atualizada." : "Campanha criada.", "success"); after(); } });
+}
+
+/* ==========================================================================
+   Propostas
+   ========================================================================== */
+
+async function renderProposals() {
+  dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Propostas", description: "Carregando…" }) + stateBlock.loading("Carregando propostas…");
+  await wrap("Propostas", "CRM", (async () => {
+    const proposals = (await api("/api/proposals")).proposals || [];
+    const sent = proposals.filter((p) => p.status === "sent"), accepted = proposals.filter((p) => p.status === "accepted");
+    const rate = proposals.filter((p) => ["accepted", "rejected"].includes(p.status)).length ? Math.round((accepted.length / proposals.filter((p) => ["accepted", "rejected"].includes(p.status)).length) * 100) : null;
+    dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Propostas", description: `${sent.length} aguardando resposta · ${money(sent.reduce((n, p) => n + Number(p.amount || 0), 0))}`, actions: button({ label: "+ Nova proposta", attr: "data-new" }) })
+      + stats([{ label: "Enviadas", value: String(sent.length), note: money(sent.reduce((n, p) => n + Number(p.amount || 0), 0)) }, { label: "Aceitas", value: String(accepted.length), note: money(accepted.reduce((n, p) => n + Number(p.amount || 0), 0)), tone: "green" }, { label: "Taxa de aceite", value: rate === null ? "—" : `${rate}%` }, { label: "Rascunhos", value: String(proposals.filter((p) => p.status === "draft").length) }])
+      + `<section class="data-card crm-card">${proposals.length ? table({ columns: [
+        { key: "title", label: "Proposta", render: (p) => `<strong>${esc(p.title)}</strong><small>${esc(p.opportunity_name || p.lead_name || "Sem vínculo")}${p.items_count ? ` · ${esc(p.items_count)} ${p.items_count === 1 ? "item" : "itens"}` : ""}</small>` },
+        { key: "status", label: "Situação", render: (p) => badge(label(PROPOSAL_STATUS, p.status), tone(PROPOSAL_STATUS, p.status)) },
+        { key: "amount", label: "Valor", align: "right", render: (p) => `<strong>${money(p.amount)}</strong>` },
+        { key: "valid_until", label: "Validade", hideOnNarrow: true, render: (p) => (p.valid_until ? `<span class="${new Date(p.valid_until) < new Date() && p.status === "sent" ? "crm-error" : ""}">${esc(date(p.valid_until))}</span>` : "—") },
+        { key: "sent_at", label: "Enviada", hideOnNarrow: true, render: (p) => esc(p.sent_at ? relative(p.sent_at) : "—") },
+        { key: "actions", label: "", align: "right", render: (p) => rowActions([{ label: "🧾", title: "Itens e detalhes", attr: `data-open="${esc(p.id)}"` }, ...(p.status === "draft" ? [{ label: "📤", title: "Marcar como enviada", attr: `data-set="${esc(p.id)}:sent"` }] : []), ...(p.status === "sent" ? [{ label: "✔", title: "Aceita", attr: `data-set="${esc(p.id)}:accepted"` }, { label: "✖", title: "Recusada", attr: `data-set="${esc(p.id)}:rejected"` }] : []), { label: "✎", title: "Editar", attr: `data-edit="${esc(p.id)}"` }, { label: "×", title: "Excluir", danger: true, attr: `data-delete="${esc(p.id)}"` }]) },
+      ], rows: proposals }) : empty({ title: "Nenhuma proposta.", text: "Monte propostas com itens do catálogo a partir de uma oportunidade.", cta: "Criar proposta", attr: "data-new" })}</section>`;
+    dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => proposalForm(null, renderProposals)));
+    dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => proposalForm(proposals.find((p) => String(p.id) === b.dataset.edit), renderProposals)));
+    dashboardGrid.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => proposalDrawer(b.dataset.open, renderProposals)));
+    dashboardGrid.querySelectorAll("[data-set]").forEach((b) => b.addEventListener("click", async () => { const [id, status] = b.dataset.set.split(":"); try { await api(`/api/proposals/${id}`, { method: "PATCH", body: { status } }); toast(status === "accepted" ? "Proposta aceita — oportunidade marcada como ganha." : status === "sent" ? "Marcada como enviada." : "Proposta recusada.", status === "rejected" ? "info" : "success"); renderProposals(); } catch (error) { toast(error.message, "error"); } }));
+    dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/proposals/${b.dataset.delete}`, { method: "DELETE" }); toast("Proposta excluída."); renderProposals(); } })));
+  })());
+}
+
+async function proposalForm(p, after) {
+  const [opps, leads] = await Promise.all([options("opportunities"), options("leads")]);
+  form({ title: p?.id ? "Editar proposta" : "Nova proposta", subtitle: "CRM", submitLabel: p?.id ? "Salvar" : "Criar", values: p ? { ...p, opportunity_id: p.opportunity_id ? String(p.opportunity_id) : "", lead_id: p.lead_id ? String(p.lead_id) : "" } : {}, fields: [
+    { name: "title", label: "Título" },
+    { name: "opportunity_id", label: "Oportunidade", type: "select", required: false, options: [["", "Sem oportunidade"], ...opps.map((o) => [String(o.id), `${o.name} · ${money(o.amount)}`])], half: true },
+    { name: "lead_id", label: "Lead", type: "select", required: false, options: [["", "Sem lead"], ...leads.map((l) => [String(l.id), l.name])], half: true },
+    { name: "amount", label: "Valor (R$)", type: "number", required: false, half: true, help: "Com itens, o valor é a soma deles." },
+    { name: "valid_until", label: "Válida até", type: "date", required: false, half: true },
+    { name: "notes", label: "Condições / observações", type: "textarea", required: false, rows: 4 },
+  ], onSubmit: async (values) => { if (values.amount === null) values.amount = 0; if (p?.id) await api(`/api/proposals/${p.id}`, { method: "PATCH", body: values }); else { const { proposal } = await api("/api/proposals", { method: "POST", body: values }); toast("Proposta criada. Adicione os itens.", "success"); after(); proposalDrawer(proposal.id, after); return; } toast("Proposta atualizada.", "success"); after(); } });
+}
+
+async function proposalDrawer(id, after) {
+  const d = drawer({ title: "Proposta", subtitle: "Carregando…", html: stateBlock.loading("Carregando proposta…") });
+  try {
+    const { proposal: p } = await api(`/api/proposals/${id}`);
+    const catalog = await options("catalog");
+    let items = (p.items || []).map((i) => ({ ...i }));
+    const render = () => {
+      const total = items.reduce((n, i) => n + Number(i.quantity || 0) * Number(i.unit_price || 0), 0);
+      d.body.innerHTML = `
+        <div class="crm-drawer-head">${badge(label(PROPOSAL_STATUS, p.status), tone(PROPOSAL_STATUS, p.status))}<strong>${money(total || p.amount)}</strong></div>
+        <h2 class="crm-drawer-title">${esc(p.title)}</h2>
+        ${facts([["Oportunidade", p.opportunity_name], ["Lead", p.lead_name], ["Validade", p.valid_until ? date(p.valid_until) : null], ["Enviada em", p.sent_at ? dateTime(p.sent_at) : null], ["Decidida em", p.decided_at ? dateTime(p.decided_at) : null]])}
+        ${p.notes ? `<div><h3>Condições</h3><p class="crm-notes">${esc(p.notes)}</p></div>` : ""}
+        <div><h3>Itens</h3>
+          <div class="crm-items">${items.length ? items.map((i, index) => `<div class="crm-item"><input type="text" value="${esc(i.description)}" data-item="${index}" data-field="description" placeholder="Descrição" /><input type="number" step="0.01" min="0.01" value="${esc(i.quantity)}" data-item="${index}" data-field="quantity" aria-label="Quantidade" /><input type="number" step="0.01" min="0" value="${esc(i.unit_price)}" data-item="${index}" data-field="unit_price" aria-label="Preço unitário" /><b>${money(Number(i.quantity || 0) * Number(i.unit_price || 0))}</b><button class="ui-icon is-danger" type="button" data-remove="${index}" aria-label="Remover">×</button></div>`).join("") : `<p class="crm-hint">Nenhum item. Adicione do catálogo ou um item livre.</p>`}</div>
+          <div class="crm-items-actions">${catalog.length ? `<select class="ui-select" data-catalog><option value="">Adicionar do catálogo…</option>${catalog.filter((c) => c.active !== false).map((c) => `<option value="${esc(c.id)}">${esc(c.name)} · ${money(c.price)}</option>`).join("")}</select>` : `<a class="text-action" href="#catalogo">Cadastrar itens no catálogo →</a>`}<button class="text-action" type="button" data-add>+ Item livre</button><span></span>${button({ label: "Salvar itens", kind: "secondary", attr: "data-save" })}</div>
+          <p class="crm-items-total">Total: <strong>${money(total)}</strong></p>
+        </div>
+        <div class="crm-drawer-actions">${p.status === "draft" ? button({ label: "Marcar como enviada", attr: 'data-status="sent"' }) : ""}${p.status === "sent" ? button({ label: "Aceita", attr: 'data-status="accepted"' }) + button({ label: "Recusada", kind: "secondary", attr: 'data-status="rejected"' }) : ""}${button({ label: "Imprimir / PDF", kind: "secondary", attr: "data-print" })}${button({ label: "Editar", kind: "secondary", attr: "data-edit" })}</div>`;
+      d.body.querySelectorAll("[data-item]").forEach((input) => input.addEventListener("input", () => { items[Number(input.dataset.item)][input.dataset.field] = input.value; if (input.dataset.field !== "description") render(); }));
+      d.body.querySelectorAll("[data-remove]").forEach((b) => b.addEventListener("click", () => { items.splice(Number(b.dataset.remove), 1); render(); }));
+      d.body.querySelector("[data-add]").addEventListener("click", () => { items.push({ description: "", quantity: 1, unit_price: 0 }); render(); d.body.querySelector(`[data-item="${items.length - 1}"][data-field="description"]`)?.focus(); });
+      d.body.querySelector("[data-catalog]")?.addEventListener("change", (e) => { const c = catalog.find((x) => String(x.id) === e.target.value); if (c) { items.push({ description: c.name, quantity: 1, unit_price: c.price, catalog_item_id: c.id }); render(); } });
+      d.body.querySelector("[data-save]").addEventListener("click", async () => { try { const { proposal } = await api(`/api/proposals/${p.id}/items`, { method: "PUT", body: { items } }); p.amount = proposal.amount; toast("Itens salvos.", "success"); after(); render(); } catch (error) { toast(error.message, "error"); } });
+      d.body.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", async () => { try { await api(`/api/proposals/${p.id}`, { method: "PATCH", body: { status: b.dataset.status } }); d.close(); toast("Situação atualizada.", "success"); after(); } catch (error) { toast(error.message, "error"); } }));
+      d.body.querySelector("[data-edit]").addEventListener("click", () => { d.close(); proposalForm(p, after); });
+      d.body.querySelector("[data-print]").addEventListener("click", () => printProposal(p, items));
+    };
+    render();
+  } catch (error) { d.body.innerHTML = stateBlock.error(error.message, "crm-drawer-retry"); }
+}
+
+function printProposal(p, items) {
+  const total = items.reduce((n, i) => n + Number(i.quantity || 0) * Number(i.unit_price || 0), 0);
+  const win = window.open("", "_blank", "width=900,height=1000");
+  if (!win) { toast("O navegador bloqueou a janela de impressão.", "error"); return; }
+  win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(p.title)}</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;color:#0f1f45;margin:40px;max-width:800px}h1{font-size:26px;margin:0 0 4px}small{color:#6b7a99}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{padding:10px 8px;border-bottom:1px solid #d7dfeb;text-align:left;font-size:14px}th{font-size:11px;text-transform:uppercase;color:#6b7a99}td.r,th.r{text-align:right}tfoot td{font-weight:800;font-size:16px}.brand{font-weight:800;font-size:22px;letter-spacing:-.04em;margin-bottom:24px}.brand span:first-child{color:#0d4fc2}.brand span:last-child{color:#f3132d}p.notes{white-space:pre-wrap;line-height:1.6}</style></head><body><div class="brand"><span>Focus</span><span>Dev</span></div><h1>${esc(p.title)}</h1><small>${esc(p.opportunity_name || p.lead_name || "")}${p.valid_until ? ` · válida até ${esc(date(p.valid_until))}` : ""} · emitida em ${esc(date(new Date()))}</small><table><thead><tr><th>Item</th><th class="r">Qtd.</th><th class="r">Unitário</th><th class="r">Subtotal</th></tr></thead><tbody>${items.map((i) => `<tr><td>${esc(i.description)}</td><td class="r">${esc(i.quantity)}</td><td class="r">${money(i.unit_price)}</td><td class="r">${money(Number(i.quantity) * Number(i.unit_price))}</td></tr>`).join("") || `<tr><td colspan="4">Valor fechado</td></tr>`}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">${money(total || p.amount)}</td></tr></tfoot></table>${p.notes ? `<h3>Condições</h3><p class="notes">${esc(p.notes)}</p>` : ""}<script>window.onload=()=>window.print()<\/script></body></html>`);
+  win.document.close();
+}
+
+/* ==========================================================================
+   Follow-ups
+   ========================================================================== */
+
+async function renderFollowups() {
+  dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Follow-ups", description: "Carregando…" }) + stateBlock.loading("Carregando follow-ups…");
+  await wrap("Follow-ups", "CRM", (async () => {
+    const items = (await api("/api/followups")).followups || [];
+    const now = new Date(), today = now.toDateString();
+    const pending = items.filter((f) => !f.done_at), done = items.filter((f) => f.done_at);
+    const groups = [["late", "Atrasados", pending.filter((f) => new Date(f.due_at) < now && new Date(f.due_at).toDateString() !== today)], ["today", "Hoje", pending.filter((f) => new Date(f.due_at).toDateString() === today)], ["next", "Próximos", pending.filter((f) => new Date(f.due_at) > now && new Date(f.due_at).toDateString() !== today)], ["done", "Concluídos", done.slice(0, 15)]];
+    const row = (f, isDone) => `<div class="crm-followup ${isDone ? "is-done" : new Date(f.due_at) < now && new Date(f.due_at).toDateString() !== today ? "is-late" : ""}"><label class="crm-check"><input type="checkbox" data-toggle="${esc(f.id)}" ${isDone ? "checked" : ""} aria-label="Concluir" /><span></span></label><time>${esc(dateTime(f.due_at))}</time><div><strong>${esc(f.lead_name || "Lead")}</strong><small>${esc(f.channel || "Contato")}${f.note ? ` · ${esc(f.note)}` : ""}</small></div><span>${badge(label(LEAD_STATUS, f.lead_status), tone(LEAD_STATUS, f.lead_status))}</span>${rowActions([...(f.lead_phone ? [{ label: "🟢", title: "Abrir WhatsApp", attr: `data-wa="${esc(String(f.lead_phone).replace(/\\D/g, ""))}"` }] : []), { label: "✎", title: "Editar", attr: `data-edit="${esc(f.id)}"` }, { label: "×", title: "Excluir", danger: true, attr: `data-delete="${esc(f.id)}"` }])}</div>`;
+    dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Follow-ups", description: `${pending.length} pendentes${groups[0][2].length ? ` · <span class="crm-error">${groups[0][2].length} atrasados</span>` : ""}`, actions: button({ label: "+ Novo follow-up", attr: "data-new" }) })
+      + stats([{ label: "Atrasados", value: String(groups[0][2].length), tone: groups[0][2].length ? "red" : undefined }, { label: "Hoje", value: String(groups[1][2].length), tone: "orange" }, { label: "Próximos", value: String(groups[2][2].length) }, { label: "Concluídos", value: String(done.length), tone: "green" }])
+      + `<section class="data-card crm-card">${pending.length || done.length ? groups.filter(([, , list]) => list.length).map(([k, name, list]) => `<section class="crm-group crm-group-${k}"><h3>${name} <span>${list.length}</span></h3><div class="crm-followup-list">${list.map((f) => row(f, k === "done")).join("")}</div></section>`).join("") : empty({ title: "Nenhum follow-up.", text: "Agende o próximo contato com cada lead e acompanhe por aqui.", cta: "Agendar follow-up", attr: "data-new" })}</section>`;
+    dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => followupForm(null, renderFollowups)));
+    dashboardGrid.querySelectorAll("[data-toggle]").forEach((input) => input.addEventListener("change", async () => { try { await api(`/api/followups/${input.dataset.toggle}`, { method: "PATCH", body: { done: input.checked } }); toast(input.checked ? "Follow-up concluído." : "Reaberto.", "success"); renderFollowups(); } catch (error) { toast(error.message, "error"); input.checked = !input.checked; } }));
+    dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => followupForm(items.find((f) => String(f.id) === b.dataset.edit), renderFollowups)));
+    dashboardGrid.querySelectorAll("[data-wa]").forEach((b) => b.addEventListener("click", () => window.open(`https://wa.me/${b.dataset.wa}`, "_blank", "noopener")));
+    dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/followups/${b.dataset.delete}`, { method: "DELETE" }); toast("Follow-up excluído."); renderFollowups(); } })));
+  })());
+}
+
+async function followupForm(f, after) {
+  const leads = await options("leads");
+  const editing = Boolean(f?.id);
+  form({ title: editing ? "Editar follow-up" : "Novo follow-up", subtitle: "CRM", submitLabel: editing ? "Salvar" : "Agendar", values: { ...(f || {}), lead_id: f?.lead_id ? String(f.lead_id) : "", due_at: f?.due_at || new Date(Date.now() + 86400e3).toISOString(), channel: f?.channel || "whatsapp" }, fields: [
+    { name: "lead_id", label: "Lead", type: "select", options: leads.length ? leads.map((l) => [String(l.id), `${l.name}${l.company ? ` · ${l.company}` : ""}`]) : [["", "Nenhum lead cadastrado"]] },
+    { name: "due_at", label: "Quando", type: "datetime-local", half: true },
+    { name: "channel", label: "Canal", type: "select", options: [["whatsapp", "WhatsApp"], ["ligacao", "Ligação"], ["email", "E-mail"], ["reuniao", "Reunião"], ["outro", "Outro"]], half: true },
+    { name: "note", label: "O que fazer", type: "textarea", required: false, rows: 3, placeholder: "Ex.: enviar proposta revisada" },
+  ], onSubmit: async (values) => { if (!values.lead_id) throw new Error("Cadastre um lead antes de agendar."); if (editing) await api(`/api/followups/${f.id}`, { method: "PATCH", body: values }); else await api("/api/followups", { method: "POST", body: values }); toast(editing ? "Follow-up atualizado." : "Follow-up agendado.", "success"); after(); } });
+}
+
+registerRoutes({ crm: renderHub, leads: renderLeads, funil: renderFunnel, oportunidades: renderOpportunities, campanhas: renderCampaigns, propostas: renderProposals, "follow-ups": renderFollowups }, { parent: "#crm", titles: { crm: "CRM comercial", leads: "Leads", funil: "Funil de vendas", oportunidades: "Oportunidades", campanhas: "Campanhas", propostas: "Propostas", "follow-ups": "Follow-ups" } });
