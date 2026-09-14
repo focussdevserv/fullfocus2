@@ -67,7 +67,7 @@ function draw(status, qr = null) {
         </form>
       </article>
 
-      ${status.canManage ? `<article class="data-card wa-config-card">
+      ${status.canManage && !status.configured ? `<article class="data-card wa-config-card">
         <div class="section-heading"><div><p class="card-kicker">Configuração</p><h2>Evolution API</h2></div></div>
         <form class="wa-form" data-wa-config>
           <label>URL do servidor<input name="baseUrl" type="url" value="${escapeHtml(status.baseUrl || "")}" placeholder="https://sua-evolution.exemplo.com" required /></label>
