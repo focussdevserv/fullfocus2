@@ -6,7 +6,7 @@ const AUTOMATION_TRIGGERS = [
   "contract_signed", "project_created", "task_due_soon", "task_overdue",
   "project_overdue", "receivable_due_soon", "receivable_overdue", "payment_confirmed",
   "payment_overdue", "ticket_created", "ticket_no_response", "customer_message",
-  "scheduled_datetime", "webhook_received", "freelancer_project_finished", "sale_won", "team_member_invited", "member_added_to_project", "project_member_added", "task_assigned", "member_overloaded",
+  "scheduled_datetime", "webhook_received", "freelancer_project_finished", "sale_won", "team_member_invited", "member_added_to_project", "project_member_added", "task_assigned", "member_overloaded", "absence_started",
 ];
 const AUTOMATION_ACTIONS = [
   "notify", "notify_responsible", "create_task", "send_message", "send_email", "send_onboarding", "create_followup",

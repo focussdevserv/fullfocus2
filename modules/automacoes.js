@@ -6,7 +6,7 @@ const tr = {
   project_overdue: "Projeto atrasado", receivable_due_soon: "Parcela próxima do vencimento", receivable_overdue: "Parcela vencida",
   payment_confirmed: "Pagamento confirmado", payment_overdue: "Pagamento atrasado", ticket_created: "Ticket aberto",
   ticket_no_response: "Ticket sem resposta", customer_message: "Cliente enviou mensagem", scheduled_datetime: "Data ou horário definido",
-  webhook_received: "Webhook recebido", freelancer_project_finished: "Freelancer finalizou projeto", sale_won: "Venda concluída", team_member_invited: "Novo membro convidado", member_added_to_project: "Membro adicionado a projeto", project_member_added: "Membro adicionado a projeto", task_assigned: "Tarefa atribuída", member_overloaded: "Membro sobrecarregado",
+  webhook_received: "Webhook recebido", freelancer_project_finished: "Freelancer finalizou projeto", sale_won: "Venda concluída", team_member_invited: "Novo membro convidado", member_added_to_project: "Membro adicionado a projeto", project_member_added: "Membro adicionado a projeto", task_assigned: "Tarefa atribuída", member_overloaded: "Membro sobrecarregado", absence_started: "Férias iniciadas",
 };
 const act = {
   notify: "Notificar equipe", notify_responsible: "Lembrar responsável", create_task: "Criar tarefa", send_message: "Enviar WhatsApp", send_email: "Enviar e-mail", send_onboarding: "Enviar acesso e orientações",
