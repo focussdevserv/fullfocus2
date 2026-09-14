@@ -1,0 +1,13 @@
+{
+  "name": "FocusDev — Foco e produtividade",
+  "short_name": "FocusDev",
+  "description": "Seu workspace de tarefas e agenda.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fc",
+  "theme_color": "#0d4fc2",
+  "icons": [
+    { "src": "/assets/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/assets/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

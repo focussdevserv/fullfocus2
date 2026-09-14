@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
+import { expandRecurringEvents } from "./recurrence.js";
 
 const { Pool } = pg;
 const app = express();
@@ -14,6 +15,12 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process
 
 app.use(cors());
 app.use(express.json());
+app.use((req, _res, next) => {
+  if (req.path.startsWith("/api/events/") && /^\/api\/events\/\d+-/.test(req.path)) {
+    req.url = req.url.replace(/(\/api\/events\/\d+)-[^/?]+/, "$1");
+  }
+  next();
+});
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 app.use(express.static(frontendRoot));
 const hashPassword = (password, salt = crypto.randomBytes(16).toString("hex")) => ({ salt, hash: crypto.scryptSync(password, salt, 64).toString("hex") });
@@ -98,7 +105,7 @@ app.post("/api/events", async (req, res) => {
 app.get("/api/events", async (_req, res) => {
   try {
     const result = await pool.query("select id,title,starts_at,description,recurrence,reminder_minutes from events order by starts_at asc");
-    res.json({ events: result.rows });
+    res.json({ events: expandRecurringEvents(result.rows) });
   } catch (error) { res.status(503).json({ error: "NÃ£o foi possÃ­vel carregar os eventos.", detail: error.message }); }
 });
 app.patch("/api/events/:id", async (req, res) => {

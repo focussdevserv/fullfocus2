@@ -939,6 +939,7 @@ svg {
     transition-duration: 0.01ms !important;
   }
 }
+.notification-enable { width: 100%; margin: 10px 0 12px; }
 
 /* Dashboard */
 .topbar-actions { display: flex; align-items: center; gap: 12px; }

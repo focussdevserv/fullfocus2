@@ -45,6 +45,38 @@ const notificationPanel = document.createElement("div"); notificationPanel.class
 const savedTheme = localStorage.getItem("focusdev_theme"); if (savedTheme === "dark") document.body.classList.add("dark-mode"); themeButton.addEventListener("click", () => { document.body.classList.toggle("dark-mode"); localStorage.setItem("focusdev_theme", document.body.classList.contains("dark-mode") ? "dark" : "light"); themeButton.textContent = document.body.classList.contains("dark-mode") ? "☀" : "☾"; });
 notificationButton?.addEventListener("click", () => { notificationPanel.hidden = !notificationPanel.hidden; }); notificationPanel.querySelector(".notification-close").addEventListener("click", () => { notificationPanel.hidden = true; });
 
+const notificationEnable = document.createElement("button");
+notificationEnable.type = "button";
+notificationEnable.className = "notification-enable button button-secondary";
+notificationEnable.textContent = "Ativar alertas do navegador";
+notificationPanel.querySelector(".section-heading")?.after(notificationEnable);
+notificationEnable.addEventListener("click", async () => {
+  if (!("Notification" in window)) return;
+  const permission = await Notification.requestPermission();
+  notificationEnable.textContent = permission === "granted" ? "Alertas ativados" : "Permissão não concedida";
+  notificationEnable.disabled = permission === "granted";
+});
+if (!("Notification" in window)) notificationEnable.hidden = true;
+if ("Notification" in window && Notification.permission === "granted") { notificationEnable.textContent = "Alertas ativados"; notificationEnable.disabled = true; }
+
+function sendBrowserNotifications(tasks, events) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const now = Date.now();
+  const due = events.filter((event) => { const start = new Date(event.starts_at).getTime(); return start >= now && start - now <= (Number(event.reminder_minutes) || 30) * 60000; }).map((event) => ({ key: "event-" + event.id + "-" + event.starts_at, title: "Próximo evento", body: event.title }));
+  const overdue = tasks.filter((task) => task.status !== "done" && task.due_at && new Date(task.due_at).getTime() < now).slice(0, 3).map((task) => ({ key: "task-" + task.id + "-" + task.due_at, title: "Tarefa atrasada", body: task.title }));
+  const notified = JSON.parse(localStorage.getItem("focusdev_browser_notifications") || "[]");
+  [...due, ...overdue].filter((item) => !notified.includes(item.key)).forEach((item) => { new Notification(item.title, { body: item.body, icon: "/assets/icon-192.svg", tag: item.key }); notified.push(item.key); });
+  localStorage.setItem("focusdev_browser_notifications", JSON.stringify(notified.slice(-100)));
+}
+
+async function pollBrowserNotifications() {
+  try {
+    const [tasksResponse, eventsResponse] = await Promise.all([fetch("/api/tasks"), fetch("/api/events")]);
+    if (tasksResponse.ok && eventsResponse.ok) sendBrowserNotifications((await tasksResponse.json()).tasks || [], (await eventsResponse.json()).events || []);
+  } catch { /* alertas são opcionais quando a API está indisponível */ }
+}
+window.setInterval(pollBrowserNotifications, 60000);
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SESSION_KEY = "focusdev_session";
 // Simula a latência da API enquanto o endpoint de autenticação não existe.
