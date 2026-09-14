@@ -24,7 +24,7 @@ const cache = { leads: null, clients: null, opportunities: null, campaigns: null
 async function options(kind) {
   if (!cache[kind]) {
     const path = { leads: "/api/leads", clients: "/api/clients", opportunities: "/api/opportunities", campaigns: "/api/campaigns", catalog: "/api/catalog-items" }[kind];
-    try { cache[kind] = (await api(path))[kind === "catalog" ? "catalog-items" : kind] || []; } catch { cache[kind] = []; }
+    try { cache[kind] = (await api(path))[kind === "catalog" ? "catalog_items" : kind] || []; } catch { cache[kind] = []; }
   }
   return cache[kind];
 }
