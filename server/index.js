@@ -110,6 +110,7 @@ const entities = {
   team_messages: { fields: ["sender_id", "project_id", "body", "important", "read_by"], required: ["body"] }
   , project_members: { fields: ["project_id", "user_id", "access_level", "files_visible", "tasks_visible", "added_at"], required: ["project_id", "user_id"] }
 };
+const archiveSpecs = { proposals: { fields: ["opportunity_id", "lead_id", "title", "amount", "status", "valid_until", "notes", "sent_at", "decided_at", "client_id", "contact_id", "project_id", "sales_owner", "issued_on", "presentation", "identified_need", "objective", "proposed_solution", "benefits", "differentiators", "service_type", "scope_included", "modules", "integrations", "technologies", "revisions_included", "responsibilities_provider", "responsibilities_client", "scope_excluded", "optional_services", "discount", "additional_fees", "final_amount", "down_payment", "balance_remaining", "installments", "installment_amount", "payment_method", "payment_due_dates", "late_fee", "late_interest", "recurring_costs", "proposal_terms", "approver_name", "approver_document", "approver_email", "approved_at", "acceptance_comment", "acceptance_ip", "accepted_terms"] }, campaigns: { fields: ["name", "channel", "status", "budget", "starts_on", "ends_on"] }, followups: { fields: ["lead_id", "due_at", "channel", "note", "done_at"] } };
 const permissionDomains = { contacts: "crm", companies: "crm", clients: "crm", leads: "crm", opportunities: "crm", projects: "operation", tasks: "operation", contracts: "operation", briefings: "operation", deliveries: "operation", infrastructure_assets: "operation", knowledge_articles: "operation", forms: "operation", revenues: "finance", expenses: "finance", receivables: "finance", charges: "finance", payments: "finance", payables: "finance", bank_accounts: "finance", invoices: "finance", team_roles: "team", team_goals: "team", absences: "team", time_entries: "team", team_messages: "team", project_members: "team", catalog_items: "catalog", automations: "integrations", templates: "integrations", integrations: "integrations", conversations: "conversations" };
 const permissionAction = (method) => ({ GET: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" }[method]);
 permissionDomains.events = "operation";
@@ -182,12 +183,14 @@ app.use("/api", (req, res, next) => {
 app.use("/api", async (req, res, next) => {
   if (req.method !== "DELETE") return next();
   const [, table, id] = req.path.split("/");
-  if (!entities[table] || !/^\d+$/.test(id || "") || ["audit_events", "trash"].includes(table)) return next();
+  if (!(entities[table] || archiveSpecs[table]) || !/^\d+$/.test(id || "") || ["audit_events", "trash"].includes(table)) return next();
   const org = tenant(req, res); if (!org) return;
   try {
     const found = await pool.query(`select * from ${table} where id=$1 and organization_id=$2`, [id, org]);
     if (!found.rowCount) return res.status(404).json({ error: "Registro nÃ£o encontrado." });
-    await pool.query("insert into trash (organization_id,entity_type,entity_id,payload,deleted_by,restore_until) values ($1,$2,$3,$4,$5,now()+interval '30 days')", [org, table, id, JSON.stringify(found.rows[0]), req.user?.id || null]);
+    const payload = { ...found.rows[0] };
+    if (table === "proposals") payload.proposal_items = (await pool.query("select * from proposal_items where proposal_id=$1 and organization_id=$2 order by position,id", [id, org])).rows;
+    await pool.query("insert into trash (organization_id,entity_type,entity_id,payload,deleted_by,restore_until) values ($1,$2,$3,$4,$5,now()+interval '30 days')", [org, table, id, JSON.stringify(payload), req.user?.id || null]);
     return next();
   } catch { return res.status(503).json({ error: "NÃ£o foi possÃ­vel preparar a exclusÃ£o recuperÃ¡vel." }); }
 });
@@ -201,12 +204,13 @@ app.post("/api/trash/:id/restore", async (req, res) => {
     await client.query("begin");
     const deleted = await client.query("select * from trash where id=$1 and organization_id=$2 and (restore_until is null or restore_until > now()) for update", [req.params.id, org]);
     if (!deleted.rowCount) { await client.query("rollback"); return res.status(404).json({ error: "Registro nÃ£o encontrado ou prazo de restauraÃ§Ã£o encerrado." }); }
-    const item = deleted.rows[0], table = item.entity_type, spec = entities[table];
+    const item = deleted.rows[0], table = item.entity_type, spec = entities[table] || archiveSpecs[table];
     if (!spec) { await client.query("rollback"); return res.status(400).json({ error: "Tipo de registro nÃ£o restaurÃ¡vel." }); }
     const payload = typeof item.payload === "string" ? JSON.parse(item.payload) : item.payload || {};
     const keys = ["id", ...spec.fields, "created_at", "updated_at"].filter((key, index, all) => all.indexOf(key) === index && payload[key] !== undefined);
     const columns = ["organization_id", ...keys], values = [org, ...keys.map((key) => payload[key])];
     await client.query(`insert into ${table} (${columns.join(",")}) values (${columns.map((_, index) => `$${index + 1}`).join(",")})`, values);
+    if (table === "proposals" && Array.isArray(payload.proposal_items)) for (const item of payload.proposal_items) await client.query("insert into proposal_items (id,organization_id,proposal_id,catalog_item_id,description,quantity,unit_price,position) values ($1,$2,$3,$4,$5,$6,$7,$8)", [item.id, org, payload.id, item.catalog_item_id || null, item.description, item.quantity, item.unit_price, item.position || 0]);
     await client.query("delete from trash where id=$1 and organization_id=$2", [req.params.id, org]);
     await client.query("commit");
     res.status(201).json({ ok: true, entity_type: table, entity_id: payload.id || null });
