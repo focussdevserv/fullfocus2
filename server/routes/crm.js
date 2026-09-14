@@ -16,6 +16,18 @@ export function register(app, ctx) {
   const fail = (res, e, msg) => { const out = classifyDbError(e, msg); res.status(out.status).json({ error: out.error }); };
   const bad = (res, msg) => res.status(400).json({ error: msg });
 
+  app.get("/api/leads", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const values = [org], where = ["l.organization_id=$1"];
+    const add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
+    const search = asText(req.query.search || req.query.q);
+    if (search) { const value = `%${search.slice(0, 100)}%`; values.push(value); const index = values.length; where.push(`(l.name ilike $${index} or coalesce(l.company,'') ilike $${index} or coalesce(l.email,'') ilike $${index} or coalesce(l.phone,'') ilike $${index})`); }
+    for (const field of ["status", "source", "owner_id", "company_id", "contact_id"]) if (req.query[field] !== undefined && req.query[field] !== "") add(`l.${field}=$VALUE`, String(req.query[field]));
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250), offset = Math.max(Number(req.query.offset) || 0, 0);
+    values.push(limit, offset);
+    try { const q = await pool.query(`select l.* from leads l where ${where.join(" and ")} order by l.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ leads: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "NÃ£o foi possÃ­vel carregar os leads."); }
+  });
+
   /* ---------------------------------------------------------------- resumo */
   app.get("/api/crm/summary", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
