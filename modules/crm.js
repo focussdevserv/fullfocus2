@@ -409,7 +409,15 @@ async function proposalDrawer(id, after) {
       d.body.querySelectorAll("[data-remove]").forEach((b) => b.addEventListener("click", () => { items.splice(Number(b.dataset.remove), 1); render(); }));
       d.body.querySelector("[data-add]").addEventListener("click", () => { items.push({ description: "", quantity: 1, unit_price: 0 }); render(); d.body.querySelector(`[data-item="${items.length - 1}"][data-field="description"]`)?.focus(); });
       d.body.querySelector("[data-catalog]")?.addEventListener("change", (e) => { const c = catalog.find((x) => String(x.id) === e.target.value); if (c) { items.push({ description: c.name, quantity: 1, unit_price: c.price, catalog_item_id: c.id }); render(); } });
-      d.body.querySelector("[data-save]").addEventListener("click", async () => { try { const { proposal } = await api(`/api/proposals/${p.id}/items`, { method: "PUT", body: { items } }); p.amount = proposal.amount; toast("Itens salvos.", "success"); after(); render(); } catch (error) { toast(error.message, "error"); } });
+      const pricingValues = () => Object.fromEntries([...d.body.querySelectorAll("[data-price]")].map((input) => [input.dataset.price, input.value]));
+      const updatePricingPreview = () => {
+        const values = pricingValues(), discount = Number(values.discount || 0), fees = Number(values.additional_fees || 0), down = Number(values.down_payment || 0), installments = Math.max(1, Number(values.installments || 1));
+        const finalAmount = Math.max(0, total - discount + fees), balance = Math.max(0, finalAmount - down), installmentAmount = balance / installments;
+        const summary = d.body.querySelector("[data-price-summary]");
+        if (summary) summary.textContent = `Valor final: ${money(finalAmount)} · Entrada: ${money(down)} · Saldo: ${money(balance)} · ${installments}x de ${money(installmentAmount)}`;
+      };
+      d.body.querySelectorAll("[data-price]").forEach((input) => input.addEventListener("input", updatePricingPreview));
+      d.body.querySelector("[data-save]").addEventListener("click", async () => { try { const { proposal } = await api(`/api/proposals/${p.id}/items`, { method: "PUT", body: { items } }); p.amount = proposal.amount; const pricing = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: pricingValues() }); Object.assign(p, pricing.proposal); toast("Itens e valores salvos.", "success"); after(); render(); } catch (error) { toast(error.message, "error"); } });
       d.body.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", async () => { try { await api(`/api/proposals/${p.id}`, { method: "PATCH", body: { status: b.dataset.status } }); d.close(); toast("Situação atualizada.", "success"); after(); } catch (error) { toast(error.message, "error"); } }));
       d.body.querySelector("[data-edit]").addEventListener("click", () => { d.close(); proposalForm(p, after); });
       d.body.querySelector("[data-print]").addEventListener("click", () => printProposal(p, items));
