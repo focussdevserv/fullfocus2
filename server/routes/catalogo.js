@@ -1,17 +1,10 @@
-/* Rotas HTTP do domínio "catalogo" — Catálogo (produtos/serviços/pacotes)
-   Ownership: server/routes/catalogo.js (+ server/migrations/NNN_catalogo_*.sql)
-
-   register(app, ctx) recebe:
-     ctx.pool            pool pg
-     ctx.tenant(req,res) -> organization_id ou null (já respondeu 400)
-     ctx.requireAuth     middleware (as rotas /api/* já exigem sessão)
-     ctx.asText          normaliza string
-     ctx.classifyDbError(err, fallback) -> { status, error }
-     ctx.singular(table) -> chave do DTO
-   Regras: toda query filtra por organization_id; erros de entrada -> 400; nunca
-   retornar dados de outra organização; mensagens em pt-BR. */
-
 export function register(app, ctx) {
-  // Nenhuma rota específica ainda. O CRUD genérico de server/index.js continua valendo.
-  void app; void ctx;
+  const { pool, tenant, asText, classifyDbError } = ctx;
+  const fail = (res,e,msg) => { const x=classifyDbError(e,msg); res.status(x.status).json({error:x.error}); };
+  const fields=["name","kind","price","unit","description","active"];
+  const valid=(b,p=false)=> (!p&&!asText(b.name)?"Informe o nome do item.":(b.kind!==undefined&&!['product','service','package'].includes(b.kind)?"Tipo inválido.":(b.price!==undefined&&(!Number.isFinite(Number(b.price))||Number(b.price)<0)?"Preço inválido.":null)));
+  app.get('/api/catalog-items',async(req,res)=>{const org=tenant(req,res);if(!org)return;try{const q=await pool.query('select * from catalog_items where organization_id=$1 order by created_at desc',[org]);res.json({catalog_items:q.rows});}catch(e){fail(res,e,'Não foi possível carregar o catálogo.');}});
+  app.post('/api/catalog-items',async(req,res)=>{const org=tenant(req,res);if(!org)return;const x=valid(req.body||{});if(x)return res.status(400).json({error:x});try{const b=req.body,q=await pool.query(`insert into catalog_items (organization_id,${fields.join(',')}) values ($1,$2,$3,$4,$5,$6,$7) returning *`,[org,b.name,b.kind||'service',b.price||0,b.unit||null,b.description||null,b.active===undefined?true:b.active]);res.status(201).json({catalog_item:q.rows[0]});}catch(e){fail(res,e,'Não foi possível criar o item.');}});
+  app.patch('/api/catalog-items/:id',async(req,res)=>{const org=tenant(req,res);if(!org)return;const x=valid(req.body||{},true);if(x)return res.status(400).json({error:x});const u=fields.filter(f=>req.body?.[f]!==undefined);if(!u.length)return res.status(400).json({error:'Informe um campo para atualizar.'});try{const q=await pool.query(`update catalog_items set ${u.map((f,i)=>`${f}=$${i+1}`).join(',')},updated_at=now() where id=$${u.length+1} and organization_id=$${u.length+2} returning *`,[...u.map(f=>req.body[f]),req.params.id,org]);if(!q.rowCount)return res.status(404).json({error:'Item não encontrado.'});res.json({catalog_item:q.rows[0]});}catch(e){fail(res,e,'Não foi possível atualizar o item.');}});
+  app.delete('/api/catalog-items/:id',async(req,res)=>{const org=tenant(req,res);if(!org)return;try{const q=await pool.query('delete from catalog_items where id=$1 and organization_id=$2 returning id',[req.params.id,org]);if(!q.rowCount)return res.status(404).json({error:'Item não encontrado.'});res.status(204).end();}catch(e){fail(res,e,'Não foi possível excluir o item.');}});
 }

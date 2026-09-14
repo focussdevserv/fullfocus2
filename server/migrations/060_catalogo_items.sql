@@ -1,0 +1,2 @@
+create table if not exists catalog_items (id bigserial primary key, organization_id uuid not null references organizations(id), name text not null, kind text not null default 'service' check(kind in ('product','service','package')), price numeric(14,2) not null default 0 check(price>=0), unit text, description text, active boolean not null default true, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists catalog_items_organization_id_idx on catalog_items(organization_id);

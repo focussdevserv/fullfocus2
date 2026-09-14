@@ -1,17 +1,7 @@
-/* Rotas HTTP do domínio "meu-dia" — Agenda, Tarefas (complementos além do CRUD genérico)
-   Ownership: server/routes/meu-dia.js (+ server/migrations/NNN_meu_dia_*.sql)
-
-   register(app, ctx) recebe:
-     ctx.pool            pool pg
-     ctx.tenant(req,res) -> organization_id ou null (já respondeu 400)
-     ctx.requireAuth     middleware (as rotas /api/* já exigem sessão)
-     ctx.asText          normaliza string
-     ctx.classifyDbError(err, fallback) -> { status, error }
-     ctx.singular(table) -> chave do DTO
-   Regras: toda query filtra por organization_id; erros de entrada -> 400; nunca
-   retornar dados de outra organização; mensagens em pt-BR. */
-
+/* Complementos autenticados de agenda e tarefas. */
 export function register(app, ctx) {
-  // Nenhuma rota específica ainda. O CRUD genérico de server/index.js continua valendo.
-  void app; void ctx;
+  const { pool, tenant, classifyDbError } = ctx;
+  const fail = (res, error, fallback) => { const out = classifyDbError(error, fallback); res.status(out.status).json({ error: out.error }); };
+  app.get("/api/tasks/summary", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select count(*) filter (where status <> 'done')::int open,count(*) filter (where status='done')::int done,count(*) filter (where status <> 'done' and due_at < now())::int overdue,count(*) filter (where status <> 'done' and due_at::date=current_date)::int \"dueToday\" from tasks where organization_id=$1", [org]); res.json(q.rows[0] || { open: 0, done: 0, overdue: 0, dueToday: 0 }); } catch (e) { fail(res, e, "Não foi possível carregar o resumo de tarefas."); } });
+  app.get("/api/events/upcoming", async (req, res) => { const org = tenant(req, res); if (!org) return; const days = Math.min(31, Math.max(1, Number.parseInt(req.query.days, 10) || 7)); try { const q = await pool.query("select * from events where organization_id=$1 and starts_at >= now() and starts_at < now()+($2::int * interval '1 day') order by starts_at", [org, days]); res.json({ events: q.rows }); } catch (e) { fail(res, e, "Não foi possível carregar os próximos eventos."); } });
 }
