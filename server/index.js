@@ -18,6 +18,7 @@ import { registerPortalAuthRoutes } from "./routes/portal-auth.js";
 import { registerPortalAdminRoutes } from "./routes/portal-admin.js";
 import { registerCrmFollowupRoutes } from "./routes/crm-followups.js";
 import { registerFinanceOverviewRoutes } from "./routes/finance-overview.js";
+import { registerDeliveryWorkflowRoutes } from "./routes/delivery-workflow.js";
 import { startAutomationRunner } from "./automations-runner.js";
 const { Pool } = pg;
 export const app = express();
@@ -303,6 +304,7 @@ app.delete("/api/events/:id", async (req, res) => { const org = tenant(req, res)
 
 registerCrmFollowupRoutes(app, { pool, tenant, validateRelations, classifyDbError });
 registerFinanceOverviewRoutes(app, { pool, tenant, classifyDbError });
+registerDeliveryWorkflowRoutes(app, { pool, tenant, classifyDbError });
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 registerPortalAdminRoutes(app, { pool, tenant, hashPassword });
 
