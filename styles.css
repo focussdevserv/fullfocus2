@@ -1257,7 +1257,7 @@ body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.da
 .priorities-card h2, .activity-card h2, .agenda-card h2,
 .priorities-card .task-progress, .activity-card .text-action, .agenda-card .icon-action { color: #fff; }
 .priorities-card .section-heading, .activity-card .section-heading, .agenda-card .section-heading, .priorities-card .task-progress, .activity-card .activity-item, .agenda-card .agenda-item { text-shadow: 0 1px 3px rgb(0 0 0 / 72%); }
-.priorities-card .priority-item, .activity-card .activity-item, .agenda-card .agenda-item { border-color: rgb(255 255 255 / 28%); background: rgb(0 0 0 / 48%); box-shadow: inset 0 1px rgb(255 255 255 / 8%); }
+.priorities-card .priority-item, .activity-card .activity-item, .agenda-card .agenda-item { border-color: rgb(255 255 255 / 28%); background: rgb(18 36 61 / 30%); box-shadow: inset 0 1px rgb(255 255 255 / 8%); }
 .priorities-card .priority-text strong, .priorities-card .priority-text small, .activity-card .activity-item strong, .activity-card .activity-item small, .agenda-card .agenda-item strong, .agenda-card .agenda-item small { color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / 80%); }
 .priorities-card .priority-text small, .activity-card .activity-item small, .agenda-card .agenda-item small { opacity: .92; }
 .priorities-card .priority-item { background: rgb(18 36 61 / 30%); box-shadow: inset 0 1px rgb(255 255 255 / 6%); }
