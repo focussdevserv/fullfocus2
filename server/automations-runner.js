@@ -1,9 +1,11 @@
 import { normalizeNumber, sendWhatsappText } from "./routes/whatsapp.js";
 import { sendEmail } from "./mailer.js";
 import { randomBytes } from "node:crypto";
+import { assertSafeOutboundUrl } from "./outbound-url.js";
 
 const SOURCE_TABLES = {
   lead_created: "leads",
+  lead_stage_changed: "opportunities",
   proposal_approved: "proposals",
   proposal_sent: "proposals",
   proposal_viewed: "proposals",
@@ -29,6 +31,7 @@ const SOURCE_TABLES = {
 
 const sourceWhere = {
   lead_created: "created_at <= $2",
+  lead_stage_changed: "updated_at <= $2",
   proposal_approved: "status = 'accepted' and updated_at <= $2",
   proposal_sent: "status = 'sent' and sent_at <= $2",
   proposal_viewed: "status = 'viewed' and updated_at <= $2",
@@ -218,6 +221,21 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     if (!updated.rowCount) throw new Error("O registro da automação não pertence ao workspace.");
     return { action: "update_status", table, id: source.id, status };
   }
+  if (automation.action === "move_pipeline") {
+    const stage = String(config.stage || "").trim().slice(0, 40);
+    if (!source.id || !stage || !["opportunities", "leads"].includes(SOURCE_TABLES[automation.trigger])) throw new Error("Informe uma etapa válida do funil.");
+    const table = SOURCE_TABLES[automation.trigger];
+    const updated = await client.query(`update ${table} set ${table === "opportunities" ? "stage" : "status"}=$1,updated_at=now() where id=$2 and organization_id=$3`, [stage, source.id, automation.organization_id]);
+    if (!updated.rowCount) throw new Error("O registro do funil não pertence ao workspace.");
+    return { action: "move_pipeline", table, id: source.id, stage };
+  }
+  if (automation.action === "webhook" || automation.action === "n8n_flow") {
+    const target = await assertSafeOutboundUrl(config.url);
+    const response = await fetch(target, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ automation_id: automation.id, trigger: automation.trigger, source }), redirect: "manual", signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`Webhook retornou HTTP ${response.status}.`);
+    return { action: automation.action, url: target, status: response.status };
+  }
+  if (automation.action === "end") return { action: "end", stopped: true };
   if (automation.action === "send_message") {
     const subject = String(config.subject || `Automação: ${automation.name}`).trim().slice(0, 240);
     if (config.channel === "whatsapp") {

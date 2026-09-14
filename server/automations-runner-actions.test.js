@@ -8,7 +8,7 @@ function poolFor(automation, source) {
     async query(sql, params) {
       calls.push({ sql, params });
       if (sql.startsWith("select * from automations")) return { rows: [automation] };
-      if (sql.includes("from leads s") || sql.includes("from proposals s") || sql.includes("from contracts s") || sql.includes("from projects s") || sql.includes("from tasks s")) return { rows: [source] };
+      if (sql.includes("from leads s") || sql.includes("from opportunities s") || sql.includes("from proposals s") || sql.includes("from contracts s") || sql.includes("from projects s") || sql.includes("from tasks s")) return { rows: [source] };
       if (sql.startsWith("select id from leads")) return { rowCount: 1, rows: [{ id: source.id }] };
       if (sql.startsWith("insert into automation_runs")) return { rowCount: 1, rows: [{ id: 90 }] };
       if (sql.startsWith("insert into followups")) return { rowCount: 1, rows: [{ id: 91 }] };
@@ -73,4 +73,17 @@ test("cria evento de calendário para uma tarefa", async () => {
   const { client, calls } = poolFor({ id: 58, organization_id: "org", trigger: "task_due_soon", action: "create_calendar_event", config: { starts_at: "2026-09-15T14:00:00Z" } }, { id: 59, title: "Revisar entrega" });
   assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
   assert.equal(calls.filter((call) => call.sql.startsWith("insert into events")).length, 1);
+});
+
+test("move uma oportunidade para a etapa configurada", async () => {
+  const { client, calls } = poolFor({ id: 60, organization_id: "org", trigger: "lead_stage_changed", action: "move_pipeline", config: { stage: "proposal" } }, { id: 61, name: "Site" });
+  assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
+  const update = calls.find((call) => call.sql.startsWith("update opportunities set stage"));
+  assert.deepEqual(update.params, ["proposal", 61, "org"]);
+});
+
+test("encerra uma automação sem executar ações adicionais", async () => {
+  const { client, calls } = poolFor({ id: 62, organization_id: "org", trigger: "lead_created", action: "end", config: {} }, { id: 63, name: "Site" });
+  assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
+  assert.equal(calls.some((call) => call.sql.startsWith("insert into notifications")), false);
 });
