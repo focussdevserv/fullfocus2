@@ -8,6 +8,7 @@
    Cada organização usa uma instância própria na Evolution: focus-<8 primeiros chars do org id>. */
 
 import crypto from "node:crypto";
+import { assertSafeOutboundUrl, parseOutboundUrl } from "../outbound-url.js";
 
 const DEFAULT_BASE_URL = process.env.EVOLUTION_API_URL || "https://evolutions-evolution-api.fcoipz.easypanel.host";
 const TIMEOUT_MS = 15000;
@@ -36,12 +37,16 @@ export function register(app, ctx) {
 
   async function evo(cfg, method, path, body, { fetchImpl = fetch } = {}) {
     if (!cfg.apiKey) throw Object.assign(new Error("A Evolution API ainda não está configurada: informe a chave da API."), { status: 400 });
+    // Revalida o destino a cada chamada (a URL salva pode ter sido alterada) e não segue redirecionamentos.
+    try { await assertSafeOutboundUrl(cfg.baseUrl); } catch (error) { throw Object.assign(new Error(`URL da Evolution API rejeitada: ${error.message}`), { status: 400 }); }
     const response = await fetchImpl(`${cfg.baseUrl}${path}`, {
       method,
       headers: { apikey: cfg.apiKey, "Content-Type": "application/json" },
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
+    if (response.status >= 300 && response.status < 400) throw Object.assign(new Error("A Evolution API tentou redirecionar a requisição; verifique a URL configurada."), { status: 502 });
     const text = await response.text();
     let data = {};
     try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text.slice(0, 200) }; }
@@ -77,9 +82,10 @@ export function register(app, ctx) {
     } catch { return null; }
   }
 
-  function publicWebhookUrl(req, org) {
-    const base = (process.env.APP_URL || `${req.get("x-forwarded-proto") || req.protocol}://${req.get("x-forwarded-host") || req.get("host")}`).replace(/\/+$/, "");
-    return `${base}/api/whatsapp/webhook/${webhookTokenFor(org)}`;
+  // URL pública do app vem de configuração, nunca do cabeçalho Host (evita redirecionar webhooks para terceiros).
+  const PUBLIC_APP_URL = (process.env.APP_URL || "https://focussapp-focussapp-api.fcoipz.easypanel.host").replace(/\/+$/, "");
+  function publicWebhookUrl(_req, org) {
+    return `${PUBLIC_APP_URL}/api/whatsapp/webhook/${webhookTokenFor(org)}`;
   }
 
   /* Status geral: configuração + estado da instância. */
@@ -103,7 +109,12 @@ export function register(app, ctx) {
     if (!["owner", "admin"].includes(await roleOf(req, org))) return fail(res, 403, "Apenas proprietários e administradores configuram o WhatsApp.");
     const baseUrl = String(req.body?.baseUrl || "").trim().replace(/\/+$/, "");
     const apiKey = String(req.body?.apiKey || "").trim();
-    if (baseUrl && !/^https?:\/\/[^\s/]+/.test(baseUrl)) return fail(res, 400, "Informe uma URL válida da Evolution API.");
+    if (baseUrl) {
+      const check = parseOutboundUrl(baseUrl);
+      if (!check.ok) return fail(res, 400, check.error);
+      if (check.url.protocol !== "https:") return fail(res, 400, "A URL da Evolution API precisa usar https.");
+      try { await assertSafeOutboundUrl(baseUrl); } catch (error) { return fail(res, 400, error.message); }
+    }
     try {
       const current = await loadConfig(org);
       const config = { ...(current.row?.config || {}), ...(baseUrl ? { baseUrl } : {}), ...(apiKey ? { apiKey } : {}) };
@@ -117,6 +128,7 @@ export function register(app, ctx) {
   /* Garante a instância, registra o webhook de entrada e devolve o QR code. */
   app.post("/api/whatsapp/connect", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
+    if (!["owner", "admin"].includes(await roleOf(req, org))) return fail(res, 403, "Apenas proprietários e administradores gerenciam a conexão do WhatsApp.");
     try {
       const cfg = await loadConfig(org);
       const name = instanceNameFor(org);
@@ -142,6 +154,7 @@ export function register(app, ctx) {
 
   app.post("/api/whatsapp/disconnect", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
+    if (!["owner", "admin"].includes(await roleOf(req, org))) return fail(res, 403, "Apenas proprietários e administradores gerenciam a conexão do WhatsApp.");
     try {
       const cfg = await loadConfig(org);
       const name = instanceNameFor(org);
