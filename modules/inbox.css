@@ -64,5 +64,13 @@
 .inbox-new label { display: grid; gap: 5px; font-size: 12.5px; font-weight: 600; }
 .inbox-empty { padding: 16px 8px; color: var(--muted); font-size: 12.5px; }
 .inbox-empty p { margin: 0 0 6px; }
+.notification-inbox { display: grid; gap: 18px; }
+.notification-inbox-list { display: grid; gap: 8px; }
+.notification-inbox-row { display: flex; justify-content: space-between; gap: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: rgb(255 255 255 / 3%); }
+.notification-inbox-row.is-unread { border-color: rgb(230 36 41 / 45%); background: rgb(230 36 41 / 7%); }
+.notification-inbox-row p { margin: 5px 0; color: var(--text-secondary, var(--muted)); line-height: 1.5; }
+.notification-inbox-row time { color: var(--muted); font-size: 11px; }
+.notification-inbox-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 640px) { .notification-inbox-row { display: grid; } }
 
 @media (max-width: 1000px) { .inbox-layout { grid-template-columns: 1fr; } .inbox-list { max-height: 360px; } }

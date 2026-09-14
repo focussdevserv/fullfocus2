@@ -46,12 +46,28 @@ function visible() {
 
 async function renderInbox(routeKey = "caixa-de-entrada") {
   box.byContact = routeKey === "conversas";
+  if (!box.byContact) return renderInternalInbox();
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Comunicação</p><h2>${box.byContact ? "Conversas" : "Caixa de entrada"}</h2><p>Carregando…</p></div></section>${stateBlock.loading("Carregando conversas…")}`;
   try { await load(); }
   catch (error) { dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Comunicação</p><h2>Caixa de entrada</h2></div></section>${stateBlock.error(error.message, "inbox-retry")}`; dashboardGrid.querySelector(".inbox-retry")?.addEventListener("click", () => renderInbox(routeKey)); return; }
   if (box.selected && !box.conversations.some((c) => String(c.id) === String(box.selected))) box.selected = null;
   draw();
   if (box.selected) openThread(box.selected, { silent: true });
+}
+
+async function renderInternalInbox() {
+  let filter = "all";
+  const drawInternal = (items = [], unread = 0, error = "") => {
+    const rows = items.length ? items.map((item) => `<article class="notification-inbox-row ${item.read_at ? "is-read" : "is-unread"}"><div><strong>${esc(item.read_at ? "Notificação interna" : "Nova notificação")}</strong><p>${esc(item.message)}</p><time>${esc(when(item.created_at))}</time></div><div class="notification-inbox-actions">${item.read_at ? "" : `<button class="text-action" type="button" data-notification-read="${esc(item.id)}">Marcar lida</button>`}<button class="text-action" type="button" data-notification-archive="${esc(item.id)}">${item.archived_at ? "Restaurar" : "Arquivar"}</button></div></article>`).join("") : `<div class="inbox-empty"><p>${error || (filter === "unread" ? "Nenhuma notificação não lida." : filter === "archived" ? "Nenhuma notificação arquivada." : "Tudo em dia.")}</p>${error ? `<button class="text-action" type="button" data-notification-retry>Tentar novamente</button>` : ""}</div>`;
+    dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Caixa de entrada</h2><p>${unread ? `<strong>${unread}</strong> ${unread === 1 ? "notificação não lida" : "notificações não lidas"}` : "Tudo lido"} · alertas internos do workspace</p></div><button class="button button-secondary compact-action" type="button" data-notification-read-all>Marcar todas como lidas</button></section><section class="data-card notification-inbox"><div class="inbox-filters"><button class="filter-button ${filter === "all" ? "is-active" : ""}" data-notification-filter="all" type="button">Todas</button><button class="filter-button ${filter === "unread" ? "is-active" : ""}" data-notification-filter="unread" type="button">Não lidas</button><button class="filter-button ${filter === "archived" ? "is-active" : ""}" data-notification-filter="archived" type="button">Arquivadas</button></div><div class="notification-inbox-list">${rows}</div></section>`;
+    dashboardGrid.querySelectorAll("[data-notification-filter]").forEach((button) => button.addEventListener("click", () => { filter = button.dataset.notificationFilter; loadInternal(); }));
+    dashboardGrid.querySelector("[data-notification-retry]")?.addEventListener("click", loadInternal);
+    dashboardGrid.querySelector("[data-notification-read-all]")?.addEventListener("click", async () => { await api("/api/notifications/read-all", { method: "POST" }); loadInternal(); document.dispatchEvent(new Event("focus-inbox-changed")); });
+    dashboardGrid.querySelectorAll("[data-notification-read]").forEach((button) => button.addEventListener("click", async () => { await api(`/api/notifications/${button.dataset.notificationRead}`, { method: "PATCH", body: { read: true } }); loadInternal(); document.dispatchEvent(new Event("focus-inbox-changed")); }));
+    dashboardGrid.querySelectorAll("[data-notification-archive]").forEach((button) => button.addEventListener("click", async () => { const archived = filter !== "archived"; await api(`/api/notifications/${button.dataset.notificationArchive}`, { method: "PATCH", body: { archived } }); loadInternal(); document.dispatchEvent(new Event("focus-inbox-changed")); }));
+  };
+  const loadInternal = async () => { dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Caixa de entrada</h2><p>Carregando notificações…</p></div></section>${stateBlock.loading("Carregando alertas internos…")}`; try { const data = await api(`/api/notifications?status=${filter}`); drawInternal(data.notifications || [], Number(data.unread_count || 0)); } catch (error) { drawInternal([], 0, error.message); } };
+  await loadInternal();
 }
 
 /* ---------------------------------------------------------------------------

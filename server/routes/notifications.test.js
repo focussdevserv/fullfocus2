@@ -14,5 +14,5 @@ function setup() {
 }
 async function request(target, path, options = {}) { await new Promise((resolve) => target.server.listen(0, resolve)); const port = target.server.address().port; const response = await fetch(`http://127.0.0.1:${port}${path}`, { ...options, headers: { "content-type": "application/json" }, body: options.body ? JSON.stringify(options.body) : undefined }); target.server.close(); return response; }
 
-test("lista notificações do usuário e retorna contador", async () => { const target = setup(); const response = await request(target, "/api/notifications"); assert.equal(response.status, 200); assert.deepEqual((await response.json()).unread_count, 1); assert.deepEqual(target.calls[0].params, [ORG, "user-1", 30]); });
+test("lista notificações do usuário e retorna contador", async () => { const target = setup(); const response = await request(target, "/api/notifications"); assert.equal(response.status, 200); assert.deepEqual((await response.json()).unread_count, 1); assert.deepEqual(target.calls[0].params, [ORG, "user-1", "all", 30]); });
 test("marca notificação como lida respeitando o workspace", async () => { const target = setup(); const response = await request(target, "/api/notifications/1/read", { method: "PATCH" }); assert.equal(response.status, 200); assert.deepEqual(target.calls[0].params, ["1", ORG, "user-1"]); });
