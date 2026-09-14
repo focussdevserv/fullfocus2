@@ -22,3 +22,18 @@ test("lista de leads aplica busca, filtros e paginação no workspace", async (t
   assert.match(calls[0].sql, /l\.source=\$4/);
   assert.deepEqual(calls[0].params, ["org-a", "%ana%", "qualified", "whatsapp", "9", 25, 50]);
 });
+
+test("lista de oportunidades aplica busca e filtros no workspace", async (t) => {
+  const calls = [];
+  const pool = { query: async (sql, params) => { calls.push({ sql, params }); return { rows: [{ id: 8, name: "Site" }], rowCount: 1 }; } };
+  const app = express();
+  register(app, { pool, tenant: () => "org-a", asText: (value) => String(value ?? "").trim(), classifyDbError: (_error, message) => ({ status: 503, error: message }), validateRelations: async () => {} });
+  const server = createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  t.after(() => server.close());
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/opportunities?search=site&stage=negotiation&owner_id=4&limit=10`);
+  assert.equal(response.status, 200);
+  assert.match(calls[0].sql, /o\.name ilike/);
+  assert.match(calls[0].sql, /o\.stage=\$3/);
+  assert.deepEqual(calls[0].params, ["org-a", "%site%", "negotiation", "4", 10, 0]);
+});
