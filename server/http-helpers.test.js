@@ -11,6 +11,7 @@ test("normaliza identidades antes da deduplicação", () => {
 test("singular cobre todas as tabelas com plural irregular", () => {
   assert.equal(singular("companies"), "company");
   assert.equal(singular("opportunities"), "opportunity");
+  assert.equal(singular("commissions"), "commission");
   for (const table of Object.keys(SINGULAR)) assert.equal(typeof singular(table), "string");
   assert.throws(() => singular("desconhecida"));
 });
@@ -36,5 +37,6 @@ test("isValidAmount permite zero apenas onde o schema permite", () => {
 
 test("lista de tabelas com updated_at é explícita", () => {
   assert.ok(TABLES_WITH_UPDATED_AT.has("leads"));
+  assert.ok(TABLES_WITH_UPDATED_AT.has("commissions"));
   assert.ok(!TABLES_WITH_UPDATED_AT.has("revenues"));
 });
