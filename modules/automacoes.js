@@ -48,9 +48,12 @@ async function list(path, title, kind, render) {
   try { const data = await api(path); render(data[kind] || []); } catch (error) { dashboardGrid.innerHTML = stateBlock.error(error.message, "automation-retry"); }
 }
 
+const autoMetric = (label, value) => `<article class="data-card finance-metric"><span>${e(label)}</span><strong>${e(value)}</strong></article>`;
+const autoDetails = (item) => { if (!item) return; const value = (entry) => entry === null || entry === undefined || entry === "" ? "—" : typeof entry === "object" ? JSON.stringify(entry, null, 2) : String(entry); const html = Object.entries(item).filter(([key]) => !["id", "organization_id"].includes(key)).map(([key, entry]) => `<dt>${e(key.replaceAll("_", " "))}</dt><dd>${e(value(entry))}</dd>`).join(""); ui.drawer({ title: item.name || "Automacao", subtitle: e(tr[item.trigger] || item.trigger || "Regra"), html: `<dl>${html || "<dd>Sem detalhes disponiveis.</dd>"}</dl>` }); };
 function automations() {
   list("/api/automations", "Automações", "automations", (rows) => {
     dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Gatilho → condição → ação</p><h2>Automações</h2></div><button class="button button-primary compact-action" data-new>+ Nova automação</button></section><section class="data-card automation-list">${rows.map((x) => `<article><strong>${e(x.name)}</strong><span>${e(tr[x.trigger] || x.trigger)} → ${e(act[x.action] || x.action)}</span><small>${x.status === "error" ? "Com erro" : x.active ? "Ativa" : "Pausada"}</small><button class="compact-action" data-toggle="${x.id}">${x.active ? "Desativar" : "Ativar"}</button></article>`).join("") || stateBlock.empty("Nenhuma automação", "Crie uma regra para começar.", "Criar agora")}</section>`;
+    dashboardGrid.querySelector(".automation-list")?.insertAdjacentHTML("beforebegin", `<section class="finance-metrics">${autoMetric("Total", rows.length)}${autoMetric("Ativas", rows.filter((item) => item.active).length)}${autoMetric("Pausadas", rows.filter((item) => !item.active).length)}${autoMetric("Com erro", rows.filter((item) => item.status === "error").length)}</section>`); dashboardGrid.querySelectorAll(".automation-list article").forEach((article, index) => { const details = document.createElement("button"); details.type = "button"; details.className = "compact-action"; details.textContent = "Detalhes"; details.addEventListener("click", () => autoDetails(rows[index])); article.append(details); });
     dashboardGrid.querySelector("[data-new]").onclick = () => openCreateDialog("automation");
     dashboardGrid.querySelectorAll("[data-toggle]").forEach((button) => { button.onclick = async () => { await api(`/api/automations/${button.dataset.toggle}`, { method: "PATCH", body: { active: button.textContent === "Ativar", status: button.textContent === "Ativar" ? "active" : "paused" } }); automations(); }; });
   });
@@ -81,3 +84,4 @@ const automationHistoryObserver = new MutationObserver(async () => {
   } catch { dashboardGrid.dataset.runsBound = ""; }
 });
 automationHistoryObserver.observe(dashboardGrid, { childList: true, subtree: true });
+dashboardGrid.addEventListener("click", (event) => { if (event.target.closest(".automation-retry")) automations(); });

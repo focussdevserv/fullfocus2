@@ -698,7 +698,8 @@ const stateBlock = {
   empty: (title, description = "", actionLabel = "", actionClass = "") => `<section class="data-card state-card state-empty"><h2>${escapeHtml(title)}</h2>${description ? `<p>${escapeHtml(description)}</p>` : ""}${actionLabel ? `<button class="button button-primary compact-action ${actionClass}" type="button">${escapeHtml(actionLabel)}</button>` : ""}</section>`,
   error: (message = "Não foi possível carregar os dados.", retryClass = "state-retry") => `<section class="data-card state-card state-error" role="alert"><h2>Algo deu errado</h2><p>${escapeHtml(message)}</p><button class="button button-secondary compact-action ${retryClass}" type="button">Tentar novamente</button></section>`,
 };
-
+/* Compatibilidade: telas antigas escutam .state-retry, enquanto as novas passam uma classe específica. */
+stateBlock.error = (message = "NÃ£o foi possÃ­vel carregar os dados.", retryClass = "state-retry") => `<section class="data-card state-card state-error" role="alert"><h2>Algo deu errado</h2><p>${escapeHtml(message)}</p><button class="button button-secondary compact-action state-retry ${retryClass}" type="button">Tentar novamente</button></section>`;
 
 const DASHBOARD_PROFILE_KEY = "focusdev_dashboard_profile";
 function applyDashboardProfile(profile = localStorage.getItem(DASHBOARD_PROFILE_KEY) || "manager") {

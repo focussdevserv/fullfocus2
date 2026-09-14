@@ -23,3 +23,4 @@ async function renderAuditScreen() {
   } catch (error) { dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Segurança e controle</p><h2>${title}</h2></div></section>${stateBlock.error(error.message, "audit-retry")}`; dashboardGrid.querySelector(".state-retry")?.addEventListener("click", renderAuditScreen); }
 }
 registerRoutes({ auditoria: renderAuditScreen });
+dashboardGrid.addEventListener("click", (event) => { if (event.target.closest(".audit-retry")) renderAuditScreen(); });

@@ -18,6 +18,7 @@ async function renderTeamAccess() {
 }
 
 registerRoutes({ equipe: renderTeamAccess });
+dashboardGrid.addEventListener("click", (event) => { if (event.target.closest(".team-retry")) renderTeamAccess(); });
 
 const rolePanelObserver = new MutationObserver(() => {
   if (location.hash !== "#equipe" || dashboardGrid.querySelector("[data-new-team-role]")) return;

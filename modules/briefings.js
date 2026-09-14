@@ -2,6 +2,7 @@
 const briefingEsc = (value) => escapeHtml(value ?? "");
 const briefingStatus = { draft: "Rascunho", published: "Publicado", sent: "Enviado", answered: "Respondido", approved: "Aprovado", archived: "Arquivado" };
 const briefingFilter = { search: "", status: "" };
+const briefingMetric = (label, value) => `<article class="data-card finance-metric"><span>${briefingEsc(label)}</span><strong>${briefingEsc(value)}</strong></article>`;
 const briefingConfig = {
   title: "Novo briefing",
   endpoint: "/api/briefings",
@@ -43,9 +44,10 @@ async function renderBriefingsScreen() {
   try {
     const params = new URLSearchParams(); if (briefingFilter.search) params.set("search", briefingFilter.search); if (briefingFilter.status) params.set("status", briefingFilter.status); const items = (await api(`/api/briefings?${params}`)).briefings || [];
     dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Operação</p><h2>${title}</h2><p>${description}</p></div><button class="button button-primary compact-action" data-briefing-new type="button">+ Novo briefing</button></section><section class="data-card automation-list"><div class="finance-toolbar"><input type="search" data-briefing-search placeholder="Buscar briefing" aria-label="Buscar briefing"><select data-briefing-filter aria-label="Filtrar status"><option value="">Todos os status</option>${Object.entries(briefingStatus).map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select></div><div class="template-grid">${items.length ? items.map((item) => { const questions = briefingQuestions(item.questions), responses = briefingResponses(item.responses), responseCount = Object.keys(responses).length; return `<article class="data-card template-card" data-briefing-row data-status="${briefingEsc(item.status || "draft")}"><div class="section-heading"><div><h3>${briefingEsc(item.name)}</h3><small>${questions.length} pergunta(s) · ${responseCount} resposta(s) · ${item.client_id ? `Cliente #${briefingEsc(item.client_id)}` : "Sem cliente"}</small></div><span class="finance-status ${item.status === "answered" || item.status === "approved" ? "positive" : "neutral"}">${briefingStatus[item.status] || briefingEsc(item.status || "Rascunho")}</span></div><div class="template-actions"><button class="compact-action" data-briefing-preview="${item.id}" type="button">Ver briefing</button>${responseCount ? `<button class="compact-action" data-briefing-responses="${item.id}" type="button">Ver respostas</button>` : ""}<button class="compact-action" data-briefing-link="${item.id}" type="button">${item.public_token ? "Copiar link" : "Gerar link"}</button><button class="compact-action" data-briefing-edit="${item.id}" type="button">Editar</button><button class="compact-action" data-briefing-delete="${item.id}" type="button">Excluir</button></div></article>`; }).join("") : stateBlock.empty("Nenhum briefing", "Crie um questionário para iniciar o levantamento do projeto.", "Criar briefing", "briefing-empty")}</div></section>`;
+    dashboardGrid.querySelector(".automation-list")?.insertAdjacentHTML("beforebegin", `<section class="finance-metrics">${briefingMetric("Total", items.length)}${briefingMetric("Publicados", items.filter((item) => ["published", "sent"].includes(item.status)).length)}${briefingMetric("Respondidos", items.filter((item) => item.status === "answered").length)}${briefingMetric("Rascunhos", items.filter((item) => !item.status || item.status === "draft").length)}</section>`);
     const openNew = () => prepareBriefingCreate();
     dashboardGrid.querySelector("[data-briefing-new]")?.addEventListener("click", openNew);
-    dashboardGrid.querySelector("[data-briefing-empty]")?.addEventListener("click", openNew);
+    dashboardGrid.querySelector(".briefing-empty")?.addEventListener("click", openNew);
     const filter = () => { const query = dashboardGrid.querySelector("[data-briefing-search]").value.toLocaleLowerCase("pt-BR"), status = dashboardGrid.querySelector("[data-briefing-filter]").value; dashboardGrid.querySelectorAll("[data-briefing-row]").forEach((row) => { row.hidden = (query && !row.textContent.toLocaleLowerCase("pt-BR").includes(query)) || (status && row.dataset.status !== status); }); };
     dashboardGrid.querySelector("[data-briefing-search]")?.addEventListener("input", filter);
     dashboardGrid.querySelector("[data-briefing-filter]")?.addEventListener("change", filter);
@@ -59,3 +61,4 @@ async function renderBriefingsScreen() {
 }
 
 registerRoutes({ briefings: renderBriefingsScreen });
+dashboardGrid.addEventListener("click", (event) => { if (event.target.closest(".briefing-retry")) renderBriefingsScreen(); });

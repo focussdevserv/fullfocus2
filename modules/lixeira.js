@@ -20,3 +20,4 @@ async function renderTrashScreen() {
   } catch (error) { dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Configurações</p><h2>${title}</h2></div></section>${stateBlock.error(error.message, "trash-retry")}`; dashboardGrid.querySelector(".state-retry")?.addEventListener("click", renderTrashScreen); }
 }
 registerRoutes({ lixeira: renderTrashScreen });
+dashboardGrid.addEventListener("click", (event) => { if (event.target.closest(".trash-retry")) renderTrashScreen(); });

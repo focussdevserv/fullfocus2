@@ -31,3 +31,4 @@ async function renderManagement(kind) {
   } catch (error) { dashboardGrid.innerHTML = stateBlock.error(error.message, "mg-retry"); dashboardGrid.querySelector(".state-retry")?.addEventListener("click", () => renderManagement(kind)); }
 }
 registerRoutes({ metas: () => renderManagement("metas"), comissoes: () => renderManagement("comissoes"), ausencias: () => renderManagement("ausencias"), horas: () => renderManagement("horas") });
+dashboardGrid.addEventListener("click", (event) => { if (!event.target.closest(".mg-retry")) return; const key = location.hash.replace(/^#/, ""); if (mgConfig[key]) renderManagement(key); });

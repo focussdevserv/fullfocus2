@@ -23,3 +23,4 @@ async function renderFinancialReports() {
 }
 
 registerRoutes({ relatorios: renderFinancialReports });
+dashboardGrid.addEventListener("click", (event) => { if (event.target.closest(".report-retry")) renderFinancialReports(); });

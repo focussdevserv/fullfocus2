@@ -100,7 +100,7 @@ body.dark-mode .create-dialog input:focus, body.dark-mode .create-dialog select:
 .app-shell .dashboard-grid input:disabled, .app-shell .dashboard-grid select:disabled, .app-shell .dashboard-grid textarea:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* Selects nativos com aparência própria (seta desenhada) em vez do controle cinza do sistema. */
-.app-shell select:not([multiple]):not([size]) {
+:is(.app-shell, .ui-drawer, .ui-modal, .create-dialog) select:not([multiple]):not([size]) {
   appearance: none;
   -webkit-appearance: none;
   padding-right: 36px;
@@ -110,9 +110,9 @@ body.dark-mode .create-dialog input:focus, body.dark-mode .create-dialog select:
   background-size: 14px 14px;
   cursor: pointer;
 }
-.app-shell select:not([multiple]):not([size]) { background-color: var(--control-bg); }
-.app-shell select option { color: #0f1f45; background: #ffffff; font-weight: 500; }
-body.dark-mode .app-shell select option { color: #eff5ff; background: #111a2d; }
+:is(.app-shell, .ui-drawer, .ui-modal, .create-dialog) select:not([multiple]):not([size]) { background-color: var(--control-bg); }
+:is(.app-shell, .ui-drawer, .ui-modal, .create-dialog) select option { color: #0f1f45; background: #ffffff; font-weight: 500; }
+body.dark-mode :is(.app-shell, .ui-drawer, .ui-modal, .create-dialog) select option { color: #eff5ff; background: #111a2d; }
 .app-shell input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 .app-shell input[type="date"], .app-shell input[type="datetime-local"], .app-shell input[type="time"], .app-shell input[type="month"] { color-scheme: light; }
 body.dark-mode .app-shell input[type="date"], body.dark-mode .app-shell input[type="datetime-local"], body.dark-mode .app-shell input[type="time"], body.dark-mode .app-shell input[type="month"] { color-scheme: dark; }
@@ -158,8 +158,8 @@ body.dark-mode .app-shell input[type="checkbox"], body.dark-mode .app-shell inpu
 .ui-modal-actions .compact-action, .dialog-actions .compact-action { min-height: 40px; padding: 0 18px; }
 
 /* Botão "compact-action" sem variante (o padrão em tabelas e listas) = botão secundário. */
-.app-shell button.compact-action:not(.button):not(.text-action):not(.ui-icon):not(.filter-button):not(.icon-action),
-.app-shell a.compact-action:not(.button) {
+:is(.app-shell, .ui-drawer, .ui-modal, .create-dialog, .notification-panel) button.compact-action:not(.button):not(.text-action):not(.ui-icon):not(.filter-button):not(.icon-action),
+:is(.app-shell, .ui-drawer, .ui-modal, .create-dialog, .notification-panel) a.compact-action:not(.button) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -179,17 +179,17 @@ body.dark-mode .app-shell input[type="checkbox"], body.dark-mode .app-shell inpu
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
-.app-shell button.compact-action:not(.button):not(.text-action):not(.ui-icon):not(.filter-button):not(.icon-action):hover,
-.app-shell a.compact-action:not(.button):hover { border-color: var(--btn-secondary-hover-border); background: var(--btn-secondary-hover-bg); }
-.app-shell button.compact-action:not(.button):active { transform: translateY(1px); }
-.app-shell button.compact-action:disabled, .app-shell .button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+:is(.app-shell, .ui-drawer, .ui-modal, .create-dialog, .notification-panel) button.compact-action:not(.button):not(.text-action):not(.ui-icon):not(.filter-button):not(.icon-action):hover,
+:is(.app-shell, .ui-drawer, .ui-modal, .create-dialog, .notification-panel) a.compact-action:not(.button):hover { border-color: var(--btn-secondary-hover-border); background: var(--btn-secondary-hover-bg); }
+:is(.app-shell, .ui-drawer, .ui-modal) button.compact-action:not(.button):active { transform: translateY(1px); }
+:is(.app-shell, .ui-drawer, .ui-modal) button.compact-action:disabled, :is(.app-shell, .ui-drawer, .ui-modal) .button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 /* Variantes semânticas usadas pelas telas. */
-.app-shell button.compact-action.success, .app-shell button.compact-action.approval-accept { border-color: rgb(18 118 76 / 45%); color: #1f9d6a; }
-body.dark-mode .app-shell button.compact-action.success, body.dark-mode .app-shell button.compact-action.approval-accept { color: #6fe0b4; }
-.app-shell button.compact-action.success:hover, .app-shell button.compact-action.approval-accept:hover { border-color: #1f9d6a; background: rgb(18 118 76 / 12%); }
-.app-shell button.compact-action.danger, .app-shell button.compact-action.approval-reject, .app-shell button.compact-action.is-danger { border-color: rgb(230 36 41 / 40%); color: #d0182f; }
-body.dark-mode .app-shell button.compact-action.danger, body.dark-mode .app-shell button.compact-action.approval-reject, body.dark-mode .app-shell button.compact-action.is-danger { color: #ff8a97; }
-.app-shell button.compact-action.danger:hover, .app-shell button.compact-action.approval-reject:hover, .app-shell button.compact-action.is-danger:hover { border-color: #e62429; background: rgb(230 36 41 / 12%); }
+:is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.success, :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.approval-accept { border-color: rgb(18 118 76 / 45%); color: #1f9d6a; }
+body.dark-mode :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.success, body.dark-mode :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.approval-accept { color: #6fe0b4; }
+:is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.success:hover, :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.approval-accept:hover { border-color: #1f9d6a; background: rgb(18 118 76 / 12%); }
+:is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.danger, :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.approval-reject, :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.is-danger { border-color: rgb(230 36 41 / 40%); color: #d0182f; }
+body.dark-mode :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.danger, body.dark-mode :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.approval-reject, body.dark-mode :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.is-danger { color: #ff8a97; }
+:is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.danger:hover, :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.approval-reject:hover, :is(.app-shell, .ui-drawer, .ui-modal) button.compact-action.is-danger:hover { border-color: #e62429; background: rgb(230 36 41 / 12%); }
 /* Botões de linha em tabelas: mais compactos. */
 .dashboard-grid td .compact-action, .dashboard-grid td .button { min-height: 30px; padding: 0 10px; font-size: 11.5px; }
 .dashboard-grid td .text-action { font-size: 12px; }

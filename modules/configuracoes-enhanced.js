@@ -18,3 +18,4 @@ async function renderEnhancedSettings() {
   } catch (error) { dashboardGrid.innerHTML = stateBlock.error(error.message, "settings-retry"); dashboardGrid.querySelector(".state-retry")?.addEventListener("click", renderEnhancedSettings); }
 }
 registerRoutes({ configuracoes: renderEnhancedSettings });
+dashboardGrid.addEventListener("click", (event) => { if (event.target.closest(".settings-retry")) renderEnhancedSettings(); });
