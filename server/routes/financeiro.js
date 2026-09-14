@@ -2,6 +2,14 @@
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
   const error = (res, e, fallback) => { const out = classifyDbError(e, fallback); res.status(out.status).json({ error: out.error }); };
+  app.get("/api/bank_accounts", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const values = [org], where = ["b.organization_id=$1"], search = asText(req.query?.search || req.query?.q);
+    if (search) { values.push(search); const p = `$${values.length}`; where.push(`(b.name ilike '%' || ${p} || '%' or coalesce(b.kind,'') ilike '%' || ${p} || '%' or exists (select 1 from bank_account_transactions bt where bt.bank_account_id=b.id and bt.organization_id=b.organization_id and bt.description ilike '%' || ${p} || '%'))`); }
+    if (["active", "inactive"].includes(String(req.query?.status))) { values.push(String(req.query.status)); where.push(`b.status=$${values.length}`); }
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 250, 1), 250), offset = Math.max(Number(req.query?.offset) || 0, 0); values.push(limit, offset);
+    try { const q = await pool.query(`select b.* from bank_accounts b where ${where.join(" and ")} order by b.created_at desc limit $${values.length - 1} offset $${values.length}`, values); return res.json({ bank_accounts: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { return error(res, e, "Não foi possível carregar as contas bancárias."); }
+  });
   app.use("/api/subscriptions", async (req, res, next) => {
     if (req.method !== "GET") return next();
     const org = tenant(req, res); if (!org) return;
