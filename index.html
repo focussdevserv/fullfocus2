@@ -27,17 +27,17 @@
     <link rel="stylesheet" href="modules/catalogo.css?v=7" />
     <link rel="stylesheet" href="modules/automacoes.css?v=7" />
     <link rel="stylesheet" href="modules/configuracoes.css?v=7" />
-    <!-- Núcleo primeiro; os módulos (um por área do menu) registram suas rotas depois. -->
+    <!-- Núcleo primeiro (defer); os módulos (um por área do menu) são type="module": escopo próprio, executam em ordem depois do núcleo e enxergam os helpers globais. -->
     <script src="app.js?v=7" defer></script>
-    <script src="modules/meu-dia.js?v=7" defer></script>
-    <script src="modules/inbox.js?v=7" defer></script>
-    <script src="modules/crm.js?v=7" defer></script>
-    <script src="modules/contas.js?v=7" defer></script>
-    <script src="modules/operacao.js?v=7" defer></script>
-    <script src="modules/financeiro.js?v=7" defer></script>
-    <script src="modules/catalogo.js?v=7" defer></script>
-    <script src="modules/automacoes.js?v=7" defer></script>
-    <script src="modules/configuracoes.js?v=7" defer></script>
+    <script type="module" src="modules/meu-dia.js?v=7"></script>
+    <script type="module" src="modules/inbox.js?v=7"></script>
+    <script type="module" src="modules/crm.js?v=7"></script>
+    <script type="module" src="modules/contas.js?v=7"></script>
+    <script type="module" src="modules/operacao.js?v=7"></script>
+    <script type="module" src="modules/financeiro.js?v=7"></script>
+    <script type="module" src="modules/catalogo.js?v=7"></script>
+    <script type="module" src="modules/automacoes.js?v=7"></script>
+    <script type="module" src="modules/configuracoes.js?v=7"></script>
     <script>if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));</script>
   </head>
   <body>
