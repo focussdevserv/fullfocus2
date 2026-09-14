@@ -24,3 +24,14 @@ test("portal com token errado responde 404", async () => { const h = harness(); 
 test("portal retorna somente dados do cliente da organização", async () => { const h = harness(); const response = await request(h, "/api/portal/valid-token"); assert.equal(response.status, 200); const body = await response.json(); assert.equal(body.client.name, "Cliente teste"); assert.deepEqual(Object.keys(body), ["client", "contracts", "receivables", "projects", "tickets"]); assert.ok(h.calls.filter((x) => x.sql.includes("organization_id")).length >= 5); });
 test("GET CEP invalid responds 400", async () => { const h = harness(); const response = await request(h, "/api/cep/123"); assert.equal(response.status, 400); });
 test("normaliza os campos retornados pela BrasilAPI", () => { const data = pickCnpj({ razao_social: "Empresa Ltda", nome_fantasia: "Empresa", situacao_cadastral: "ATIVA", data_inicio_atividade: "2020-01-02", cnae_fiscal: 6201, ddd_telefone_1: "1133334444", logradouro: "Rua A", numero: "10" }, "11222333000181"); assert.equal(data.situacao, "ATIVA"); assert.equal(data.abertura, "2020-01-02"); assert.equal(data.cnae, 6201); assert.equal(data.telefone, "1133334444"); assert.equal(data.logradouro, "Rua A"); });
+test("listagem de contatos aplica busca, filtros, paginação e workspace", async () => {
+  const h = harness();
+  const response = await request(h, "/api/contacts?search=ana&company_id=5&limit=10&offset=2");
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body, { contacts: [], pagination: { limit: 10, offset: 2, returned: 0 } });
+  const call = h.calls.at(-1);
+  assert.match(call.sql, /contacts\.organization_id=\$1/);
+  assert.match(call.sql, /contacts\.company_id=\$3/);
+  assert.deepEqual(call.params, [org, "%ana%", "5", 10, 2]);
+});

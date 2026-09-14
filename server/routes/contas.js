@@ -33,6 +33,19 @@ const portalPage = ({ client, contracts, receivables, projects = [], tickets = [
 function tokenHash(token) { return crypto.createHash("sha256").update(token).digest("hex"); }
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError } = ctx;
+  const listEntity = (table, searchColumns, filterColumns = []) => app.get(`/api/${table}`, async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const values = [org], where = [`${table}.organization_id=$1`];
+    const add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
+    const search = asText(req.query.search || req.query.q);
+    if (search) { values.push(`%${search.slice(0, 100)}%`); const index = values.length; where.push(`(${searchColumns.map((column) => `coalesce(${table}.${column},'') ilike $${index}`).join(" or ")})`); }
+    for (const field of filterColumns) if (req.query[field] !== undefined && req.query[field] !== "") add(`${table}.${field}=$VALUE`, String(req.query[field]));
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250), offset = Math.max(Number(req.query.offset) || 0, 0); values.push(limit, offset);
+    try { const q = await pool.query(`select ${table}.* from ${table} where ${where.join(" and ")} order by ${table}.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ [table]: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (error) { const out = classifyDbError(error, "Não foi possível carregar os registros."); res.status(out.status).json({ error: out.error }); }
+  });
+  listEntity("contacts", ["name", "email", "phone", "document"], ["company_id", "is_primary"]);
+  listEntity("companies", ["name", "trade_name", "document", "email", "phone"], ["status", "segment"]);
+  listEntity("clients", ["name", "legal_name", "trade_name", "email", "phone", "whatsapp", "document"], ["status", "company_id", "contact_id", "financial_status"]);
   const relationOverview = async (req, res, table) => {
     const org = tenant(req, res); if (!org) return;
     const id = req.params.id;
