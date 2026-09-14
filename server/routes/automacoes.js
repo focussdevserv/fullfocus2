@@ -67,6 +67,15 @@ export function register(app, ctx) {
     const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); params.push(limit, offset);
     try { const q = await pool.query(`select * from automations where ${where.join(" and ")} order by created_at desc limit $${params.length - 1} offset $${params.length}`, params); return res.json({ automations: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (error) { return fail(res, error, "Nao foi possivel carregar as automacoes."); }
   });
+  app.use("/api/integrations", async (req, res, next) => {
+    if (req.method !== "GET") return next();
+    const org = tenant(req, res); if (!org) return;
+    const search = text(req.query?.search || req.query?.q), status = text(req.query?.status); const params = [org], where = ["i.organization_id=$1"];
+    if (search) { params.push(search); where.push(`(i.provider ilike '%' || $${params.length} || '%' or coalesce(i.category,'') ilike '%' || $${params.length} || '%' or coalesce(i.account_name,'') ilike '%' || $${params.length} || '%')`); }
+    if (["disconnected", "connected", "error"].includes(status)) { params.push(status); where.push(`i.status=$${params.length}`); }
+    const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); params.push(limit, offset);
+    try { const q = await pool.query(`select i.* from integrations i where ${where.join(" and ")} order by i.created_at desc limit $${params.length - 1} offset $${params.length}`, params); return res.json({ integrations: q.rows.map(maskIntegration), pagination: { limit, offset, returned: q.rows.length } }); } catch (error) { return fail(res, error, "Não foi possível carregar as integrações."); }
+  });
 
   const definitions = {
     automations: {
