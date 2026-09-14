@@ -16,7 +16,32 @@ function setup() {
     if (sql.startsWith("select f.*")) return { rows: [{ id: 5, organization_id: ORG, lead_id: 7 }] };
     if (sql.startsWith("insert into followups")) return { rowCount: 1, rows: [{ id: 6, organization_id: ORG, lead_id: params[1] }] };
     return { rowCount: 1, rows: [{ id: 9 }] };
-  } };
+  }, release: () => {} };
+  const app = express(); app.use(express.json());
+  register(app, { pool, tenant: (_req, res) => { res.locals.org = ORG; return ORG; }, asText: v => typeof v === "string" ? v.trim() : "", classifyDbError: (_e, error) => ({ status: 503, error }), validateRelations: async () => {} });
+  const server = createServer(app); return { server, calls };
+}
+function setupConversion({ converted = false, missing = false } = {}) {
+  const calls = [];
+  const lead = missing ? null : { id: 7, organization_id: ORG, name: "Ana", company: "Acme", email: "ana@example.com", phone: "5511999999999", company_id: null, contact_id: null, converted_client_id: converted ? 22 : null };
+  const transaction = { query: async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql === "begin" || sql === "commit" || sql === "rollback") return { rowCount: 1, rows: [] };
+    if (sql.startsWith("select * from leads")) return { rowCount: lead ? 1 : 0, rows: lead ? [lead] : [] };
+    if (sql.startsWith("select * from clients")) return converted ? { rowCount: 1, rows: [{ id: 22, organization_id: ORG, name: "Ana" }] } : { rowCount: 0, rows: [] };
+    if (sql.startsWith("select id from companies where id")) return { rowCount: 1, rows: [{ id: 10 }] };
+    if (sql.startsWith("select id from companies where organization_id")) return { rowCount: 0, rows: [] };
+    if (sql.startsWith("insert into companies")) return { rowCount: 1, rows: [{ id: 10 }] };
+    if (sql.startsWith("select id from contacts where id")) return { rowCount: 1, rows: [{ id: 11 }] };
+    if (sql.startsWith("select id from contacts where organization_id")) return { rowCount: 0, rows: [] };
+    if (sql.startsWith("insert into contacts")) return { rowCount: 1, rows: [{ id: 11 }] };
+    if (sql.startsWith("select * from clients where organization_id")) return { rowCount: 0, rows: [] };
+    if (sql.startsWith("insert into clients")) return { rowCount: 1, rows: [{ id: 22, organization_id: ORG, name: "Ana", status: "active" }] };
+    if (sql.startsWith("update clients")) return { rowCount: 1, rows: [{ id: 22, organization_id: ORG, name: "Ana", status: "active" }] };
+    if (sql.startsWith("update leads")) return { rowCount: 1, rows: [] };
+    return { rowCount: 1, rows: [] };
+  }, release: () => {} };
+  const pool = { connect: async () => transaction, query: async () => ({ rows: [], rowCount: 0 }) };
   const app = express(); app.use(express.json());
   register(app, { pool, tenant: (_req, res) => { res.locals.org = ORG; return ORG; }, asText: v => typeof v === "string" ? v.trim() : "", classifyDbError: (_e, error) => ({ status: 503, error }), validateRelations: async () => {} });
   const server = createServer(app); return { server, calls };
@@ -30,3 +55,6 @@ test("proposals lista filtrada por organização", async () => { const t = setup
 test("proposal válida responde 201 e inválida 400", async () => { const good = await request(setup(), "/api/proposals", { method: "POST", body: { title: "P", amount: 20 } }); assert.equal(good.status, 201); const bad = await request(setup(), "/api/proposals", { method: "POST", body: { title: "", amount: -2 } }); assert.equal(bad.status, 400); });
 test("followups lista e criação filtram organização", async () => { const t = setup(); assert.equal((await request(t, "/api/followups")).status, 200); assert.equal(t.calls[0].params[0], ORG); const r = await request(setup(), "/api/followups", { method: "POST", body: { lead_id: 7, due_at: "2026-09-15T10:00:00Z" } }); assert.equal(r.status, 201); });
 test("aceitar proposta atualiza oportunidade para won", async () => { const t = setup(); const r = await request(t, "/api/proposals/2", { method: "PATCH", body: { status: "accepted" } }); assert.equal(r.status, 200); assert.ok(t.calls.some(x => x.sql.includes("stage='won'") && x.params[1] === ORG)); });
+test("converte lead em cliente, contato e empresa sem sair do workspace", async () => { const t = setupConversion(); const r = await request(t, "/api/leads/7/convert-to-client", { method: "POST", body: {} }); assert.equal(r.status, 201); const body = await r.json(); assert.equal(body.client.id, 22); assert.equal(body.converted, false); assert.ok(t.calls.every(x => x.sql === "begin" || x.sql === "commit" || x.sql === "rollback" || x.sql.includes("organization_id"))); });
+test("conversão repetida retorna o mesmo cliente sem inserir novamente", async () => { const t = setupConversion({ converted: true }); const r = await request(t, "/api/leads/7/convert-to-client", { method: "POST", body: {} }); assert.equal(r.status, 200); const body = await r.json(); assert.equal(body.client.id, 22); assert.equal(body.converted, true); assert.equal(t.calls.some(x => x.sql.startsWith("insert into clients")), false); });
+test("lead de outro workspace não é convertido", async () => { const t = setupConversion({ missing: true }); const r = await request(t, "/api/leads/7/convert-to-client", { method: "POST", body: {} }); assert.equal(r.status, 404); });

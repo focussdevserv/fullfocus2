@@ -113,7 +113,7 @@ function drawLeads(leads, campaigns) {
       { key: "source", label: "Origem", hideOnNarrow: true, render: (l) => esc(SOURCES.find(([k]) => k === l.source)?.[1] || l.source || "—") },
       { key: "value", label: "Valor", align: "right", hideOnNarrow: true, render: (l) => (l.value ? money(l.value) : "—") },
       { key: "created_at", label: "Criado", hideOnNarrow: true, render: (l) => `<span title="${esc(dateTime(l.created_at))}">${esc(relative(l.created_at))}</span>` },
-      { key: "actions", label: "", align: "right", render: (l) => rowActions([{ label: "↗", title: "Converter em oportunidade", attr: `data-convert="${esc(l.id)}"` }, { label: "⏰", title: "Agendar follow-up", attr: `data-followup="${esc(l.id)}"` }, { label: "✎", title: "Editar", attr: `data-edit="${esc(l.id)}"` }, { label: "×", title: "Excluir", danger: true, attr: `data-delete="${esc(l.id)}"` }]) },
+      { key: "actions", label: "", align: "right", render: (l) => rowActions([{ label: "↗", title: "Converter em oportunidade", attr: `data-convert="${esc(l.id)}"` }, { label: "✓", title: "Converter em cliente", attr: `data-convert-client="${esc(l.id)}"` }, { label: "⏰", title: "Agendar follow-up", attr: `data-followup="${esc(l.id)}"` }, { label: "✎", title: "Editar", attr: `data-edit="${esc(l.id)}"` }, { label: "×", title: "Excluir", danger: true, attr: `data-delete="${esc(l.id)}"` }]) },
     ], rows: list, rowClass: () => "is-clickable", rowAttr: (l) => `data-open="${esc(l.id)}"` }) : empty({ title: leads.length ? "Nenhum lead com esses filtros." : "Nenhum lead ainda.", text: leads.length ? "Ajuste a busca ou os filtros." : "Cadastre quem demonstrou interesse e acompanhe até o fechamento.", cta: leads.length ? "" : "Criar primeiro lead", attr: "data-new" })}
     </section>`;
   const refocus = keepSearchFocus(dashboardGrid);
@@ -127,6 +127,7 @@ function drawLeads(leads, campaigns) {
   dashboardGrid.querySelectorAll("tr[data-open]").forEach((row) => row.addEventListener("click", (event) => { if (event.target.closest("button, select, a")) return; leadDrawer(leads.find((l) => String(l.id) === row.dataset.open), campaigns, renderLeads); }));
   dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => leadForm(leads.find((l) => String(l.id) === b.dataset.edit), renderLeads)));
   dashboardGrid.querySelectorAll("[data-convert]").forEach((b) => b.addEventListener("click", () => convertLead(leads.find((l) => String(l.id) === b.dataset.convert), renderLeads)));
+  dashboardGrid.querySelectorAll("[data-convert-client]").forEach((b) => b.addEventListener("click", () => convertLeadToClient(leads.find((l) => String(l.id) === b.dataset.convertClient), renderLeads)));
   dashboardGrid.querySelectorAll("[data-followup]").forEach((b) => b.addEventListener("click", () => followupForm({ lead_id: b.dataset.followup }, renderLeads)));
   dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/leads/${b.dataset.delete}`, { method: "DELETE" }); toast("Lead excluído."); renderLeads(); } })));
 }
@@ -154,10 +155,11 @@ function leadDrawer(lead, campaigns, after) {
     <div class="crm-drawer-head">${badge(label(LEAD_STATUS, lead.status), tone(LEAD_STATUS, lead.status))}${lead.value ? `<strong>${money(lead.value)}</strong>` : ""}</div>
     ${facts([["Empresa", lead.company], ["E-mail", lead.email], ["Telefone", lead.phone], ["Origem", SOURCES.find(([k]) => k === lead.source)?.[1] || lead.source], ["Campanha", campaign?.name], ["Criado em", dateTime(lead.created_at)], ["Atualizado", relative(lead.updated_at)]])}
     ${lead.notes ? `<div><h3>Observações</h3><p class="crm-notes">${esc(lead.notes)}</p></div>` : ""}
-    <div class="crm-drawer-actions">${button({ label: "Converter em oportunidade", attr: "data-convert" })}${button({ label: "Agendar follow-up", kind: "secondary", attr: "data-followup" })}${button({ label: "Editar", kind: "secondary", attr: "data-edit" })}${lead.phone ? button({ label: "WhatsApp", kind: "secondary", attr: "data-whatsapp" }) : ""}</div>
+    <div class="crm-drawer-actions">${button({ label: "Converter em oportunidade", attr: "data-convert" })}${button({ label: "Converter em cliente", kind: "secondary", attr: "data-convert-client" })}${button({ label: "Agendar follow-up", kind: "secondary", attr: "data-followup" })}${button({ label: "Editar", kind: "secondary", attr: "data-edit" })}${lead.phone ? button({ label: "WhatsApp", kind: "secondary", attr: "data-whatsapp" }) : ""}</div>
     <div><h3>Follow-ups</h3><div data-followups>${stateBlock.loading("Carregando…")}</div></div>`,
     onOpen: async (body, close) => {
       body.querySelector("[data-convert]").addEventListener("click", () => { close(); convertLead(lead, after); });
+      body.querySelector("[data-convert-client]").addEventListener("click", () => { close(); convertLeadToClient(lead, after); });
       body.querySelector("[data-followup]").addEventListener("click", () => { close(); followupForm({ lead_id: lead.id }, after); });
       body.querySelector("[data-edit]").addEventListener("click", () => { close(); leadForm(lead, after); });
       body.querySelector("[data-whatsapp]")?.addEventListener("click", async () => { close(); location.hash = "#caixa-de-entrada"; try { await window.FocusInbox?.openNumber(lead.phone); } catch (error) { toast(error.message, "error"); } });
@@ -175,6 +177,16 @@ function convertLead(lead, after) {
     { name: "createContact", label: "", type: "checkbox", text: "Criar contato com os dados do lead" },
     { name: "createCompany", label: "", type: "checkbox", text: lead.company ? `Criar empresa "${lead.company}"` : "Criar empresa (lead sem empresa)" },
   ], onSubmit: async (values) => { await api(`/api/leads/${lead.id}/convert`, { method: "POST", body: values }); invalidate(); toast("Oportunidade criada no funil.", "success"); after(); } });
+}
+
+function convertLeadToClient(lead, after) {
+  if (!lead) return;
+  const proceed = async () => {
+    try { await api(`/api/leads/${lead.id}/convert-to-client`, { method: "POST", body: {} }); invalidate(); toast("Cliente criado e histórico preservado.", "success"); after(); }
+    catch (error) { toast(error.message, "error"); }
+  };
+  const action = document.createElement("button"); action.type = "button"; action.className = "ui-button"; action.textContent = "Converter em cliente"; action.addEventListener("click", proceed);
+  drawer({ title: "Converter lead", subtitle: lead.name, html: `<p>O lead será vinculado a um contato, empresa e cliente existentes quando possível.</p>`, onOpen: (body, close) => { body.append(action); action.addEventListener("click", close, { once: true }); } });
 }
 
 /* ==========================================================================

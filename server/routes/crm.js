@@ -52,6 +52,57 @@ export function register(app, ctx) {
     finally { client.release(); }
   });
 
+  /* Converter lead em cliente sem duplicar registros e preservando vínculos. */
+  app.post("/api/leads/:id/convert-to-client", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const client = await pool.connect().catch(() => null);
+    if (!client) return res.status(503).json({ error: "Serviço indisponível." });
+    try {
+      await client.query("begin");
+      const leadResult = await client.query("select * from leads where id=$1 and organization_id=$2 for update", [req.params.id, org]);
+      const lead = leadResult.rows[0];
+      if (!lead) { await client.query("rollback"); return res.status(404).json({ error: "Lead não encontrado." }); }
+
+      if (lead.converted_client_id) {
+        const existing = await client.query("select * from clients where id=$1 and organization_id=$2", [lead.converted_client_id, org]);
+        if (existing.rowCount) {
+          await client.query("commit");
+          return res.json({ client: existing.rows[0], contact_id: lead.contact_id, company_id: lead.company_id, converted: true });
+        }
+      }
+
+      let companyId = lead.company_id || null;
+      if (companyId) {
+        const company = await client.query("select id from companies where id=$1 and organization_id=$2", [companyId, org]);
+        if (!company.rowCount) { await client.query("rollback"); return res.status(400).json({ error: "Empresa do lead não pertence ao workspace." }); }
+      } else if (asText(lead.company)) {
+        const company = await client.query("select id from companies where organization_id=$1 and lower(trim(name))=lower(trim($2)) order by id limit 1", [org, asText(lead.company)]);
+        companyId = company.rows[0]?.id || (await client.query("insert into companies (organization_id,name) values ($1,$2) returning id", [org, asText(lead.company)])).rows[0].id;
+      }
+
+      let contactId = lead.contact_id || null;
+      if (contactId) {
+        const contact = await client.query("select id from contacts where id=$1 and organization_id=$2", [contactId, org]);
+        if (!contact.rowCount) { await client.query("rollback"); return res.status(400).json({ error: "Contato do lead não pertence ao workspace." }); }
+      } else if (asText(lead.email) || asText(lead.phone)) {
+        const contact = await client.query("select id from contacts where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(phone,'\\D','','g')=regexp_replace($3,'\\D','','g'))) order by id limit 1", [org, asText(lead.email), asText(lead.phone)]);
+        contactId = contact.rows[0]?.id || (await client.query("insert into contacts (organization_id,name,email,phone,company_id) values ($1,$2,$3,$4,$5) returning id", [org, lead.name, asText(lead.email) || null, asText(lead.phone) || null, companyId])).rows[0].id;
+      }
+
+      const matched = await client.query("select * from clients where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(phone,'\\D','','g')=regexp_replace($3,'\\D','','g'))) order by id limit 1", [org, asText(lead.email), asText(lead.phone)]);
+      let clientRow;
+      if (matched.rowCount) {
+        clientRow = (await client.query("update clients set company_id=coalesce(company_id,$2), contact_id=coalesce(contact_id,$3), updated_at=now() where id=$1 and organization_id=$4 returning *", [matched.rows[0].id, companyId, contactId, org])).rows[0];
+      } else {
+        clientRow = (await client.query("insert into clients (organization_id,company_id,contact_id,name,email,phone,status) values ($1,$2,$3,$4,$5,$6,'active') returning *", [org, companyId, contactId, lead.name, asText(lead.email) || null, asText(lead.phone) || null])).rows[0];
+      }
+      await client.query("update leads set status='won', contact_id=coalesce(contact_id,$2), company_id=coalesce(company_id,$3), converted_client_id=$4, updated_at=now() where id=$1 and organization_id=$5", [lead.id, contactId, companyId, clientRow.id, org]);
+      await client.query("commit");
+      res.status(201).json({ client: clientRow, contact_id: contactId, company_id: companyId, converted: false });
+    } catch (e) { await client.query("rollback").catch(() => {}); fail(res, e, "Não foi possível converter o lead em cliente."); }
+    finally { client.release(); }
+  });
+
   /* ------------------------------------------------------------ campanhas */
   app.get("/api/campaigns", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select c.*, (select count(*)::int from leads l where l.organization_id=c.organization_id and l.campaign_id=c.id) leads_count from campaigns c where c.organization_id=$1 order by c.created_at desc", [org]); res.json({ campaigns: q.rows }); } catch (e) { fail(res, e, "Não foi possível carregar campanhas."); } });
   app.post("/api/campaigns", async (req, res) => {
