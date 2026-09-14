@@ -18,6 +18,7 @@ const configs = {
   team_goal: { title: "Nova meta", endpoint: "/api/team_goals", fields: [{ name: "name", label: "Meta" }, { name: "target", label: "Valor esperado", type: "number", required: false }, { name: "period_end", label: "Fim do período", type: "date", required: false }] },
   absence: { title: "Nova ausência", endpoint: "/api/absences", fields: [{ name: "user_id", label: "Membro (ID)" }, { name: "kind", label: "Tipo" }, { name: "starts_on", label: "Início", type: "date" }, { name: "ends_on", label: "Fim", type: "date" }] },
 };
+configs.aprovacao.fields.push({ name: "status", label: "Status", type: "select", options: [["pending", "Pendente"], ["approved", "Aprovada"], ["rejected", "Recusada"], ["cancelled", "Cancelada"]] }, { name: "comment", label: "Comentário", type: "textarea", required: false });
 Object.assign(createConfig, configs);
 const esc = (value) => escapeHtml(value ?? "");
 const recordCreateKind = { aprovacoes: "aprovacao", briefings: "briefing", "contas-a-pagar": "payable", "contas-bancarias": "bank_account", "notas-fiscais": "invoice", formularios: "form", "base-de-conhecimento": "knowledge_article", metas: "team_goal", ausencias: "absence" };
@@ -30,4 +31,20 @@ async function renderEstrutura(key) {
     dashboardGrid.querySelector("[data-new]")?.addEventListener("click", () => openCreateDialog(recordCreateKind[key]));
   } catch (error) { dashboardGrid.innerHTML = stateBlock.error(error.message, "estrutura-retry"); }
 }
+const approvalActionsObserver = new MutationObserver(async () => {
+  if (location.hash.replace(/^#/, "") !== "aprovacoes") return;
+  const list = dashboardGrid.querySelector(".automation-list");
+  if (!list || list.dataset.approvalActions === "1") return;
+  list.dataset.approvalActions = "1";
+  try {
+    const rows = (await api("/api/approvals")).approvals || [];
+    list.querySelectorAll("article").forEach((article, index) => {
+      const approval = rows[index];
+      if (!approval || approval.status !== "pending") return;
+      const actions = document.createElement("div"); actions.className = "approval-actions";
+      [ ["approved", "Aprovar", "success"], ["rejected", "Recusar", "danger"] ].forEach(([status, label, kind]) => { const button = document.createElement("button"); button.type = "button"; button.className = `compact-action ${kind}`; button.textContent = label; button.addEventListener("click", async () => { button.disabled = true; try { await api(`/api/approvals/${approval.id}`, { method: "PATCH", body: { status, decision: status, decided_at: new Date().toISOString() } }); toast(status === "approved" ? "Aprovação registrada." : "Recusa registrada.", status === "approved" ? "success" : "info"); renderEstrutura("aprovacoes"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); actions.append(button); }); article.append(actions);
+    });
+  } catch {}
+});
+approvalActionsObserver.observe(dashboardGrid, { childList: true, subtree: true });
 registerRoutes(Object.fromEntries(Object.keys(labels).map((key) => [key, () => renderEstrutura(key)])));
