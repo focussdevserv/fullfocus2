@@ -592,6 +592,7 @@ const navIconPaths = {
   automacoes: '<path d="m13 2-9 11h7l-1 9 9-11h-7Z"/>',
   templates: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M9 9v11"/>',
   integracoes: '<circle cx="8" cy="12" r="3"/><circle cx="16" cy="12" r="3"/><path d="M11 12h2"/>',
+  whatsapp: '<path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/><path d="M9.3 8.7c.2-.5.5-.5.8-.5h.5c.2 0 .4.1.5.4l.7 1.6c.1.2 0 .4-.1.5l-.5.6c-.1.1-.1.3 0 .4a6 6 0 0 0 2.9 2.7c.2.1.3 0 .4-.1l.6-.7c.2-.2.4-.2.6-.1l1.6.8c.2.1.3.3.3.5 0 .8-.6 1.6-1.4 1.8-.7.2-1.6 0-2.7-.5a9.4 9.4 0 0 1-3.9-3.7c-.6-1-.8-1.9-.6-2.6Z"/>',
   equipe: '<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c.7-3.4 2.7-5 6-5s5.3 1.6 6 5M16 15c2.8.2 4.3 1.7 5 4"/>'
 };
 document.querySelectorAll(".nav-item").forEach((item) => {

@@ -53,7 +53,9 @@ app.get("/api/auth/me", requireAuth, (req, res) => res.json({ user: req.user }))
 app.post("/api/auth/logout", (_req, res) => { res.setHeader("Set-Cookie", sessionCookie("", 0)); res.status(204).end(); });
 attachResetRoutes(app, { pool, hashPassword });
 app.get("/api/health", async (_req, res) => { try { const q = await pool.query("select now() as time"); res.json({ ok: true, database: "connected", time: q.rows[0].time }); } catch { res.status(503).json({ ok: false, database: "unavailable", error: "Database unavailable." }); } });
-app.use("/api", (req, res, next) => { if (req.path.startsWith("/auth/") || req.path === "/health") return next(); return requireAuth(req, res, next); });
+/* Rotas públicas (sem sessão): autenticação, health, portal do cliente (token) e webhook do WhatsApp (token). */
+const PUBLIC_API_PREFIXES = ["/auth/", "/portal/", "/whatsapp/webhook/"];
+app.use("/api", (req, res, next) => { if (req.path === "/health" || PUBLIC_API_PREFIXES.some((prefix) => req.path.startsWith(prefix))) return next(); return requireAuth(req, res, next); });
 
 const entities = {
   contacts: { fields: ["name", "email", "phone", "role", "notes"], required: ["name"] }, companies: { fields: ["name", "document", "email", "phone", "website", "address"], required: ["name"] },
