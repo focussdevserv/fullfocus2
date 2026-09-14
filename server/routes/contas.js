@@ -8,6 +8,14 @@ export function isValidCnpj(value) {
   return calc(12) === Number(cnpj[12]) && calc(13) === Number(cnpj[13]);
 }
 const cache = new Map();
+const publicClientFields = (client) => {
+  if (!client || typeof client !== "object") return client;
+  const safe = { ...client };
+  delete safe.pix_key;
+  delete safe.invoice_data;
+  delete safe.internal_notes;
+  return safe;
+};
 export const pickCnpj = (data, cnpj) => ({
   cnpj,
   razao_social: data?.razao_social ?? data?.razaoSocial ?? null,
@@ -33,6 +41,12 @@ const portalPage = ({ client, contracts, receivables, projects = [], tickets = [
 function tokenHash(token) { return crypto.createHash("sha256").update(token).digest("hex"); }
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError } = ctx;
+  app.use("/api/clients", (req, res, next) => {
+    if (req.method !== "GET" || req.path !== "/") return next();
+    const sendJson = res.json.bind(res);
+    res.json = (payload) => payload?.clients ? sendJson({ ...payload, clients: payload.clients.map(publicClientFields) }) : sendJson(payload);
+    next();
+  });
   const listEntity = (table, searchColumns, filterColumns = []) => app.get(`/api/${table}`, async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const values = [org], where = [`${table}.organization_id=$1`];

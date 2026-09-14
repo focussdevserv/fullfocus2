@@ -13,6 +13,7 @@ function harness() {
   const app = express(); app.use(express.json()); register(app, { pool, tenant: (_req, _res) => org, asText: (v) => typeof v === "string" ? v.trim() : "", classifyDbError: () => ({ status: 503, error: "erro" }) });
   return { app, calls };
 }
+
 async function request(t, path, options) { const server = createServer(t.app); await new Promise((resolve) => server.listen(0, resolve)); try { const address = server.address(); return await fetch(`http://127.0.0.1:${address.port}${path}`, options); } finally { server.close(); } }
 
 test("isValidCnpj aceita CNPJ válido", () => assert.equal(isValidCnpj("11.222.333/0001-81"), true));
@@ -34,4 +35,12 @@ test("listagem de contatos aplica busca, filtros, paginação e workspace", asyn
   assert.match(call.sql, /contacts\.organization_id=\$1/);
   assert.match(call.sql, /contacts\.company_id=\$3/);
   assert.deepEqual(call.params, [org, "%ana%", "5", 10, 2]);
+});
+
+test("listagem de clientes oculta dados financeiros e observacoes internas", async () => {
+  const app = express(); app.use(express.json());
+  const pool = { query: async () => ({ rowCount: 1, rows: [{ id: 9, name: "Cliente", pix_key: "segredo", invoice_data: { cpf: "123" }, internal_notes: "restrito" }] }) };
+  register(app, { pool, tenant: () => org, asText: (v) => typeof v === "string" ? v.trim() : "", classifyDbError: () => ({ status: 503, error: "erro" }) });
+  const response = await request({ app }, "/api/clients"); const body = await response.json();
+  assert.equal(response.status, 200); assert.equal(body.clients[0].name, "Cliente"); assert.equal("pix_key" in body.clients[0], false); assert.equal("invoice_data" in body.clients[0], false); assert.equal("internal_notes" in body.clients[0], false);
 });
