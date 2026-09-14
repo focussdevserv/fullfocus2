@@ -5,6 +5,8 @@ const SOURCE_TABLES = {
   task_overdue: "tasks",
   receivable_overdue: "receivables",
   ticket_created: "tickets",
+  freelancer_project_finished: "projects",
+  project_completed: "projects",
 };
 
 const sourceWhere = {
@@ -12,12 +14,15 @@ const sourceWhere = {
   task_overdue: "status <> 'done' and due_at is not null and due_at < $2",
   receivable_overdue: "status = 'pending' and due_at < $2::date",
   ticket_created: "created_at <= $2",
+  freelancer_project_finished: "(status in ('done','completed','published') or completed_on is not null) and (completed_on is null or completed_on <= $2::date)",
+  project_completed: "(status in ('done','completed','published') or completed_on is not null) and (completed_on is null or completed_on <= $2::date)",
 };
 
 const sourceMessage = (trigger, row) => {
   if (trigger === "lead_created") return `Novo lead: ${row.name}`;
   if (trigger === "task_overdue") return `Tarefa atrasada: ${row.title}`;
   if (trigger === "receivable_overdue") return `Recebível vencido: ${row.description}`;
+  if (trigger === "freelancer_project_finished" || trigger === "project_completed") return `Projeto finalizado: ${row.name}`;
   return `Novo ticket: ${row.title}`;
 };
 
@@ -77,6 +82,24 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     await client.query("insert into messages (organization_id,conversation_id,direction,body) values ($1,$2,'out',$3)", [automation.organization_id, conversationId, String(config.body || message).slice(0, 4000)]);
     await client.query("update conversations set last_message_at=now(),updated_at=now() where id=$1 and organization_id=$2", [conversationId, automation.organization_id]);
     return { action: "send_message", conversation_id: conversationId, message };
+  }
+  if (automation.action === "calculate_commission") {
+    const baseAmount = Math.max(0, Number(source.total_value || source.value || config.base_amount || 0));
+    const rate = Math.max(0, Number(config.rate ?? config.commission_rate ?? 0));
+    const fixedAmount = Math.max(0, Number(config.fixed_amount || 0));
+    const amount = fixedAmount || Number((baseAmount * rate / 100).toFixed(2));
+    if (!amount) throw new Error("Informe o percentual ou valor fixo da comissão.");
+    let userId = config.user_id || null;
+    if (userId) {
+      const user = await client.query("select id from users where id=$1 and organization_id=$2", [userId, automation.organization_id]);
+      if (!user.rowCount) throw new Error("O responsável da comissão não pertence à organização.");
+      userId = user.rows[0].id;
+    }
+    const commission = await client.query(
+      "insert into commissions (organization_id,project_id,user_id,responsible,description,base_amount,rate,amount,status,source_automation_id) values ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9) on conflict (source_automation_id,project_id) do nothing returning id,amount",
+      [automation.organization_id, source.id, userId, source.responsible || config.responsible || null, `Comissão · ${source.name || source.id}`, baseAmount, rate, amount, automation.id],
+    );
+    return { action: "calculate_commission", commission_id: commission.rows[0]?.id || null, amount, base_amount: baseAmount, rate };
   }
   throw new Error(`Ação não suportada: ${automation.action}`);
 }

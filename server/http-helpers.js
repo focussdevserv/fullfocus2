@@ -16,6 +16,20 @@ export const SINGULAR = {
   charges: "charge",
   payments: "payment",
   events: "event",
+  approvals: "approval",
+  briefings: "briefing",
+  change_requests: "change_request",
+  deliveries: "delivery",
+  infrastructure_assets: "infrastructure_asset",
+  knowledge_articles: "knowledge_article",
+  forms: "form",
+  payables: "payable",
+  bank_accounts: "bank_account",
+  invoices: "invoice",
+  audit_events: "audit_event",
+  trash: "trash_item",
+  team_goals: "team_goal",
+  absences: "absence",
 };
 
 export function singular(table) {
@@ -25,7 +39,7 @@ export function singular(table) {
 }
 
 /* Tabelas que possuem a coluna updated_at (lista explícita, alinhada ao schema.sql). */
-export const TABLES_WITH_UPDATED_AT = new Set(["clients", "companies", "contacts", "contracts", "leads", "opportunities", "projects", "tasks"]);
+export const TABLES_WITH_UPDATED_AT = new Set(["clients", "companies", "contacts", "contracts", "leads", "opportunities", "projects", "tasks", "approvals", "briefings", "change_requests", "deliveries", "infrastructure_assets", "knowledge_articles", "forms", "payables", "bank_accounts", "invoices", "team_goals", "absences"]);
 
 /* Colunas de valor que aceitam zero no schema (check >= 0). As demais exigem > 0. */
 const ZERO_ALLOWED = new Set(["opportunities.amount", "contracts.value", "projects.value"]);
