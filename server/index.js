@@ -13,6 +13,7 @@ import { registerDomainRoutes } from "./routes/index.js";
 import { registerContractPublicRoutes } from "./routes/contract-public.js";
 import { registerProposalPublicRoutes } from "./routes/proposal-public.js";
 import { registerDeliveryPublicRoutes } from "./routes/delivery-public.js";
+import { registerPortalPublicRoute } from "./routes/portal-public.js";
 import { startAutomationRunner } from "./automations-runner.js";
 const { Pool } = pg;
 export const app = express();
@@ -91,6 +92,7 @@ const PUBLIC_API_PREFIXES = ["/auth/", "/portal/", "/satisfaction/", "/whatsapp/
 registerContractPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
 registerProposalPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
 registerDeliveryPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
+registerPortalPublicRoute(app, { pool });
 const formPublicSafe = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
 const publicFormField = (item, index) => {
   const field = typeof item === "string" ? { label: item } : item || {};
