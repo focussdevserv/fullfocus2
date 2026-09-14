@@ -41,6 +41,30 @@ export function register(app, ctx) {
       res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: false, notice: "Cobrança registrada. Conecte um gateway para gerar Pix, boleto ou link de pagamento." });
     } catch (e) { error(res, e, "Não foi possível gerar a cobrança."); }
   });
+  app.post("/api/contracts/:id/create-receivables", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const db = pool.connect ? await pool.connect() : pool;
+    try {
+      await db.query("begin");
+      const contract = await db.query("select * from contracts where id=$1 and organization_id=$2 for update", [req.params.id, org]);
+      if (!contract.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Contrato não encontrado." }); }
+      const source = contract.rows[0];
+      if (!["signed", "active"].includes(source.status)) { await db.query("rollback"); return res.status(400).json({ error: "O contrato precisa estar assinado ou ativo para gerar parcelas." }); }
+      const existing = await db.query("select id from receivables where contract_id=$1 and organization_id=$2 order by installment_number nulls last, id", [source.id, org]);
+      if (existing.rowCount) { await db.query("commit"); return res.json({ receivables: existing.rows, created: false }); }
+      const total = Number(source.total_value ?? source.value ?? 0), entry = Number(source.down_payment || 0), installments = Math.max(1, Number.parseInt(source.installments, 10) || 1);
+      if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(entry) || entry < 0 || entry > total) { await db.query("rollback"); return res.status(400).json({ error: "Valores do contrato inválidos para gerar parcelas." }); }
+      const balance = total - entry, installmentValue = Number(source.installment_value) > 0 ? Number(source.installment_value) : balance / installments;
+      const suppliedDates = String(source.payment_due_dates || "").split(",").map((value) => value.trim()).filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+      const dueDate = (index) => suppliedDates[index] || new Date(Date.now() + (index + 1) * 30 * 864e5).toISOString().slice(0, 10);
+      const created = [];
+      if (entry > 0) { const q = await db.query("insert into receivables (organization_id,client_id,project_id,contract_id,proposal_id,description,amount,original_amount,updated_amount,due_at,status,installment_number,payment_method) values ($1,$2,$3,$4,$5,$6,$7,$7,$7,current_date,'pending',0,$8) returning *", [org, source.client_id, source.project_id || null, source.id, source.proposal_id || null, `${source.name} · Entrada`, entry, source.payment_method || null]); created.push(q.rows[0]); }
+      for (let index = 0; index < installments && balance > 0; index += 1) { const amount = index === installments - 1 ? Math.max(0, balance - installmentValue * (installments - 1)) : installmentValue; if (amount <= 0) continue; const q = await db.query("insert into receivables (organization_id,client_id,project_id,contract_id,proposal_id,description,amount,original_amount,updated_amount,due_at,status,installment_number,payment_method) values ($1,$2,$3,$4,$5,$6,$7,$7,$7,$8,'pending',$9,$10) returning *", [org, source.client_id, source.project_id || null, source.id, source.proposal_id || null, `${source.name} · Parcela ${index + 1}/${installments}`, amount, dueDate(index), index + 1, source.payment_method || null]); created.push(q.rows[0]); }
+      await db.query("commit");
+      res.status(201).json({ receivables: created, created: true });
+    } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível gerar as parcelas do contrato."); }
+    finally { db.release?.(); }
+  });
   app.get("/api/finance/summary", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const months = Math.min(24, Math.max(1, Number.parseInt(req.query.months, 10) || 6));

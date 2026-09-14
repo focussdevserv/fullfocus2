@@ -63,10 +63,13 @@ const contractProjectObserver = new MutationObserver(async () => {
     const rows = (await api("/api/contracts")).contracts || [];
     table.querySelectorAll("tr").forEach((row, index) => {
       const contract = rows[index];
-      if (!contract || !["signed", "active"].includes(contract.status) || contract.project_id) return;
-      const button = document.createElement("button"); button.className = "compact-action"; button.type = "button"; button.textContent = "Criar projeto";
-      button.addEventListener("click", async () => { button.disabled = true; button.textContent = "Criando..."; try { await api(`/api/contracts/${contract.id}/create-project`, { method: "POST", body: {} }); toast("Projeto criado a partir do contrato.", "success"); location.hash = "#projetos"; } catch (error) { button.disabled = false; button.textContent = "Criar projeto"; toast(error.message, "error"); } });
-      row.lastElementChild?.append(" ", button);
+      if (!contract || !["signed", "active"].includes(contract.status)) return;
+      if (!contract.project_id) { const button = document.createElement("button"); button.className = "compact-action"; button.type = "button"; button.textContent = "Criar projeto";
+        button.addEventListener("click", async () => { button.disabled = true; button.textContent = "Criando..."; try { await api(`/api/contracts/${contract.id}/create-project`, { method: "POST", body: {} }); toast("Projeto criado a partir do contrato.", "success"); location.hash = "#projetos"; } catch (error) { button.disabled = false; button.textContent = "Criar projeto"; toast(error.message, "error"); } });
+        row.lastElementChild?.append(" ", button); }
+      const receivablesButton = document.createElement("button"); receivablesButton.className = "compact-action"; receivablesButton.type = "button"; receivablesButton.textContent = "Gerar parcelas";
+      receivablesButton.addEventListener("click", async () => { receivablesButton.disabled = true; receivablesButton.textContent = "Gerando..."; try { const result = await api(`/api/contracts/${contract.id}/create-receivables`, { method: "POST", body: {} }); toast(result.created ? "Parcelas geradas em Contas a receber." : "As parcelas deste contrato já existem.", "success"); } catch (error) { receivablesButton.disabled = false; receivablesButton.textContent = "Gerar parcelas"; toast(error.message, "error"); } });
+      row.lastElementChild?.append(" ", receivablesButton);
     });
   } catch {}
 });
