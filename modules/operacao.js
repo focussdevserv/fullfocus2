@@ -12,6 +12,26 @@ const config = {
   ticket: { title: "Novo ticket", endpoint: "/api/tickets", fields: [{ name: "title", label: "Título" }, { name: "description", label: "Descrição", required: false }, { name: "client_id", label: "Cliente", type: "select", options: [] }, { name: "priority", label: "Prioridade", type: "select", options: Object.entries({ low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" }) }, { name: "status", label: "Status", type: "select", options: Object.entries({ open: "Aberto", in_progress: "Em andamento", waiting: "Aguardando", done: "Concluído" }) }, { name: "due_at", label: "Prazo", type: "datetime-local", required: false }] }
 };
 Object.assign(createConfig, config);
+config.arquivo.fields.find((field) => field.name === "url").required = false;
+config.arquivo.fields.push({ name: "file", label: "Ou envie um arquivo (até 750 KB)", type: "file", required: false });
+document.addEventListener("submit", async (event) => {
+  const form = event.target;
+  const fileInput = form?.id === "create-dialog-form" ? form.querySelector("input[type=file]") : null;
+  if (!fileInput?.files?.[0]) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  const file = fileInput.files[0], submit = form.querySelector("[type=submit]"), status = form.querySelector("[data-dialog-status]") || document.querySelector("#dialog-status");
+  if (file.size > 750000) { if (status) status.textContent = "O arquivo deve ter no máximo 750 KB."; return; }
+  submit.disabled = true; if (status) status.textContent = "Enviando arquivo...";
+  try {
+    const reader = new FileReader();
+    const dataUrl = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error("Não foi possível ler o arquivo.")); reader.readAsDataURL(file); });
+    const payload = Object.fromEntries(new FormData(form)); payload.file = undefined; payload.url = dataUrl; Object.keys(payload).forEach((key) => { if (payload[key] === "" || payload[key] === undefined) delete payload[key]; });
+    const response = await fetch(form.dataset.endpoint || "/api/files", { method: form.dataset.method || "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar o arquivo.");
+    closeCreateDialog(); renderHashRoute(window.location.hash); toast("Arquivo enviado com sucesso.", "success");
+  } catch (error) { if (status) status.textContent = error.message; }
+  finally { submit.disabled = false; }
+}, true);
 const projectContractField = config.projeto.fields.find((field) => field.name === "contract_id");
 const projectState = { query: "", status: "" };
 if (projectContractField) { projectContractField.type = "select"; projectContractField.options = [["", "Sem contrato"]]; }
