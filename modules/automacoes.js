@@ -13,7 +13,7 @@ const act = {
   create_followup: "Criar follow-up", create_charge: "Criar cobrança", generate_contract: "Gerar contrato", create_project: "Criar projeto",
   update_status: "Alterar status", move_pipeline: "Mover no funil", assign_owner: "Atribuir responsável", add_tag: "Adicionar etiqueta",
   webhook: "Chamar webhook", n8n_flow: "Executar fluxo n8n", wait: "Aguardar período", end: "Encerrar automação",
-  calculate_commission: "Calcular comissão", reassign_support: "Reatribuir atendimento", create_calendar_event: "Criar evento no calendário",
+  calculate_commission: "Calcular comissão", reassign_support: "Reatribuir atendimentos", create_calendar_event: "Criar evento no calendário",
   request_satisfaction: "Solicitar pesquisa de satisfação", generate_document: "Gerar e enviar documento", grant_project_access: "Liberar arquivos e tarefas", revoke_access: "Encerrar acesso",
 };
 const tk = { proposal: "Proposta", contract: "Contrato", project: "Projeto", task: "Tarefa", checklist: "Checklist", charge: "Cobrança", followup: "Follow-up", support: "Atendimento", ticket: "Resposta de ticket", briefing: "Briefing", delivery_term: "Termo de entrega", report: "Relatório", notification: "Notificação", email: "E-mail", message: "Mensagem", whatsapp: "WhatsApp" };
