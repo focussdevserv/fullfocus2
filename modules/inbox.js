@@ -1,6 +1,6 @@
 /* ==========================================================================
    FocusDev — módulo "inbox"
-   Telas: Caixa de entrada
+   Telas: Caixa de entrada, Conversas
    Carregado depois de app.js; usa os helpers globais do núcleo
    (dashboardGrid, escapeHtml, openCreateDialog, api, stateBlock, registerRoutes).
    Ownership: modules/inbox.js
@@ -38,4 +38,6 @@ function renderInboxView() {
 
 registerRoutes({
   "caixa-de-entrada": () => renderInboxView(),
+  // Conversas usa a mesma base de mensagens; por enquanto reaproveita a caixa de entrada.
+  "conversas": () => renderInboxView(),
 });

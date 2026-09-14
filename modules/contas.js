@@ -1,6 +1,6 @@
 /* ==========================================================================
    FocusDev — módulo "contas"
-   Telas: Conversas, Contatos, Consulta CNPJ, Clientes, Portal do cliente, Empresas
+   Telas: Contatos, Consulta CNPJ, Clientes, Portal do cliente, Empresas
    Carregado depois de app.js; usa os helpers globais do núcleo
    (dashboardGrid, escapeHtml, openCreateDialog, api, stateBlock, registerRoutes).
    Ownership: modules/contas.js
@@ -101,7 +101,6 @@ function bindCustomerInteractions(key) {
 
 
 registerRoutes({
-  "conversas": () => renderCustomerModuleView("conversas"),
   "contatos": () => renderCustomerModuleView("contatos"),
   "consulta-cnpj": () => renderCustomerModuleView("consulta-cnpj"),
   "clientes": () => renderCustomerModuleView("clientes"),
