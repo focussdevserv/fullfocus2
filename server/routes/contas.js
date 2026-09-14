@@ -33,6 +33,36 @@ const portalPage = ({ client, contracts, receivables, projects = [], tickets = [
 function tokenHash(token) { return crypto.createHash("sha256").update(token).digest("hex"); }
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError } = ctx;
+  const relationOverview = async (req, res, table) => {
+    const org = tenant(req, res); if (!org) return;
+    const id = req.params.id;
+    try {
+      const entity = table === "contacts"
+        ? await pool.query("select c.*,co.name company_name from contacts c left join companies co on co.id=c.company_id and co.organization_id=c.organization_id where c.id=$1 and c.organization_id=$2", [id, org])
+        : await pool.query("select * from companies where id=$1 and organization_id=$2", [id, org]);
+      if (!entity.rowCount) return res.status(404).json({ error: table === "contacts" ? "Contato não encontrado." : "Empresa não encontrada." });
+      const related = table === "contacts"
+        ? await Promise.all([
+          pool.query("select id,name,status,company_id,contact_id from clients where organization_id=$1 and contact_id=$2", [org, id]),
+          pool.query("select id,name,status,next_action_at from leads where organization_id=$1 and contact_id=$2 order by created_at desc", [org, id]),
+          pool.query("select id,name,stage,amount,status from opportunities where organization_id=$1 and contact_id=$2 order by created_at desc", [org, id]),
+          pool.query("select id,subject,channel,status,last_message_at from conversations where organization_id=$1 and contact_id=$2 order by last_message_at desc nulls last limit 20", [org, id]),
+          pool.query("select id,action,entity_type,entity_id,changes,created_at from audit_events where organization_id=$1 and ((entity_type='contacts' and entity_id=$2) or (entity_type='leads' and entity_id in (select id from leads where organization_id=$1 and contact_id=$2))) order by created_at desc limit 30", [org, id]),
+        ])
+        : await Promise.all([
+          pool.query("select id,name,email,phone,role,is_primary from contacts where organization_id=$1 and company_id=$2 order by is_primary desc nulls last,name", [org, id]),
+          pool.query("select id,name,status,amount,stage from opportunities where organization_id=$1 and company_id=$2 order by created_at desc", [org, id]),
+          pool.query("select id,title,status,amount from proposals where organization_id=$1 and opportunity_id in (select id from opportunities where organization_id=$1 and company_id=$2) order by created_at desc", [org, id]),
+          pool.query("select id,name,status,value from contracts where organization_id=$1 and client_id in (select id from clients where organization_id=$1 and company_id=$2) order by created_at desc", [org, id]),
+          pool.query("select id,name,status,progress from projects where organization_id=$1 and client_id in (select id from clients where organization_id=$1 and company_id=$2) order by created_at desc", [org, id]),
+          pool.query("select id,action,entity_type,entity_id,changes,created_at from audit_events where organization_id=$1 and ((entity_type='companies' and entity_id=$2) or (entity_type='contacts' and entity_id in (select id from contacts where organization_id=$1 and company_id=$2))) order by created_at desc limit 30", [org, id]),
+        ]);
+      const keys = table === "contacts" ? ["clients", "leads", "opportunities", "conversations", "activities"] : ["contacts", "opportunities", "proposals", "contracts", "projects", "activities"];
+      res.json({ [table === "contacts" ? "contact" : "company"]: entity.rows[0], ...Object.fromEntries(keys.map((key, index) => [key, related[index].rows])) });
+    } catch (error) { const out = classifyDbError(error, "Não foi possível carregar os relacionamentos."); res.status(out.status).json({ error: out.error }); }
+  };
+  app.get("/api/contacts/:id/overview", (req, res) => relationOverview(req, res, "contacts"));
+  app.get("/api/companies/:id/overview", (req, res) => relationOverview(req, res, "companies"));
   app.get("/api/cnpj/:cnpj", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const cnpj = digitsOnly(req.params.cnpj);

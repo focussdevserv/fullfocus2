@@ -54,3 +54,19 @@ const portalAccessObserver = new MutationObserver(() => {
 });
 portalAccessObserver.observe(dashboardGrid, { childList: true, subtree: true });
 registerRoutes({ contatos: () => renderList("contato", "Contatos", "Pessoas e vínculos da sua operação.", "/api/contacts", "contacts", "contact"), empresas: () => renderList("empresa", "Empresas", "Organizações conectadas ao workspace.", "/api/companies", "companies", "company"), clientes: () => renderList("cliente", "Clientes", "Saúde e relacionamento da sua carteira.", "/api/clients", "clients", "client"), "consulta-cnpj": renderCnpj, "portal-do-cliente": renderPortal });
+const contaOpenRelatedDetails = openDetails;
+const relatedList = (items = [], label, render) => `<section><h3>${contaEsc(label)}</h3>${items.length ? items.slice(0, 12).map(render).join("") : `<p class="conta-muted">Nenhum registro relacionado.</p>`}</section>`;
+openDetails = async function openRelatedDetails(record, type) {
+  if (!record || !["contact", "company"].includes(type)) return contaOpenRelatedDetails(record, type);
+  const panel = document.createElement("aside"); panel.className = "conta-drawer conta-drawer-wide";
+  panel.innerHTML = `<button class="conta-close" type="button">&times;</button><p class="card-kicker">Visão relacionada</p><h2>${contaEsc(record.name)}</h2><div data-related-overview>${contaState("loading", "Carregando relacionamentos...")}</div>`;
+  document.body.append(panel); panel.querySelector(".conta-close").onclick = () => panel.remove();
+  try {
+    const data = await api(`/api/${type === "contact" ? "contacts" : "companies"}/${record.id}/overview`);
+    const renderItem = (item, fields) => `<p><strong>${contaEsc(item[fields[0]] || "Sem nome")}</strong> · ${contaEsc(item[fields[1]] || item.status || "Sem status")}</p>`;
+    const body = type === "contact"
+      ? `${relatedList(data.clients, "Clientes", (item) => renderItem(item, ["name", "status"]))}${relatedList(data.leads, "Leads", (item) => renderItem(item, ["name", "status"]))}${relatedList(data.opportunities, "Oportunidades", (item) => renderItem(item, ["name", "stage"]))}${relatedList(data.conversations, "Conversas", (item) => renderItem(item, ["subject", "channel"]))}${relatedList(data.activities, "Histórico", (item) => renderItem(item, ["action", "entity_type"]))}`
+      : `${relatedList(data.contacts, "Contatos", (item) => renderItem(item, ["name", "role"]))}${relatedList(data.opportunities, "Oportunidades", (item) => renderItem(item, ["name", "stage"]))}${relatedList(data.proposals, "Propostas", (item) => renderItem(item, ["title", "status"]))}${relatedList(data.contracts, "Contratos", (item) => renderItem(item, ["name", "status"]))}${relatedList(data.projects, "Projetos", (item) => renderItem(item, ["name", "status"]))}${relatedList(data.activities, "Histórico", (item) => renderItem(item, ["action", "entity_type"]))}`;
+    panel.querySelector("[data-related-overview]").innerHTML = body;
+  } catch (error) { panel.querySelector("[data-related-overview]").innerHTML = contaState("error", error.message); }
+};
