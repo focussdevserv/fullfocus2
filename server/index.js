@@ -149,6 +149,17 @@ app.use("/api", async (req, res, next) => {
     return next();
   } catch { return res.status(503).json({ error: "Não foi possível validar duplicidade." }); }
 });
+app.use("/api", async (req, res, next) => {
+  if (!req.user || ["owner", "admin"].includes(req.user.role)) return next();
+  try {
+    const q = await pool.query("select tr.hidden_fields from users u left join team_roles tr on tr.id=u.team_role_id and tr.organization_id=u.organization_id where u.id=$1 and u.organization_id=$2", [req.user.id, req.user.organization_id]);
+    const hidden = Array.isArray(q.rows[0]?.hidden_fields) ? new Set(q.rows[0].hidden_fields.map(String)) : new Set();
+    if (!hidden.size) return next();
+    const redact = (value) => Array.isArray(value) ? value.map(redact) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).filter(([key]) => !hidden.has(key)).map(([key, item]) => [key, redact(item)])) : value;
+    const sendJson = res.json.bind(res); res.json = (payload) => sendJson(redact(payload));
+    return next();
+  } catch { return res.status(503).json({ error: "Não foi possível aplicar a visibilidade do cargo." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.get("/api/dashboard", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const [tasks, leads, projects, revenue] = await Promise.all([pool.query("select count(*)::int total from tasks where organization_id=$1 and status <> 'done'", [org]), pool.query("select count(*)::int total from leads where organization_id=$1 and status <> 'won'", [org]), pool.query("select count(*)::int total from projects where organization_id=$1 and status='active'", [org]), pool.query("select coalesce(sum(amount),0) total from revenues where organization_id=$1 and paid_at >= date_trunc('month',current_date)", [org])]); res.json({ tasks: tasks.rows[0].total, leads: leads.rows[0].total, projects: projects.rows[0].total, revenue: revenue.rows[0].total }); } catch { res.status(503).json({ error: "Não foi possível carregar o dashboard." }); } });
