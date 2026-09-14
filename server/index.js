@@ -354,6 +354,14 @@ app.get("/api/briefings", async (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select b.*,c.name client_name,p.name project_name from briefings b left join clients c on c.id=b.client_id and c.organization_id=b.organization_id left join projects p on p.id=b.project_id and p.organization_id=b.organization_id where ${where.join(" and ")} order by b.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ briefings: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os briefings." }); }
 });
+app.get("/api/forms", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["f.organization_id=$1"], search = String(req.query?.search || "").trim();
+  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(f.name ilike '%' || ${p} || '%' or coalesce(f.kind,'') ilike '%' || ${p} || '%')`); }
+  for (const field of ["status", "kind"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`f.${field}=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select f.* from forms f where ${where.join(" and ")} order by f.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ forms: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os formularios." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
