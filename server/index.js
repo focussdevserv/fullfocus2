@@ -108,6 +108,8 @@ const entities = {
 };
 const permissionDomains = { contacts: "crm", companies: "crm", clients: "crm", leads: "crm", opportunities: "crm", projects: "operation", tasks: "operation", contracts: "operation", briefings: "operation", deliveries: "operation", infrastructure_assets: "operation", knowledge_articles: "operation", forms: "operation", revenues: "finance", expenses: "finance", receivables: "finance", charges: "finance", payments: "finance", payables: "finance", bank_accounts: "finance", invoices: "finance", team_roles: "team", team_goals: "team", absences: "team", time_entries: "team", team_messages: "team", project_members: "team", catalog_items: "catalog", automations: "integrations", templates: "integrations", integrations: "integrations", conversations: "conversations" };
 const permissionAction = (method) => ({ GET: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" }[method]);
+permissionDomains.events = "operation";
+permissionDomains.commissions = "finance";
 const permissionAllows = (permissions, domain, table, action) => {
   if (!permissions || typeof permissions !== "object") return true;
   for (const value of [permissions[table], permissions[domain], permissions[`${domain}.${action}`], permissions[`${table}.${action}`]]) {
