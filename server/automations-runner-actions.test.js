@@ -87,3 +87,17 @@ test("encerra uma automação sem executar ações adicionais", async () => {
   assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
   assert.equal(calls.some((call) => call.sql.startsWith("insert into notifications")), false);
 });
+
+test("atribui responsável a um lead", async () => {
+  const { client, calls } = poolFor({ id: 64, organization_id: "org", trigger: "lead_created", action: "assign_owner", config: { user_id: "owner" } }, { id: 65, name: "Site" });
+  assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
+  const update = calls.find((call) => call.sql.startsWith("update leads set owner_id"));
+  assert.deepEqual(update.params, ["owner", 65, "org"]);
+});
+
+test("adiciona etiqueta sem duplicá-la", async () => {
+  const { client, calls } = poolFor({ id: 66, organization_id: "org", trigger: "lead_created", action: "add_tag", config: { tag: "vip" } }, { id: 67, name: "Site" });
+  assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
+  const update = calls.find((call) => call.sql.startsWith("update leads set tags"));
+  assert.deepEqual(update.params, ["vip", 67, "org"]);
+});

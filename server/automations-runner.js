@@ -229,6 +229,24 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     if (!updated.rowCount) throw new Error("O registro do funil não pertence ao workspace.");
     return { action: "move_pipeline", table, id: source.id, stage };
   }
+  if (automation.action === "assign_owner") {
+    const table = SOURCE_TABLES[automation.trigger];
+    const targetId = config.user_id || config.owner_id || null;
+    const columns = { leads: "owner_id", opportunities: "owner_id", tasks: "assignee_id" };
+    if (!source.id || !targetId || !columns[table]) throw new Error("Informe um responsável e um registro compatíveis.");
+    await assertOrganizationRelation(client, "users", targetId, automation.organization_id, "O responsável");
+    const updated = await client.query(`update ${table} set ${columns[table]}=$1,updated_at=now() where id=$2 and organization_id=$3`, [targetId, source.id, automation.organization_id]);
+    if (!updated.rowCount) throw new Error("O registro não pertence ao workspace.");
+    return { action: "assign_owner", table, id: source.id, user_id: targetId };
+  }
+  if (automation.action === "add_tag") {
+    const table = SOURCE_TABLES[automation.trigger];
+    const tag = String(config.tag || "").trim().slice(0, 40);
+    if (!source.id || !tag || !["leads", "opportunities", "tasks"].includes(table)) throw new Error("Informe uma etiqueta e um registro compatíveis.");
+    const updated = await client.query(`update ${table} set tags=array_append(array_remove(coalesce(tags,'{}'),$1),$1),updated_at=now() where id=$2 and organization_id=$3`, [tag, source.id, automation.organization_id]);
+    if (!updated.rowCount) throw new Error("O registro não pertence ao workspace.");
+    return { action: "add_tag", table, id: source.id, tag };
+  }
   if (automation.action === "webhook" || automation.action === "n8n_flow") {
     const target = await assertSafeOutboundUrl(config.url);
     const response = await fetch(target, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ automation_id: automation.id, trigger: automation.trigger, source }), redirect: "manual", signal: AbortSignal.timeout(10000) });
