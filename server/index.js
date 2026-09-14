@@ -338,6 +338,14 @@ app.get("/api/charges", async (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select ch.*,c.name client_name,r.description receivable_description from charges ch left join clients c on c.id=ch.client_id and c.organization_id=ch.organization_id left join receivables r on r.id=ch.receivable_id and r.organization_id=ch.organization_id where ${where.join(" and ")} order by ch.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ charges: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar as cobrancas." }); }
 });
+app.get("/api/invoices", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["i.organization_id=$1"], search = String(req.query?.search || "").trim();
+  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(coalesce(i.number,'') ilike '%' || ${p} || '%' or coalesce(c.name,'') ilike '%' || ${p} || '%')`); }
+  for (const field of ["status", "client_id", "project_id"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`i.${field}=$${values.length}`); }
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select i.*,c.name client_name from invoices i left join clients c on c.id=i.client_id and c.organization_id=i.organization_id where ${where.join(" and ")} order by i.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ invoices: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar as notas fiscais." }); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {
