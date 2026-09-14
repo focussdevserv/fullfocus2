@@ -1,16 +1,9 @@
 export function register(app, ctx) {
   const { pool, tenant } = ctx;
-  app.use("/api/team/access-status", (req, res, next) => {
-    const sendJson = res.json.bind(res);
-    res.json = (payload) => {
-      if (!payload?.users?.length) return sendJson(payload);
-      pool.query("select id,team_role_id from users where organization_id=$1", [req.user?.organization_id]).then((q) => sendJson({ ...payload, users: payload.users.map((user) => ({ ...user, team_role_id: q.rows.find((row) => String(row.id) === String(user.id))?.team_role_id || null })) })).catch(() => sendJson(payload));
-    };
-    next();
-  });
   const text = (value) => typeof value === "string" ? value.trim() : "";
   const roleOf = async (req, org) => (await pool.query("select role from users where id=$1 and organization_id=$2", [req.user?.id, org])).rows[0]?.role || null;
   const authorized = async (req, org) => ["owner", "admin"].includes(await roleOf(req, org));
+  app.get("/api/team/access-status", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select u.id,u.name,u.email,u.role,u.team_role_id,u.department,u.job_title,u.availability,u.access_status,u.access_expires_on,u.created_at,tr.name as team_role_name from users u left join team_roles tr on tr.id=u.team_role_id and tr.organization_id=u.organization_id where u.organization_id=$1 order by u.created_at", [org]); res.json({ users: q.rows }); } catch { res.status(503).json({ error: "Unable to load team members." }); } });
   app.post("/api/team/sessions/revoke-all", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     if (!(await authorized(req, org))) return res.status(403).json({ error: "Você não tem permissão para encerrar as sessões." });
