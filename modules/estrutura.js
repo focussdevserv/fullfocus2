@@ -20,8 +20,15 @@ const configs = {
 };
 configs.aprovacao.fields.push({ name: "status", label: "Status", type: "select", options: [["pending", "Pendente"], ["approved", "Aprovada"], ["rejected", "Recusada"], ["cancelled", "Cancelada"]] }, { name: "comment", label: "Comentário", type: "textarea", required: false });
 Object.assign(createConfig, configs);
+labels.alteracoes = ["Alterações de escopo", "change_requests", "title"];
+labels.entregas = ["Entregas e publicações", "deliveries", "version"];
+labels.infraestrutura = ["Infraestrutura", "infrastructure_assets", "name"];
+configs.alteracao = { title: "Nova solicitação de alteração", endpoint: "/api/change_requests", fields: [{ name: "title", label: "Título" }, { name: "description", label: "Descrição", type: "textarea", required: false }, { name: "project_id", label: "Projeto (ID)", required: false }, { name: "client_id", label: "Cliente (ID)", required: false }, { name: "impact_days", label: "Impacto no prazo (dias)", type: "number", required: false }, { name: "additional_cost", label: "Valor adicional", type: "number", required: false }, { name: "status", label: "Status", type: "select", options: [["pending", "Pendente"], ["approved", "Aprovada"], ["rejected", "Recusada"], ["implemented", "Implementada"]] }] };
+configs.entrega = { title: "Nova entrega", endpoint: "/api/deliveries", fields: [{ name: "version", label: "Versão" }, { name: "project_id", label: "Projeto (ID)" }, { name: "environment", label: "Ambiente", required: false }, { name: "published_url", label: "Link publicado", type: "url", required: false }, { name: "status", label: "Status", type: "select", options: [["draft", "Rascunho"], ["ready", "Pronta"], ["published", "Publicada"], ["approved", "Aprovada"]] }, { name: "backup_done", label: "Backup realizado", type: "checkbox", required: false }, { name: "client_approved", label: "Aprovada pelo cliente", type: "checkbox", required: false }] };
+configs.infraestrutura = { title: "Novo recurso de infraestrutura", endpoint: "/api/infrastructure_assets", fields: [{ name: "kind", label: "Tipo" }, { name: "name", label: "Nome" }, { name: "provider", label: "Provedor", required: false }, { name: "project_id", label: "Projeto (ID)", required: false }, { name: "client_id", label: "Cliente (ID)", required: false }, { name: "expires_on", label: "Vencimento", type: "date", required: false }, { name: "cost", label: "Custo", type: "number", required: false }, { name: "client_price", label: "Valor cobrado do cliente", type: "number", required: false }, { name: "responsible", label: "Responsável", required: false }] };
+Object.assign(createConfig, { alteracao: configs.alteracao, entrega: configs.entrega, infraestrutura: configs.infraestrutura });
 const esc = (value) => escapeHtml(value ?? "");
-const recordCreateKind = { aprovacoes: "aprovacao", briefings: "briefing", "contas-a-pagar": "payable", "contas-bancarias": "bank_account", "notas-fiscais": "invoice", formularios: "form", "base-de-conhecimento": "knowledge_article", metas: "team_goal", ausencias: "absence" };
+const recordCreateKind = { aprovacoes: "aprovacao", briefings: "briefing", alteracoes: "alteracao", entregas: "entrega", infraestrutura: "infraestrutura", "contas-a-pagar": "payable", "contas-bancarias": "bank_account", "notas-fiscais": "invoice", formularios: "form", "base-de-conhecimento": "knowledge_article", metas: "team_goal", ausencias: "absence" };
 async function renderEstrutura(key) {
   const [title, table, primary] = labels[key];
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Operação integrada</p><h2>${title}</h2><p>${key === "auditoria" ? "Registro de alterações, acessos e ações administrativas." : key === "lixeira" ? "Registros removidos com prazo para restauração." : "Dados vinculados por cliente, projeto e organização."}</p></div>${recordCreateKind[key] ? `<button class="button button-primary compact-action" data-new>+ Novo</button>` : ""}</section>${stateBlock.loading("Carregando...")}`;
@@ -62,4 +69,23 @@ const briefingLinkObserver = new MutationObserver(async () => {
   } catch {}
 });
 briefingLinkObserver.observe(dashboardGrid, { childList: true, subtree: true });
+const operationActionObserver = new MutationObserver(async () => {
+  const key = location.hash.replace(/^#/, "");
+  if (!["alteracoes", "entregas"].includes(key)) return;
+  const list = dashboardGrid.querySelector(".automation-list");
+  if (!list || list.dataset.operationActions === "1") return;
+  list.dataset.operationActions = "1";
+  const table = key === "alteracoes" ? "change_requests" : "deliveries";
+  try {
+    const rows = (await api(`/api/${table}`))[table] || [];
+    list.querySelectorAll("article").forEach((article, index) => {
+      const item = rows[index]; if (!item) return;
+      const actions = document.createElement("div"); actions.className = "operation-actions";
+      const choices = key === "alteracoes" && item.status === "pending" ? [["approved", "Aprovar"], ["rejected", "Recusar"]] : key === "entregas" && !item.client_approved ? [["approved", "Registrar aprovação"]] : [];
+      choices.forEach(([status, label]) => { const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = label; button.addEventListener("click", async () => { button.disabled = true; try { const body = key === "entregas" ? { client_approved: true, status: "approved" } : { status, approval_data: { decision: status, decided_at: new Date().toISOString() } }; await api(`/api/${table}/${item.id}`, { method: "PATCH", body }); toast("Atualização registrada.", "success"); renderEstrutura(key); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); actions.append(button); });
+      if (actions.children.length) article.append(actions);
+    });
+  } catch {}
+});
+operationActionObserver.observe(dashboardGrid, { childList: true, subtree: true });
 registerRoutes(Object.fromEntries(Object.keys(labels).map((key) => [key, () => renderEstrutura(key)])));
