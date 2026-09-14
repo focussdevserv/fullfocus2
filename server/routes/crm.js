@@ -152,6 +152,17 @@ export function register(app, ctx) {
   app.delete("/api/campaigns/:id", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("delete from campaigns where id=$1 and organization_id=$2 returning id", [req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Campanha não encontrada." }); res.status(204).end(); } catch (e) { fail(res, e, "Não foi possível excluir a campanha."); } });
 
   /* ------------------------------------------------------------ propostas */
+  app.get("/api/proposals", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const values = [org], where = ["p.organization_id=$1"];
+    const add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
+    const search = asText(req.query.search || req.query.q);
+    if (search) { values.push(`%${search.slice(0, 100)}%`); const index = values.length; where.push(`(p.title ilike $${index} or coalesce(p.notes,'') ilike $${index})`); }
+    for (const field of ["client_id", "project_id", "opportunity_id", "lead_id", "status"]) if (req.query[field] !== undefined && req.query[field] !== "") add(`p.${field}=$VALUE`, String(req.query[field]));
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250), offset = Math.max(Number(req.query.offset) || 0, 0);
+    values.push(limit, offset);
+    try { const q = await pool.query(`select p.*, o.name opportunity_name, l.name lead_name, (select coalesce(sum(quantity*unit_price),0)::float8 from proposal_items i where i.proposal_id=p.id and i.organization_id=p.organization_id) items_total, (select count(*)::int from proposal_items i where i.proposal_id=p.id and i.organization_id=p.organization_id) items_count from proposals p left join opportunities o on o.id=p.opportunity_id and o.organization_id=p.organization_id left join leads l on l.id=p.lead_id and l.organization_id=p.organization_id where ${where.join(" and ")} order by p.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ proposals: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "NÃ£o foi possÃ­vel carregar as propostas."); }
+  });
   const proposalTotal = async (id, org) => Number((await pool.query("select coalesce(sum(quantity*unit_price),0)::float8 total from proposal_items where proposal_id=$1 and organization_id=$2", [id, org])).rows[0].total);
   app.post("/api/proposals/:id/recalculate", async (req, res) => {
     const org = tenant(req, res); if (!org) return;

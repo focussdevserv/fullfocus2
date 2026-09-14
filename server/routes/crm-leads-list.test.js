@@ -37,3 +37,21 @@ test("lista de oportunidades aplica busca e filtros no workspace", async (t) => 
   assert.match(calls[0].sql, /o\.stage=\$3/);
   assert.deepEqual(calls[0].params, ["org-a", "%site%", "negotiation", "4", 10, 0]);
 });
+
+test("lista de propostas aplica filtros e paginação no workspace", async (t) => {
+  const calls = [];
+  const pool = { query: async (sql, params) => { calls.push({ sql, params }); return { rows: [{ id: 12, title: "Proposta" }], rowCount: 1 }; } };
+  const app = express();
+  register(app, { pool, tenant: () => "org-a", asText: (value) => String(value ?? "").trim(), classifyDbError: (_error, message) => ({ status: 503, error: message }), validateRelations: async () => {} });
+  const server = createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  t.after(() => server.close());
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/proposals?search=site&client_id=3&status=sent&limit=5&offset=10`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.proposals.length, 1);
+  assert.deepEqual(body.pagination, { limit: 5, offset: 10, returned: 1 });
+  assert.match(calls[0].sql, /p\.title ilike/);
+  assert.match(calls[0].sql, /p\.client_id=\$3/);
+  assert.deepEqual(calls[0].params, ["org-a", "%site%", "3", "sent", 5, 10]);
+});
