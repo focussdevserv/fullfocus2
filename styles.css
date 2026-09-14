@@ -1219,8 +1219,7 @@ tbody tr:last-child td { border-bottom: 0; } td:first-child { color: var(--ink);
 @media (max-width: 780px) { .agenda-layout { grid-template-columns: 1fr; } .calendar-day { min-height: 40px; } .agenda-upcoming .text-action { display: none; } }
 @media (max-width: 780px) { .page-intro { align-items: flex-start; flex-direction: column; gap: 14px; } .compact-action { width: 100%; } .quick-summary, .task-summary { grid-template-columns: 1fr; } .table-card { padding: 17px 12px; } th, td { padding-left: 9px; padding-right: 9px; } }
 .app-shell::before { display: none; }
-.button-primary::after { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(110deg, transparent 25%, rgb(255 255 255 / 28%) 48%, transparent 70%); content: ""; transform: translateX(-110%); transition: transform .55s ease; }
-.button-primary:hover::after { transform: translateX(110%); }
+.button-primary::after { display: none; }
 .dashboard-hero::after { position: absolute; inset: -30%; pointer-events: none; opacity: .22; background: repeating-radial-gradient(circle at 72% 34%, transparent 0 38px, rgb(255 255 255 / 45%) 39px 40px, transparent 41px 78px); content: ""; transform: rotate(-18deg); animation: web-drift 18s linear infinite; }
 .dashboard-hero { position: relative; }
 .task-priority-filter { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink-soft); font: inherit; font-size: 11px; font-weight: 700; }
