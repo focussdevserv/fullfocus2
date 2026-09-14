@@ -18,3 +18,13 @@ async function renderTemplatesScreen() {
 }
 
 registerRoutes({ templates: renderTemplatesScreen });
+
+const templateActionsObserver = new MutationObserver(() => {
+  if (location.hash.replace(/^#/, "") !== "templates") return;
+  dashboardGrid.querySelectorAll("[data-template-row]").forEach((row) => {
+    const actions = row.querySelector(".template-actions"); if (!actions || actions.querySelector("[data-template-duplicate]")) return;
+    const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.templateDuplicate = row.querySelector("[data-template-edit]")?.dataset.templateEdit || ""; button.textContent = "Duplicar";
+    button.addEventListener("click", async () => { button.disabled = true; try { await api(`/api/templates/${button.dataset.templateDuplicate}/duplicate`, { method: "POST", body: {} }); toast("Template duplicado.", "success"); renderTemplatesScreen(); } catch (error) { toast(error.message, "error"); button.disabled = false; } }); actions.append(button);
+  });
+});
+templateActionsObserver.observe(dashboardGrid, { childList: true, subtree: true });

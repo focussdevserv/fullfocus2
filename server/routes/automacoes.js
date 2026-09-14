@@ -118,6 +118,17 @@ export function register(app, ctx) {
     });
   }
 
+  app.post("/api/templates/:id/duplicate", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    try {
+      const source = await pool.query("select kind,name,body,category,subject,language,variables,service_id,favorite,is_default,version,internal_notes from templates where id=$1 and organization_id=$2", [req.params.id, org]);
+      if (!source.rowCount) return res.status(404).json({ error: "Template não encontrado." });
+      const item = source.rows[0];
+      const copy = await pool.query("insert into templates (organization_id,kind,name,body,category,subject,language,variables,service_id,favorite,is_default,version,internal_notes) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,false,false,$10,$11) returning *", [org, item.kind, `${item.name} (cópia)`, item.body, item.category, item.subject, item.language || "pt-BR", item.variables, item.service_id, Number(item.version || 1) + 1, item.internal_notes]);
+      res.status(201).json({ template: copy.rows[0] });
+    } catch (error) { fail(res, error, "Não foi possível duplicar o template."); }
+  });
+
   app.get("/api/commissions", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     try { const q = await pool.query("select * from commissions where organization_id=$1 order by created_at desc", [org]); res.json({ commissions: q.rows }); } catch (error) { fail(res, error, "Não foi possível carregar as comissões."); }
