@@ -14,6 +14,27 @@ export function register(app, ctx) {
       res.json({ revoked: true });
     } catch { res.status(503).json({ error: "Não foi possível encerrar as sessões." }); }
   });
+  app.post("/api/time-entry-timer/start", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const userId = req.user?.id, projectId = req.body?.project_id || null, taskId = req.body?.task_id || null;
+    try {
+      const existing = await pool.query("select id from time_entries where organization_id=$1 and user_id=$2 and ended_at is null order by started_at desc limit 1", [org, userId]);
+      if (existing.rowCount) return res.status(409).json({ error: "Já existe um cronômetro em andamento para este usuário." });
+      if (projectId || taskId) await ctx.validateRelations({ ...(projectId ? { project_id: projectId } : {}), ...(taskId ? { task_id: taskId } : {}) }, org);
+      const q = await pool.query("insert into time_entries (organization_id,user_id,project_id,task_id,started_at,billable,status,notes) values ($1,$2,$3,$4,now(),$5,'pending',$6) returning *", [org, userId, projectId, taskId, Boolean(req.body?.billable), text(req.body?.notes) || null]);
+      res.status(201).json({ time_entry: q.rows[0] });
+    } catch (error) { if (error.code === "invalid_relation") return res.status(400).json({ error: error.message }); res.status(503).json({ error: "Não foi possível iniciar o cronômetro." }); }
+  });
+  app.post("/api/time-entry-timer/:id/stop", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    try {
+      const found = await pool.query("select id,user_id from time_entries where id=$1 and organization_id=$2 and ended_at is null", [req.params.id, org]);
+      if (!found.rowCount) return res.status(404).json({ error: "Cronômetro não encontrado ou já finalizado." });
+      if (String(found.rows[0].user_id) !== String(req.user?.id) && !(await authorized(req, org))) return res.status(403).json({ error: "Você não tem permissão para finalizar este cronômetro." });
+      const q = await pool.query("update time_entries set ended_at=now(),minutes=greatest(0,floor(extract(epoch from (now()-started_at))/60)::int),updated_at=now() where id=$1 and organization_id=$2 returning *", [req.params.id, org]);
+      res.json({ time_entry: q.rows[0] });
+    } catch { res.status(503).json({ error: "Não foi possível finalizar o cronômetro." }); }
+  });
   app.get("/api/team/dashboard", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const query = (sql, params = [org]) => pool.query(sql, params).catch(() => ({ rows: [{ total: 0 }] }));
