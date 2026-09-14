@@ -173,6 +173,19 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     );
     return { action: "create_project", project_id: project.rows[0].id, contract_id: source.id };
   }
+  if (automation.action === "generate_document") {
+    const url = String(config.url || source.document_url || source.url || "").trim();
+    if (!url) throw new Error("Informe a URL do documento para gerar e enviar.");
+    const projectId = config.project_id || source.project_id || null;
+    const clientId = config.client_id || source.client_id || null;
+    await assertOrganizationRelation(client, "projects", projectId, automation.organization_id, "O projeto");
+    await assertOrganizationRelation(client, "clients", clientId, automation.organization_id, "O cliente");
+    const document = await client.query(
+      "insert into files (organization_id,name,url,kind,project_id,client_id) values ($1,$2,$3,$4,$5,$6) returning id",
+      [automation.organization_id, String(config.name || `${automation.name} · documento`).slice(0, 240), url.slice(0, 4000), String(config.kind || "document").slice(0, 40), projectId, clientId],
+    );
+    return { action: "generate_document", file_id: document.rows[0].id, project_id: projectId, client_id: clientId };
+  }
   if (automation.action === "update_status") {
     const tables = new Set(["leads", "opportunities", "proposals", "contracts", "projects", "tasks", "tickets", "clients", "receivables"]);
     const table = String(config.table || SOURCE_TABLES[automation.trigger] || "");

@@ -15,6 +15,7 @@ function poolFor(automation, source) {
       if (sql.startsWith("insert into receivables")) return { rowCount: 1, rows: [{ id: 92 }] };
       if (sql.startsWith("insert into contracts")) return { rowCount: 1, rows: [{ id: 93 }] };
       if (sql.startsWith("insert into projects")) return { rowCount: 1, rows: [{ id: 94 }] };
+      if (sql.startsWith("insert into files")) return { rowCount: 1, rows: [{ id: 95 }] };
       return { rowCount: 1, rows: [] };
     },
     release() {},
@@ -52,4 +53,10 @@ test("cria projeto quando contrato é assinado", async () => {
   const { client, calls } = poolFor({ id: 49, organization_id: "org", trigger: "contract_signed", action: "create_project", config: {} }, { id: 50, name: "Site", client_id: 51, value: "3000" });
   assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
   assert.equal(calls.filter((call) => call.sql.startsWith("insert into projects")).length, 1);
+});
+
+test("registra documento gerado no acervo de arquivos", async () => {
+  const { client, calls } = poolFor({ id: 52, organization_id: "org", trigger: "proposal_approved", action: "generate_document", config: { url: "https://example.com/contract.pdf" } }, { id: 53, title: "Site", client_id: 54 });
+  assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
+  assert.equal(calls.filter((call) => call.sql.startsWith("insert into files")).length, 1);
 });
