@@ -216,14 +216,15 @@ app.get("/api/audit_events", async (req, res) => {
   const add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
   if (req.query.action) add("a.action=$VALUE", String(req.query.action).slice(0, 80));
   if (req.query.entity_type) add("a.entity_type=$VALUE", String(req.query.entity_type).slice(0, 80));
-  if (req.query.actor_id && /^\\d+$/.test(String(req.query.actor_id))) add("a.actor_id=$VALUE", String(req.query.actor_id));
+  if (req.query.actor_id && UUID.test(String(req.query.actor_id))) add("a.actor_id=$VALUE", String(req.query.actor_id));
   if (req.query.from && !Number.isNaN(Date.parse(String(req.query.from)))) add("a.created_at >= $VALUE::timestamptz", String(req.query.from));
   if (req.query.to && !Number.isNaN(Date.parse(String(req.query.to)))) add("a.created_at < ($VALUE::date + interval '1 day')", String(req.query.to));
   if (req.query.search) { values.push(`%${String(req.query.search).slice(0, 100)}%`); const index = values.length; where.push(`(a.action ilike $${index} or a.entity_type ilike $${index} or coalesce(u.name,'') ilike $${index})`); }
-  values.push(limit);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  values.push(limit, offset);
   try {
-    const q = await pool.query(`select a.id,a.action,a.entity_type,a.entity_id,a.changes,a.ip_address,a.user_agent,a.created_at,u.name as actor_name from audit_events a left join users u on u.id=a.actor_id and u.organization_id=a.organization_id where ${where.join(" and ")} order by a.created_at desc limit $${values.length}`, values);
-    res.json({ audit_events: q.rows });
+    const q = await pool.query(`select a.id,a.action,a.entity_type,a.entity_id,a.changes,a.ip_address,a.user_agent,a.created_at,u.name as actor_name from audit_events a left join users u on u.id=a.actor_id and u.organization_id=a.organization_id where ${where.join(" and ")} order by a.created_at desc limit $${values.length - 1} offset $${values.length}`, values);
+    res.json({ audit_events: q.rows, pagination: { limit, offset, returned: q.rows.length } });
   } catch { res.status(503).json({ error: "Não foi possível carregar a auditoria." }); }
 });
 app.use("/api", async (req, res, next) => {
@@ -369,6 +370,15 @@ app.get("/api/knowledge_articles", async (req, res) => {
   for (const field of ["status", "category"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`k.${field}=$${values.length}`); }
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select k.* from knowledge_articles k where ${where.join(" and ")} order by k.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ knowledge_articles: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os artigos." }); }
+});
+app.get("/api/trash", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const values = [org], where = ["t.organization_id=$1"], search = String(req.query?.search || "").trim();
+  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(t.entity_type ilike '%' || ${p} || '%' or cast(t.entity_id as text) ilike '%' || ${p} || '%')`); }
+  if (req.query?.entity_type) { values.push(String(req.query.entity_type)); where.push(`t.entity_type=$${values.length}`); }
+  if (req.query?.active === "true") where.push("(t.restore_until is null or t.restore_until > now())");
+  const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
+  try { const q = await pool.query(`select t.id,t.entity_type,t.entity_id,t.deleted_by,t.restore_until,t.created_at,u.name as deleted_by_name from trash t left join users u on u.id=t.deleted_by and u.organization_id=t.organization_id where ${where.join(" and ")} order by t.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ trash: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar a lixeira." }); }
 });
 Object.keys(entities).forEach(createCrud);
 
