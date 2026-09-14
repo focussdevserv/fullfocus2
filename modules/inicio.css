@@ -1,1 +1,69 @@
-/* Estilos do módulo "inicio" — ownership: modules/inicio.css. */
+/* Estilos do módulo "inicio" — ownership: modules/inicio.css */
+
+/* Faixa de disponibilidade com tom e botão de atualizar */
+.workspace-availability { align-items: center; }
+.workspace-availability .availability-refresh { margin-left: auto; white-space: nowrap; }
+.workspace-availability[data-tone="ok"] .availability-mark { background: rgb(18 118 76 / 18%); color: #55e0a6; }
+.workspace-availability[data-tone="ok"] p { color: #9ed9bd; }
+.workspace-availability[data-tone="loading"] .availability-mark { opacity: 0.6; }
+
+/* Painel "Como funciona" */
+.inicio-help-panel { grid-column: 1 / -1; }
+.inicio-help-list { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.inicio-help-list strong { color: inherit; }
+
+/* Funil resumido dentro do cartão comercial */
+.pulse-stages { display: grid; gap: 6px; margin: 4px 0; }
+.pulse-stage { position: relative; display: block; padding: 3px 0 3px 8px; font-size: 10px; color: var(--muted); }
+.pulse-stage i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: linear-gradient(90deg, rgb(13 79 194 / 55%), rgb(13 79 194 / 15%)); z-index: -1; }
+.pulse-stage { isolation: isolate; }
+.pulse-danger { color: #ff8a97; }
+
+/* Estados vazios dos cartões */
+.inicio-empty { display: grid; gap: 10px; justify-items: start; padding: 6px 0; }
+.inicio-empty p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.inicio-empty small { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.inicio-empty .agenda-item { width: 100%; }
+
+/* Prioridades */
+.priority-item.is-today .priority-text small { color: #ffd38a; }
+.priority-item.is-late .priority-text small { color: #ff9aa5; font-weight: 700; }
+.priority-item.is-done { opacity: 0.45; text-decoration: line-through; transition: opacity 0.4s ease; }
+.agenda-item.is-past { opacity: 0.55; }
+
+/* Atividade clicável */
+a.activity-item { color: inherit; text-decoration: none; padding: 8px 6px; margin: 0 -6px; border-radius: 10px; }
+a.activity-item:hover { background: rgb(255 255 255 / 5%); }
+.activity-avatar.purple { background: rgb(126 87 194 / 22%); color: #c8b3ff; }
+.activity-avatar.orange { background: rgb(240 140 20 / 20%); color: #ffc46b; }
+
+/* Vencimentos próximos */
+.inicio-due-card { grid-column: 1 / -1; }
+.inicio-due-list { display: grid; gap: 0; }
+.inicio-due-item { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid rgb(255 255 255 / 7%); }
+.inicio-due-item:last-child { border-bottom: 0; }
+.inicio-due-item > div { flex: 1; min-width: 0; }
+.inicio-due-item strong { display: block; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inicio-due-item small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.inicio-due-item.is-late small { color: #ff9aa5; font-weight: 700; }
+.inicio-due-item.is-today small { color: #ffd38a; }
+.inicio-due-item b { font-size: 13px; white-space: nowrap; }
+
+/* Primeiros passos */
+.inicio-onboarding { grid-column: 1 / -1; }
+.inicio-progress { height: 6px; border-radius: 999px; background: rgb(255 255 255 / 8%); overflow: hidden; margin-bottom: 14px; }
+.inicio-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--blue), #55e0a6); transition: width 0.4s ease; }
+.inicio-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 18px; }
+.inicio-steps li { display: flex; align-items: center; gap: 10px; min-height: 36px; font-size: 12.5px; }
+.inicio-steps li span:nth-child(2) { flex: 1; }
+.inicio-steps li.is-done { color: var(--muted); text-decoration: line-through; }
+.inicio-step-mark { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; border-radius: 50%; background: rgb(13 79 194 / 22%); color: #8bb9ff; font-size: 11px; font-weight: 800; }
+.inicio-steps li.is-done .inicio-step-mark { background: rgb(18 118 76 / 22%); color: #55e0a6; }
+
+/* Tema claro: cartões de fundo claro */
+body:not(.dark-mode) .inicio-due-item { border-bottom-color: var(--line); }
+body:not(.dark-mode) a.activity-item:hover { background: rgb(13 79 194 / 5%); }
+body:not(.dark-mode) .inicio-progress { background: var(--line); }
+body:not(.dark-mode) .priority-item.is-late .priority-text small { color: var(--danger); }
+body:not(.dark-mode) .priority-item.is-today .priority-text small { color: #b06a00; }
+body:not(.dark-mode) .pulse-danger { color: var(--danger); }

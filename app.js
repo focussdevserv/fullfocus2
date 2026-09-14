@@ -198,12 +198,12 @@ function showApp(user) {
     document.querySelectorAll(".avatar").forEach((element) => { element.textContent = user.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); });
   }
   appTitle.focus();
-  syncDashboard();
+  // Quando modules/inicio.js registra a rota "inicio", ele é o dono do painel inicial.
+  if (!routeRenderers.inicio) syncDashboard();
   loadWeather();
   window.setTimeout(refreshInboxBadge, 300);
-  if (window.location.hash && window.location.hash !== "#inicio") {
-    window.requestAnimationFrame(() => renderHashRoute(window.location.hash));
-  }
+  // Sempre re-renderiza a rota atual com a sessão válida (o boot pode ter desenhado a tela deslogado).
+  window.requestAnimationFrame(() => renderHashRoute(window.location.hash || "#inicio"));
 }
 
 function saveSession(user) {
@@ -511,7 +511,7 @@ function openEditDialog(kind, item, endpoint) { openCreateDialog(kind); dialogTi
 function openSubtaskDialog(task) { openCreateDialog("tarefa"); dialogTitle.textContent = `Nova subtarefa · ${task.title}`; dialogFields.insertAdjacentHTML("beforeend", `<input type="hidden" name="parentId" value="${task.id}" />`); }
 document.querySelectorAll(".create-menu a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); createMenu.hidden = true; createMenuTrigger?.setAttribute("aria-expanded", "false"); const text = link.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
 document.querySelectorAll(".quick-actions button").forEach((button) => button.addEventListener("click", () => { const text = button.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
-dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); const config = createConfig[dialogForm.dataset.kind]; const payload = Object.fromEntries(new FormData(dialogForm)); if (payload.amount) payload.amount = payload.amount.replace(",", "."); const submit = dialogForm.querySelector("[type=submit]"); submit.disabled = true; dialogStatus.textContent = "Salvando..."; try { const method = dialogForm.dataset.method || "POST", endpoint = dialogForm.dataset.endpoint || config.endpoint; const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); closeCreateDialog(); /* Re-renderiza a tela atual (qualquer módulo) e atualiza o painel inicial. */ renderHashRoute(window.location.hash); if (!window.location.hash || window.location.hash === "#inicio") await syncDashboard(); } catch (error) { dialogStatus.textContent = error.message; } finally { submit.disabled = false; } });
+dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); const config = createConfig[dialogForm.dataset.kind]; const payload = Object.fromEntries(new FormData(dialogForm)); if (payload.amount) payload.amount = payload.amount.replace(",", "."); const submit = dialogForm.querySelector("[type=submit]"); submit.disabled = true; dialogStatus.textContent = "Salvando..."; try { const method = dialogForm.dataset.method || "POST", endpoint = dialogForm.dataset.endpoint || config.endpoint; const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); closeCreateDialog(); /* Re-renderiza a tela atual (qualquer módulo) e atualiza o painel inicial. */ renderHashRoute(window.location.hash); if ((!window.location.hash || window.location.hash === "#inicio") && !routeRenderers.inicio) await syncDashboard(); } catch (error) { dialogStatus.textContent = error.message; } finally { submit.disabled = false; } });
 dialogForm.querySelector(".dialog-close").addEventListener("click", closeCreateDialog); $("dialog-cancel").addEventListener("click", closeCreateDialog);
 
 document.addEventListener("click", (event) => {
@@ -769,6 +769,7 @@ if (bootResetToken) {
   showNewPassword(bootResetToken);
 } else {
   restoreSession().then(() => {
-    renderHashRoute();
+    // Só desenha o workspace se houver sessão; deslogado, a tela de login já está visível.
+    if (!appShell.hidden) renderHashRoute();
   });
 }
