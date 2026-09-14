@@ -63,10 +63,14 @@ const contractProjectObserver = new MutationObserver(async () => {
     const rows = (await api("/api/contracts")).contracts || [];
     table.querySelectorAll("tr").forEach((row, index) => {
       const contract = rows[index];
-      if (!contract || !["signed", "active"].includes(contract.status)) return;
-      if (!contract.project_id) { const button = document.createElement("button"); button.className = "compact-action"; button.type = "button"; button.textContent = "Criar projeto";
+      if (!contract) return;
+      const shareButton = document.createElement("button"); shareButton.className = "compact-action"; shareButton.type = "button"; shareButton.textContent = "Link para assinatura";
+      shareButton.addEventListener("click", async () => { shareButton.disabled = true; shareButton.textContent = "Gerando..."; try { const data = await api(`/api/contracts/${contract.id}/public-link`, { method: "POST", body: {} }); const link = `${location.origin}${data.path}`; await navigator.clipboard?.writeText(link); shareButton.textContent = "Link copiado"; toast("Link público do contrato copiado.", "success"); } catch (error) { shareButton.disabled = false; shareButton.textContent = "Link para assinatura"; toast(error.message, "error"); } });
+      row.lastElementChild?.append(" ", shareButton);
+      if (!contract.project_id && ["signed", "active"].includes(contract.status)) { const button = document.createElement("button"); button.className = "compact-action"; button.type = "button"; button.textContent = "Criar projeto";
         button.addEventListener("click", async () => { button.disabled = true; button.textContent = "Criando..."; try { await api(`/api/contracts/${contract.id}/create-project`, { method: "POST", body: {} }); toast("Projeto criado a partir do contrato.", "success"); location.hash = "#projetos"; } catch (error) { button.disabled = false; button.textContent = "Criar projeto"; toast(error.message, "error"); } });
         row.lastElementChild?.append(" ", button); }
+      if (!["signed", "active"].includes(contract.status)) return;
       const receivablesButton = document.createElement("button"); receivablesButton.className = "compact-action"; receivablesButton.type = "button"; receivablesButton.textContent = "Gerar parcelas";
       receivablesButton.addEventListener("click", async () => { receivablesButton.disabled = true; receivablesButton.textContent = "Gerando..."; try { const result = await api(`/api/contracts/${contract.id}/create-receivables`, { method: "POST", body: {} }); toast(result.created ? "Parcelas geradas em Contas a receber." : "As parcelas deste contrato já existem.", "success"); } catch (error) { receivablesButton.disabled = false; receivablesButton.textContent = "Gerar parcelas"; toast(error.message, "error"); } });
       row.lastElementChild?.append(" ", receivablesButton);
