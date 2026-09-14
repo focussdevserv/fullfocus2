@@ -874,3 +874,8 @@ openEditDialog = function openEditDialogWithCorrectTitle(kind, item, endpoint) {
 dialogForm.addEventListener("formdata", (event) => {
   dialogForm.querySelectorAll('input[type="checkbox"][name]').forEach((input) => { event.formData.delete(input.name); event.formData.append(input.name, input.checked ? "true" : "false"); });
 });
+const baseAuthenticatedApi = api;
+api = async function apiWithSessionExpiry(path, options) {
+  try { return await baseAuthenticatedApi(path, options); }
+  catch (error) { if (error?.status === 401) { authTransition += 1; localStorage.removeItem(SESSION_KEY); showLogin(); } throw error; }
+};
