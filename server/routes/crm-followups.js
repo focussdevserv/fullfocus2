@@ -6,7 +6,7 @@ export function registerCrmFollowupRoutes(app, { pool, tenant, validateRelations
   app.get("/api/followups", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const values = [org], where = ["f.organization_id=$1"], add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
-    const search = text(req.query?.search); if (search) add("(f.title ilike '%' || $VALUE || '%' or f.note ilike '%' || $VALUE || '%' or l.name ilike '%' || $VALUE || '%' or c.name ilike '%' || $VALUE || '%')", search);
+    const search = text(req.query?.search); if (search) { values.push(search); const param = `$${values.length}`; where.push(`(f.title ilike '%' || ${param} || '%' or f.note ilike '%' || ${param} || '%' or l.name ilike '%' || ${param} || '%' or c.name ilike '%' || ${param} || '%')`); }
     if (req.query?.channel) add("f.channel=$VALUE", text(req.query.channel));
     if (req.query?.status === "done") where.push("f.done_at is not null");
     if (req.query?.status === "open") where.push("f.done_at is null");
