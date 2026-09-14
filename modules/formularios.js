@@ -20,3 +20,14 @@ async function renderFormsScreen() {
 }
 
 registerRoutes({ formularios: renderFormsScreen });
+
+const formPublishObserver = new MutationObserver(() => {
+  if (location.hash.replace(/^#/, "") !== "formularios") return;
+  dashboardGrid.querySelectorAll("[data-form-row]").forEach((row) => {
+    const actions = row.querySelector(".template-actions"); if (!actions || actions.querySelector("[data-form-publish]")) return;
+    const edit = row.querySelector("[data-form-edit]"); if (!edit) return;
+    const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.formPublish = edit.dataset.formEdit; button.textContent = "Publicar e gerar link";
+    button.addEventListener("click", async () => { button.disabled = true; button.textContent = "Publicando..."; try { const data = await api(`/api/forms/${button.dataset.formPublish}/public-link`, { method: "POST", body: {} }); const link = `${location.origin}${data.path}`; await navigator.clipboard?.writeText(link); window.open(link, "_blank", "noopener,noreferrer"); toast("Formulário publicado; link copiado.", "success"); button.textContent = "Link copiado"; } catch (error) { toast(error.message, "error"); button.disabled = false; button.textContent = "Publicar e gerar link"; } }); actions.append(button);
+  });
+});
+formPublishObserver.observe(dashboardGrid, { childList: true, subtree: true });
