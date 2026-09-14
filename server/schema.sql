@@ -96,3 +96,10 @@ create index if not exists idx_clients_org on clients(organization_id); create i
 create index if not exists idx_projects_org on projects(organization_id); create index if not exists idx_tasks_org on tasks(organization_id);
 create index if not exists idx_revenues_org on revenues(organization_id); create index if not exists idx_expenses_org on expenses(organization_id);
 create index if not exists idx_receivables_org on receivables(organization_id); create index if not exists idx_charges_org on charges(organization_id); create index if not exists idx_payments_org on payments(organization_id); create index if not exists idx_events_org on events(organization_id);
+
+create table if not exists password_resets (
+  id bigserial primary key, user_id uuid not null references users(id) on delete cascade,
+  token_hash text not null unique, expires_at timestamptz not null, used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_password_resets_user_id on password_resets(user_id);
