@@ -181,6 +181,9 @@ function showApp(user) {
   appTitle.focus();
   syncDashboard();
   loadWeather();
+  if (window.location.hash && window.location.hash !== "#inicio") {
+    window.requestAnimationFrame(() => renderHashRoute(window.location.hash));
+  }
 }
 
 function saveSession(user) {
