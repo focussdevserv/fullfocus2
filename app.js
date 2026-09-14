@@ -516,17 +516,19 @@ document.addEventListener("keydown", (event) => {
 
 const navItemsByHash = new Map([...document.querySelectorAll(".nav-item")].map((item) => [item.getAttribute("href"), item]));
 function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
-  const hash = requestedHash || "#inicio";
-  const item = navItemsByHash.get(hash) || navItemsByHash.get("#inicio");
-  if (!item) return;
-  if (window.location.hash !== item.getAttribute("href")) history.replaceState(null, "", item.getAttribute("href"));
+  let hash = requestedHash || "#inicio";
+  let key = hash.replace(/^#/, "");
+  // Rota válida = item do menu ou rota registrada por um módulo (sub-tela). Fora disso, volta ao Início.
+  if (!navItemsByHash.has(hash) && !routeRenderers[key]) { hash = "#inicio"; key = "inicio"; }
+  const navItem = navItemsByHash.get(hash) || navItemsByHash.get(routeMeta[key]?.parent || "") || navItemsByHash.get("#inicio");
+  if (window.location.hash !== hash) history.replaceState(null, "", hash);
   document.querySelector(".nav-item.is-active")?.classList.remove("is-active");
-  item.classList.add("is-active");
-  const label = item.textContent.trim();
-  document.title = `${item.getAttribute("href") === "#inicio" ? "Início" : label} · FocusDev`;
-  appTitle.textContent = item.getAttribute("href") === "#inicio" ? homeGreeting : label;
-  document.querySelector(".eyebrow").textContent = item.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
-  renderWorkspaceView(item.getAttribute("href"), label);
+  navItem?.classList.add("is-active");
+  const label = navItemsByHash.has(hash) ? navItem.textContent.trim() : (routeMeta[key]?.title || key);
+  document.title = `${key === "inicio" ? "Início" : label} · FocusDev`;
+  appTitle.textContent = key === "inicio" ? homeGreeting : label;
+  document.querySelector(".eyebrow").textContent = navItem?.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
+  renderWorkspaceView(hash, label);
   closeSidebar();
 }
 document.addEventListener("click", (event) => {
@@ -596,11 +598,23 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"]/g, (character
    mesma tela.
    --------------------------------------------------------------------------- */
 const routeRenderers = Object.create(null);
-function registerRoutes(map) {
+/* Metadados de rotas que não estão no menu lateral (sub-telas): qual item do
+   menu fica destacado e qual título aparece. Módulos podem estender via
+   registerRoutes(map, { parent: "#crm", titles: { leads: "Leads" } }). */
+const routeMeta = {
+  leads: { parent: "#crm", title: "Leads" },
+  campanhas: { parent: "#crm", title: "Campanhas" },
+  funil: { parent: "#crm", title: "Funil de vendas" },
+  oportunidades: { parent: "#crm", title: "Oportunidades" },
+  propostas: { parent: "#crm", title: "Propostas" },
+  "follow-ups": { parent: "#crm", title: "Follow-ups" },
+};
+function registerRoutes(map, meta = {}) {
   for (const [key, render] of Object.entries(map)) {
     if (routeRenderers[key]) throw new Error(`Rota "${key}" já registrada por outro módulo.`);
     if (typeof render !== "function") throw new Error(`Rota "${key}" precisa de uma função de render.`);
     routeRenderers[key] = render;
+    if (meta.parent || meta.titles?.[key]) routeMeta[key] = { parent: meta.parent || routeMeta[key]?.parent, title: meta.titles?.[key] || routeMeta[key]?.title };
   }
 }
 

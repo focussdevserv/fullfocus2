@@ -6,3 +6,5 @@ create table if not exists files (
   created_at timestamptz not null default now()
 );
 create index if not exists files_organization_id_idx on files(organization_id);
+alter table contracts drop constraint if exists contracts_status_check;
+alter table contracts add constraint contracts_status_check check (status in ('draft','active','expired','cancelled'));

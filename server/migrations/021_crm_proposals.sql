@@ -1,0 +1,2 @@
+create table if not exists proposals (id bigserial primary key, organization_id uuid not null references organizations(id), opportunity_id bigint references opportunities(id) on delete set null, title text not null, amount numeric(14,2) check (amount >= 0), status text not null default 'draft' check (status in ('draft','sent','accepted','rejected')), valid_until date, notes text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists proposals_organization_id_idx on proposals(organization_id);

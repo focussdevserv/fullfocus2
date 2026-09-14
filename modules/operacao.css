@@ -1,1 +1,21 @@
-/* Estilos do módulo "operacao" — ownership: modules/operacao.css. Use os tokens de styles.css (var(--blue), var(--paper), ...) e as classes existentes (data-card, section-heading, card-kicker, filter-button) antes de criar novas. */
+.operations-intro { align-items: center; }
+.operations-table { overflow: hidden; }
+.operations-table table small { display: block; color: var(--muted); margin-top: .25rem; }
+.operations-table td b { color: var(--red); font-size: .78rem; }
+.operations-expiring { background: color-mix(in srgb, var(--red) 8%, transparent); }
+.operations-progress { width: 150px; height: 8px; border-radius: 9px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; }
+.operations-progress span { display: block; height: 100%; background: var(--blue); border-radius: inherit; }
+.operations-toolbar { display: flex; gap: .75rem; padding: 1rem; }
+.operations-toolbar select { padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: inherit; }
+.operations-kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.operations-column { min-height: 220px; padding: 1rem; }
+.operations-column h3 { margin: 0 0 1rem; }
+.operations-ticket { display: grid; gap: .4rem; padding: .8rem; border: 1px solid var(--line); border-radius: 9px; margin-bottom: .7rem; background: var(--paper); cursor: grab; }
+.operations-ticket small { color: var(--muted); }
+.operations-priority { width: max-content; padding: .15rem .4rem; border-radius: 5px; font-size: .75rem; }
+.priority-urgent, .priority-high { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+.priority-medium { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.operations-urgent { color: var(--muted); }
+.operations-urgent strong { color: var(--red); }
+@media (max-width: 900px) { .operations-kanban { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .operations-kanban { grid-template-columns: 1fr; } .operations-progress { width: 90px; } }
