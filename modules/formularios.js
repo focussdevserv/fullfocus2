@@ -5,7 +5,7 @@ const formStatus = { draft: "Rascunho", published: "Publicado", active: "Ativo",
 const formKind = { capture: "Captação", quote: "Orçamento", briefing: "Briefing", support: "Suporte", satisfaction: "Pesquisa de satisfação", onboarding: "Onboarding" };
 
 async function renderFormsScreen() {
-  const title = "Formulários", description = "Capte informações e transforme respostas em leads, tickets ou tarefas.";
+  const title = "Formulários", description = "Capte informações e transforme respostas em leads, oportunidades, tickets ou tarefas.";
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Automações</p><h2>${title}</h2><p>${description}</p></div><button class="button button-primary compact-action" data-form-new type="button">+ Novo formulário</button></section>${stateBlock.loading("Carregando formulários...")}`;
   try {
     const params = new URLSearchParams(); if (formFilterState.search) params.set("search", formFilterState.search); if (formFilterState.status) params.set("status", formFilterState.status); const items = (await api(`/api/forms?${params}`)).forms || [];
