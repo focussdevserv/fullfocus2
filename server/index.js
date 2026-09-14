@@ -362,7 +362,7 @@ app.get("/api/forms", async (req, res) => {
   if (search) { values.push(search); const p = `$${values.length}`; where.push(`(f.name ilike '%' || ${p} || '%' or coalesce(f.kind,'') ilike '%' || ${p} || '%')`); }
   for (const field of ["status", "kind"]) if (req.query?.[field]) { values.push(String(req.query[field])); where.push(`f.${field}=$${values.length}`); }
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);
-  try { const q = await pool.query(`select f.* from forms f where ${where.join(" and ")} order by f.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ forms: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os formularios." }); }
+  try { const q = await pool.query(`select f.id,f.organization_id,f.name,f.kind,f.schema,f.automation_config,f.status,f.public_token,f.created_at,f.updated_at,f.submitted_at from forms f where ${where.join(" and ")} order by f.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ forms: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Nao foi possivel carregar os formularios." }); }
 });
 app.get("/api/knowledge_articles", async (req, res) => {
   const org = tenant(req, res); if (!org) return;
