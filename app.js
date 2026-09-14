@@ -605,12 +605,6 @@ document.querySelectorAll(".nav-item").forEach((item) => {
   item.insertAdjacentHTML("afterbegin", `<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">${navIconPaths[key] || '<circle cx="12" cy="12" r="3"/>'}</svg>`);
 });
 
-const views = {
-  tarefas: { kicker: "Meu dia", title: "Tarefas", intro: "Organize prioridades e acompanhe o trabalho da equipe.", columns: ["Tarefa", "Responsável", "Prazo", "Status"], rows: [["Revisar briefing do cliente", "Alex Martins", "Hoje, 14:00", "Em andamento"], ["Preparar relatório mensal", "Joana Silva", "Amanhã", "A fazer"], ["Publicar nova campanha", "Rafael Costa", "20 Jun", "Concluída"], ["Validar pagamentos pendentes", "Marina Lopes", "22 Jun", "A fazer"]] },
-  projetos: { kicker: "Operação", title: "Projetos", intro: "Veja o andamento dos projetos e os próximos marcos.", columns: ["Projeto", "Cliente", "Progresso", "Saúde"], rows: [["Website institucional", "Acme Inc.", "78%", "No prazo"], ["Aplicativo mobile", "Vértice", "46%", "Atenção"], ["Campanha de lançamento", "Nexum", "92%", "No prazo"], ["Portal do cliente", "Orbit", "28%", "No prazo"]] },
-  receitas: { kicker: "Financeiro", title: "Receitas", intro: "Acompanhe entradas, vencimentos e recebimentos.", columns: ["Descrição", "Cliente", "Vencimento", "Valor"], rows: [["Mensalidade · Website", "Acme Inc.", "Hoje", "R$ 8.400"], ["Projeto · Aplicativo mobile", "Vértice", "22 Jun", "R$ 14.800"], ["Suporte mensal", "Nexum", "30 Jun", "R$ 5.200"], ["Consultoria", "Orbit", "05 Jul", "R$ 3.900"]] },
-};
-
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character]));
 
 /* ---------------------------------------------------------------------------
@@ -705,8 +699,7 @@ function applyDashboardProfile(profile = localStorage.getItem(DASHBOARD_PROFILE_
 function renderWorkspaceView(hash, label) {
   if (!dashboardGrid) return;
   const key = hash?.replace("#", "");
-  const fallbackView = views[key] || { kicker: "Workspace", title: label || "Tela", intro: "Carregando dados do workspace.", columns: ["Status"], rows: [["Aguardando módulo"]] };
-  const view = fallbackView;
+  const view = null;
   if (key === "inicio" && !routeRenderers.inicio) {
     dashboardGrid.innerHTML = initialDashboardMarkup;
     applyDashboardProfile();
