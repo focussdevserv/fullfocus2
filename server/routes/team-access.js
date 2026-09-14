@@ -1,5 +1,13 @@
 export function register(app, ctx) {
   const { pool, tenant } = ctx;
+  app.use("/api/team/access-status", (req, res, next) => {
+    const sendJson = res.json.bind(res);
+    res.json = (payload) => {
+      if (!payload?.users?.length) return sendJson(payload);
+      pool.query("select id,team_role_id from users where organization_id=$1", [req.user?.organization_id]).then((q) => sendJson({ ...payload, users: payload.users.map((user) => ({ ...user, team_role_id: q.rows.find((row) => String(row.id) === String(user.id))?.team_role_id || null })) })).catch(() => sendJson(payload));
+    };
+    next();
+  });
   const text = (value) => typeof value === "string" ? value.trim() : "";
   const roleOf = async (req, org) => (await pool.query("select role from users where id=$1 and organization_id=$2", [req.user?.id, org])).rows[0]?.role || null;
   const authorized = async (req, org) => ["owner", "admin"].includes(await roleOf(req, org));

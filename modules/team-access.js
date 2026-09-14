@@ -17,6 +17,7 @@ registerRoutes({ equipe: renderTeamAccess });
 
 const rolePanelObserver = new MutationObserver(() => {
   if (location.hash !== "#equipe" || dashboardGrid.querySelector("[data-new-team-role]")) return;
+  api("/api/team/access-status").then((data) => { (data.users || []).forEach((user) => { const select = dashboardGrid.querySelector(`[data-team-role="${CSS.escape(String(user.id))}"]`); if (select) select.value = user.team_role_id ? String(user.team_role_id) : ""; }); }).catch(() => {});
   const panel = document.createElement("section"); panel.className = "data-card config-card"; panel.innerHTML = `<h3>Novo cargo personalizado</h3><p>Defina permissões JSON e campos ocultos para este cargo.</p><form data-new-team-role><input name="name" placeholder="Nome do cargo" required><input name="department" placeholder="Departamento"><textarea name="permissions" rows="3" placeholder='{"crm":{"view":true,"create":false}}'>{}</textarea><input name="hidden_fields" placeholder='["pix_key","internal_notes"]'><button class="button button-primary" type="submit">Criar cargo</button><output data-role-result></output></form>`;
   dashboardGrid.append(panel);
   panel.querySelector("form").addEventListener("submit", async (event) => {
