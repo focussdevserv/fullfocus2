@@ -633,7 +633,12 @@ function registerRoutes(map, meta = {}) {
     routeRenderers[key] = render;
     if (meta.parent || meta.titles?.[key]) routeMeta[key] = { parent: meta.parent || routeMeta[key]?.parent, title: meta.titles?.[key] || routeMeta[key]?.title };
   }
+  window.dispatchEvent(new CustomEvent("focusdev:routes-ready"));
 }
+
+window.addEventListener("focusdev:routes-ready", () => {
+  if (!appShell.hidden) renderHashRoute(window.location.hash || "#inicio");
+});
 
 /* Chamada de API autenticada (cookie same-origin) com erro legível em pt-BR. */
 async function api(path, { method = "GET", body, headers } = {}) {
@@ -691,6 +696,8 @@ function applyDashboardProfile(profile = localStorage.getItem(DASHBOARD_PROFILE_
 function renderWorkspaceView(hash, label) {
   if (!dashboardGrid) return;
   const key = hash?.replace("#", "");
+  const fallbackView = views[key] || { kicker: "Workspace", title: label || "Tela", intro: "Carregando dados do workspace.", columns: ["Status"], rows: [["Aguardando módulo"]] };
+  const view = fallbackView;
   if (key === "inicio" && !routeRenderers.inicio) {
     dashboardGrid.innerHTML = initialDashboardMarkup;
     applyDashboardProfile();
