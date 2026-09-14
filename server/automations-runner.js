@@ -1,4 +1,5 @@
 import { normalizeNumber, sendWhatsappText } from "./routes/whatsapp.js";
+import { sendEmail } from "./mailer.js";
 
 const SOURCE_TABLES = {
   lead_created: "leads",
@@ -7,6 +8,7 @@ const SOURCE_TABLES = {
   ticket_created: "tickets",
   freelancer_project_finished: "projects",
   project_completed: "projects",
+  team_member_invited: "users",
 };
 
 const sourceWhere = {
@@ -16,6 +18,7 @@ const sourceWhere = {
   ticket_created: "created_at <= $2",
   freelancer_project_finished: "(status in ('done','completed','published') or completed_on is not null) and (completed_on is null or completed_on <= $2::date)",
   project_completed: "(status in ('done','completed','published') or completed_on is not null) and (completed_on is null or completed_on <= $2::date)",
+  team_member_invited: "created_at <= $2 and coalesce(access_status,'active') = 'active'",
 };
 
 const sourceMessage = (trigger, row) => {
@@ -23,6 +26,7 @@ const sourceMessage = (trigger, row) => {
   if (trigger === "task_overdue") return `Tarefa atrasada: ${row.title}`;
   if (trigger === "receivable_overdue") return `Recebível vencido: ${row.description}`;
   if (trigger === "freelancer_project_finished" || trigger === "project_completed") return `Projeto finalizado: ${row.name}`;
+  if (trigger === "team_member_invited") return `Bem-vindo ao FocusDev, ${row.name}`;
   return `Novo ticket: ${row.title}`;
 };
 
@@ -82,6 +86,13 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     await client.query("insert into messages (organization_id,conversation_id,direction,body) values ($1,$2,'out',$3)", [automation.organization_id, conversationId, String(config.body || message).slice(0, 4000)]);
     await client.query("update conversations set last_message_at=now(),updated_at=now() where id=$1 and organization_id=$2", [conversationId, automation.organization_id]);
     return { action: "send_message", conversation_id: conversationId, message };
+  }
+  if (automation.action === "send_email") {
+    const recipient = String(config.to || source.email || "").trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(recipient)) throw new Error("A automação de e-mail precisa de um destinatário válido.");
+    const delivery = await sendEmail({ to: recipient, subject: String(config.subject || automation.name).slice(0, 240), html: String(config.body || message).slice(0, 10000), text: String(config.body || message).slice(0, 4000) });
+    if (!delivery?.sent) throw new Error(delivery?.reason || "O e-mail não foi enviado.");
+    return { action: "send_email", to: recipient, message };
   }
   if (automation.action === "calculate_commission") {
     const baseAmount = Math.max(0, Number(source.total_value || source.value || config.base_amount || 0));
