@@ -3,6 +3,7 @@ import { sendEmail } from "./mailer.js";
 
 const SOURCE_TABLES = {
   lead_created: "leads",
+  task_due_soon: "tasks",
   task_overdue: "tasks",
   receivable_overdue: "receivables",
   ticket_created: "tickets",
@@ -16,6 +17,7 @@ const SOURCE_TABLES = {
 
 const sourceWhere = {
   lead_created: "created_at <= $2",
+  task_due_soon: "status not in ('done','cancelled') and due_at is not null and due_at > $2 and due_at <= ($2 + interval '1 day')",
   task_overdue: "status <> 'done' and due_at is not null and due_at < $2",
   receivable_overdue: "status = 'pending' and due_at < $2::date",
   ticket_created: "created_at <= $2",
@@ -29,6 +31,7 @@ const sourceWhere = {
 
 const sourceMessage = (trigger, row) => {
   if (trigger === "lead_created") return `Novo lead: ${row.name}`;
+  if (trigger === "task_due_soon") return `Tarefa próxima do prazo: ${row.title}`;
   if (trigger === "task_overdue") return `Tarefa atrasada: ${row.title}`;
   if (trigger === "receivable_overdue") return `Recebível vencido: ${row.description}`;
   if (trigger === "freelancer_project_finished" || trigger === "project_completed") return `Projeto finalizado: ${row.name}`;
@@ -55,16 +58,19 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
   const config = automation.config && typeof automation.config === "object" ? automation.config : {};
   const message = sourceMessage(automation.trigger, source);
   if (automation.action === "notify") {
-    const users = await client.query("select id from users where organization_id=$1", [automation.organization_id]);
-    if (users.rowCount) {
-      await Promise.all(users.rows.map((user) => client.query(
+    const users = source.assignee_id
+      ? await client.query("select id from users where id=$1 and organization_id=$2", [source.assignee_id, automation.organization_id])
+      : await client.query("select id from users where organization_id=$1", [automation.organization_id]);
+    const recipients = users.rowCount ? users : await client.query("select id from users where organization_id=$1", [automation.organization_id]);
+    if (recipients.rowCount) {
+      await Promise.all(recipients.rows.map((user) => client.query(
         "insert into notifications (organization_id,user_id,automation_id,message) values ($1,$2,$3,$4)",
         [automation.organization_id, user.id, automation.id, message],
       )));
     } else {
       await client.query("insert into notifications (organization_id,automation_id,message) values ($1,$2,$3)", [automation.organization_id, automation.id, message]);
     }
-    return { action: "notify", message, recipients: users.rowCount };
+    return { action: "notify", message, recipients: recipients.rowCount };
   }
   if (automation.action === "create_task") {
     const title = String(config.title || message).trim().slice(0, 240);
