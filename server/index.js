@@ -84,7 +84,8 @@ app.use("/api", (req, res, next) => {
   res.on("finish", () => {
     if (res.statusCode < 200 || res.statusCode >= 300 || !req.user) return;
     const parts = req.path.split("/").filter(Boolean), entityType = parts[0] || "api", entityId = /^\d+$/.test(parts[1] || "") ? parts[1] : null;
-    const changes = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => !/(password|token|secret|api.?key|credential)/i.test(key)).map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 500) : value]));
+    const redactAudit = (value) => Array.isArray(value) ? value.map(redactAudit) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).filter(([key]) => !/(password|token|secret|api.?key|credential)/i.test(key)).map(([key, item]) => [key, redactAudit(item)])) : typeof value === "string" ? value.slice(0, 500) : value;
+    const changes = redactAudit(req.body || {});
     pool.query("insert into audit_events (organization_id,actor_id,action,entity_type,entity_id,changes,ip_address,user_agent) values ($1,$2,$3,$4,$5,$6,$7,$8)", [req.user.organization_id, req.user.id, req.method.toLowerCase(), entityType, entityId, JSON.stringify(changes), req.ip || null, req.get("user-agent") || null]).catch(() => {});
   });
   next();
