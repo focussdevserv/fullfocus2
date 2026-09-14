@@ -1,0 +1,2 @@
+create table if not exists ticket_comments (id bigserial primary key, organization_id uuid not null references organizations(id) on delete cascade, ticket_id bigint not null references tickets(id) on delete cascade, author_name text not null, author_email text, body text not null, attachment_url text, is_public boolean not null default true, created_at timestamptz not null default now());
+create index if not exists idx_ticket_comments_org_ticket on ticket_comments(organization_id,ticket_id,created_at);

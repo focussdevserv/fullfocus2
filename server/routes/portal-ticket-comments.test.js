@@ -1,0 +1,11 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import express from "express";
+import { createServer } from "node:http";
+import { registerPortalPublicRoute } from "./portal-public.js";
+
+async function request(server, path, options = {}) { const address = server.address(); return fetch(`http://127.0.0.1:${address.port}${path}`, { ...options, headers: { "content-type": "application/json" }, body: options.body === undefined ? undefined : JSON.stringify(options.body) }); }
+function setup() { const calls = []; const query = async (sql, params) => { calls.push({ sql, params }); if (sql.startsWith("select t.id")) return { rowCount: 1, rows: [{ id: 3, title: "Acesso", status: "waiting", priority: "medium", organization_id: "org", client_id: 4 }] }; if (sql.startsWith("select id,author_name")) return { rowCount: 1, rows: [] }; return { rowCount: 1, rows: [{ id: 9, author_name: "Cliente", body: "Atualização", attachment_url: null }] }; }; const app = express(); app.use(express.json()); registerPortalPublicRoute(app, { pool: { query } }); return { app, calls }; }
+
+test("comentário do ticket valida anexo externo", async (t) => { const { app } = setup(), server = createServer(app); await new Promise((resolve) => server.listen(0, resolve)); t.after(() => server.close()); const response = await request(server, "/api/portal/token/tickets/3/comments", { method: "POST", body: { body: "Veja", attachment_url: "javascript:alert(1)" } }); assert.equal(response.status, 400); });
+test("comentário público é vinculado ao ticket do portal", async (t) => { const { app, calls } = setup(), server = createServer(app); await new Promise((resolve) => server.listen(0, resolve)); t.after(() => server.close()); const response = await request(server, "/api/portal/token/tickets/3/comments", { method: "POST", body: { author: "Cliente", email: "cliente@example.com", body: "Segue atualização", attachment_url: "https://files.example.com/a.png" } }); assert.equal(response.status, 201); assert.ok(calls.some((call) => call.sql.includes("insert into ticket_comments") && call.params[1] === 3)); });
