@@ -13,6 +13,7 @@ const SOURCE_TABLES = {
   member_added_to_project: "project_members",
   project_member_added: "project_members",
   task_assigned: "tasks",
+  member_overloaded: "users",
 };
 
 const sourceWhere = {
@@ -27,6 +28,7 @@ const sourceWhere = {
   member_added_to_project: "added_at <= $2",
   project_member_added: "added_at <= $2",
   task_assigned: "assigned_at is not null and assigned_at <= $2 and assignee_id is not null",
+  member_overloaded: "coalesce(s.access_status,'active') = 'active' and (select count(*) from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) > 5",
 };
 
 const sourceMessage = (trigger, row) => {
@@ -38,6 +40,7 @@ const sourceMessage = (trigger, row) => {
   if (trigger === "team_member_invited") return `Bem-vindo ao FocusDev, ${row.name}`;
   if (trigger === "member_added_to_project" || trigger === "project_member_added") return `Você foi adicionado ao projeto ${row.project_name || row.project_id}.`;
   if (trigger === "task_assigned") return `Nova tarefa atribuída: ${row.title}`;
+  if (trigger === "member_overloaded") return `Membro sobrecarregado: ${row.name} (${row.open_tasks} tarefas abertas)`;
   return `Novo ticket: ${row.title}`;
 };
 
@@ -45,7 +48,7 @@ async function findSources(client, automation, now) {
   const table = SOURCE_TABLES[automation.trigger];
   const where = sourceWhere[automation.trigger];
   if (!table || !where) return [];
-  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : automation.trigger === "task_assigned" ? "select s.*,u.name member_name,u.email" : "select s.*";
+  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : automation.trigger === "task_assigned" ? "select s.*,u.name member_name,u.email" : automation.trigger === "member_overloaded" ? "select s.*,(select count(*)::int from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) open_tasks" : "select s.*";
   const joins = table === "project_members" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id join projects p on p.id=s.project_id and p.organization_id=s.organization_id" : automation.trigger === "task_assigned" ? " join users u on u.id=s.assignee_id and u.organization_id=s.organization_id" : "";
   const query = `${select} from ${table} s${joins} where s.organization_id=$1 and ${where}
     and not exists (select 1 from automation_runs r where r.automation_id=$3 and r.source_type=$4 and r.source_id=s.id)
@@ -57,10 +60,13 @@ async function findSources(client, automation, now) {
 async function executeAction(client, automation, source, { sendWhatsApp = sendWhatsappText, pool } = {}) {
   const config = automation.config && typeof automation.config === "object" ? automation.config : {};
   const message = sourceMessage(automation.trigger, source);
-  if (automation.action === "notify") {
-    const users = source.assignee_id
-      ? await client.query("select id from users where id=$1 and organization_id=$2", [source.assignee_id, automation.organization_id])
-      : await client.query("select id from users where organization_id=$1", [automation.organization_id]);
+  if (automation.action === "notify" || automation.action === "notify_responsible") {
+    const targetId = source.manager_id || source.assignee_id;
+    const users = targetId && automation.action === "notify_responsible"
+      ? await client.query("select id from users where id=$1 and organization_id=$2", [targetId, automation.organization_id])
+      : source.assignee_id
+        ? await client.query("select id from users where id=$1 and organization_id=$2", [source.assignee_id, automation.organization_id])
+        : await client.query("select id from users where organization_id=$1", [automation.organization_id]);
     const recipients = users.rowCount ? users : await client.query("select id from users where organization_id=$1", [automation.organization_id]);
     if (recipients.rowCount) {
       await Promise.all(recipients.rows.map((user) => client.query(
@@ -70,7 +76,7 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     } else {
       await client.query("insert into notifications (organization_id,automation_id,message) values ($1,$2,$3)", [automation.organization_id, automation.id, message]);
     }
-    return { action: "notify", message, recipients: recipients.rowCount };
+    return { action: automation.action, message, recipients: recipients.rowCount };
   }
   if (automation.action === "create_task") {
     const title = String(config.title || message).trim().slice(0, 240);
