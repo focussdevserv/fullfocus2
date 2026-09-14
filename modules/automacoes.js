@@ -70,3 +70,13 @@ function integrations() {
   });
 }
 registerRoutes({ automacoes: automations, templates, integracoes: integrations });
+const automationHistoryObserver = new MutationObserver(async () => {
+  if (location.hash.replace(/^#/, "") !== "automacoes") { dashboardGrid.dataset.runsBound = ""; return; } if (dashboardGrid.dataset.runsBound === "1") return;
+  const articles = [...dashboardGrid.querySelectorAll(".automation-list article")]; if (!articles.length) return;
+  dashboardGrid.dataset.runsBound = "1";
+  try {
+    const rows = (await api("/api/automations")).automations || [];
+    articles.forEach((article, index) => { const automation = rows[index]; if (!automation) return; const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = "Histórico"; button.addEventListener("click", async () => { button.disabled = true; try { const runs = (await api(`/api/automations/${automation.id}/runs`)).runs || []; const panel = document.createElement("aside"); panel.className = "conta-drawer"; panel.innerHTML = `<button class="conta-close" type="button">×</button><p class="card-kicker">Automações</p><h2>Histórico · ${e(automation.name)}</h2>${runs.length ? runs.map((run) => `<div class="automation-run"><strong>${e(run.source_type)} #${e(run.source_id)}</strong><small>${e(new Date(run.created_at).toLocaleString("pt-BR"))}</small>${run.result?.error ? `<p>${e(run.result.error)}</p><button class="compact-action" data-retry="${e(run.id)}">Tentar novamente</button>` : `<p>Concluída</p>`}</div>`).join("") : `<p class="conta-muted">Nenhuma execução registrada.</p>`}`; document.body.append(panel); panel.querySelector(".conta-close").onclick = () => panel.remove(); panel.querySelectorAll("[data-retry]").forEach((retry) => retry.onclick = async () => { retry.disabled = true; try { await api(`/api/automations/${automation.id}/runs/${retry.dataset.retry}/retry`, { method: "POST" }); retry.textContent = "Retentativa agendada"; } catch (error) { retry.disabled = false; retry.textContent = error.message; } }); } catch (error) { toast(error.message, "error"); } finally { button.disabled = false; } }); article.append(button); });
+  } catch { dashboardGrid.dataset.runsBound = ""; }
+});
+automationHistoryObserver.observe(dashboardGrid, { childList: true, subtree: true });
