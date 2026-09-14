@@ -185,5 +185,4 @@ function bind() {
 }
 
 registerRoutes({ agenda: renderAgenda });
-createConfig.evento.endpoint = "/api/events/details";
 createConfig.evento.fields.push({ name: "event_type", label: "Tipo", type: "select", options: [["meeting", "Reunião"], ["call", "Ligação"], ["followup", "Retorno ao cliente"], ["deadline", "Prazo/entrega"], ["billing", "Cobrança/vencimento"], ["support", "Suporte"], ["personal", "Compromisso pessoal"], ["other", "Outro"]], required: false }, { name: "status", label: "Status", type: "select", options: [["pending", "Pendente"], ["confirmed", "Confirmado"], ["in_progress", "Em andamento"], ["done", "Concluído"], ["cancelled", "Cancelado"]], required: false }, { name: "endsAt", label: "Horário final", type: "datetime-local", required: false }, { name: "location", label: "Local ou link", required: false }, { name: "participants", label: "Participantes", required: false }, { name: "reminder_channels", label: "Lembretes", placeholder: "app, navegador, e-mail ou WhatsApp", required: false }, { name: "recurrenceUntil", label: "Fim da repetição", type: "date", required: false });
