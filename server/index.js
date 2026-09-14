@@ -14,6 +14,8 @@ import { registerContractPublicRoutes } from "./routes/contract-public.js";
 import { registerProposalPublicRoutes } from "./routes/proposal-public.js";
 import { registerDeliveryPublicRoutes } from "./routes/delivery-public.js";
 import { registerPortalPublicRoute } from "./routes/portal-public.js";
+import { registerPortalAuthRoutes } from "./routes/portal-auth.js";
+import { registerPortalAdminRoutes } from "./routes/portal-admin.js";
 import { startAutomationRunner } from "./automations-runner.js";
 const { Pool } = pg;
 export const app = express();
@@ -92,6 +94,7 @@ const PUBLIC_API_PREFIXES = ["/auth/", "/portal/", "/satisfaction/", "/whatsapp/
 registerContractPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
 registerProposalPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
 registerDeliveryPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
+registerPortalAuthRoutes(app, { pool, hashPassword, verifyPassword });
 registerPortalPublicRoute(app, { pool });
 const formPublicSafe = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
 const publicFormField = (item, index) => {
@@ -297,6 +300,7 @@ app.patch("/api/events/:id", async (req, res) => { const org = tenant(req, res);
 app.delete("/api/events/:id", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("delete from events where id=$1 and organization_id=$2 returning id", [req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Evento não encontrado." }); res.status(204).end(); } catch { res.status(503).json({ error: "Não foi possível excluir o evento." }); } });
 
 registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
+registerPortalAdminRoutes(app, { pool, tenant, hashPassword });
 
 app.post("/api/forms/:id/public-link", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const token = crypto.randomBytes(32).toString("base64url"); const q = await pool.query("update forms set public_token=$1,status='published',updated_at=now() where id=$2 and organization_id=$3 returning id,name,status", [token, req.params.id, org]); if (!q.rowCount) return res.status(404).json({ error: "Formulário não encontrado." }); res.status(201).json({ form: q.rows[0], token, path: "/form/" + token }); } catch { res.status(503).json({ error: "Não foi possível gerar o link do formulário." }); } });
 async function start() { try { await runMigrations(pool); app.listen(port, "0.0.0.0", () => { console.log(`FocusApp API listening on ${port}`); startAutomationRunner(pool); }); } catch (e) { console.error("FocusApp API could not connect to PostgreSQL:", e.message); process.exitCode = 1; } }
