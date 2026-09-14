@@ -15,6 +15,7 @@ const SOURCE_TABLES = {
   task_assigned: "tasks",
   member_overloaded: "users",
   absence_started: "absences",
+  sale_won: "opportunities",
 };
 
 const sourceWhere = {
@@ -31,6 +32,7 @@ const sourceWhere = {
   task_assigned: "assigned_at is not null and assigned_at <= $2 and assignee_id is not null",
   member_overloaded: "coalesce(s.access_status,'active') = 'active' and (select count(*) from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) > 5",
   absence_started: "s.starts_on = $2::date and lower(s.kind) in ('vacation','ferias','férias')",
+  sale_won: "s.stage in ('won','closed_won','sale_won')",
 };
 
 const sourceMessage = (trigger, row) => {
@@ -51,7 +53,7 @@ async function findSources(client, automation, now) {
   const table = SOURCE_TABLES[automation.trigger];
   const where = sourceWhere[automation.trigger];
   if (!table || !where) return [];
-  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : automation.trigger === "task_assigned" ? "select s.*,u.name member_name,u.email" : automation.trigger === "member_overloaded" ? "select s.*,(select count(*)::int from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) open_tasks" : automation.trigger === "absence_started" ? "select s.*,u.name member_name,u.manager_id" : "select s.*";
+  const select = table === "project_members" ? "select s.*,u.name member_name,u.email,p.name project_name" : automation.trigger === "task_assigned" ? "select s.*,u.name member_name,u.email" : automation.trigger === "member_overloaded" ? "select s.*,(select count(*)::int from tasks t where t.organization_id=s.organization_id and t.assignee_id=s.id and t.status not in ('done','cancelled')) open_tasks" : automation.trigger === "absence_started" ? "select s.*,u.name member_name,u.manager_id" : automation.trigger === "sale_won" ? "select s.*,(select c.id from clients c where c.organization_id=s.organization_id and ((s.contact_id is not null and c.contact_id=s.contact_id) or (s.company_id is not null and c.company_id=s.company_id)) order by c.id limit 1) client_id" : "select s.*";
   const joins = table === "project_members" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id join projects p on p.id=s.project_id and p.organization_id=s.organization_id" : automation.trigger === "task_assigned" ? " join users u on u.id=s.assignee_id and u.organization_id=s.organization_id" : automation.trigger === "absence_started" ? " join users u on u.id=s.user_id and u.organization_id=s.organization_id" : "";
   const query = `${select} from ${table} s${joins} where s.organization_id=$1 and ${where}
     and not exists (select 1 from automation_runs r where r.automation_id=$3 and r.source_type=$4 and r.source_id=s.id)
@@ -130,6 +132,19 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
     await client.query("update project_members set files_visible=true,tasks_visible=true where id=$1 and organization_id=$2", [source.id, automation.organization_id]);
     await client.query("insert into notifications (organization_id,user_id,automation_id,message) values ($1,$2,$3,$4)", [automation.organization_id, source.user_id, automation.id, message]);
     return { action: "grant_project_access", project_id: source.project_id, user_id: source.user_id };
+  }
+  if (automation.action === "reassign_support") {
+    let targetId = config.user_id || source.responsible_id || null;
+    if (!targetId) {
+      const fallback = await client.query("select id from users where organization_id=$1 and coalesce(access_status,'active')='active' and role in ('owner','admin') order by case when role='owner' then 0 else 1 end,id limit 1", [automation.organization_id]);
+      targetId = fallback.rows[0]?.id || null;
+    }
+    if (!targetId) throw new Error("Configure o usuário responsável pelo atendimento.");
+    const target = await client.query("select id from users where id=$1 and organization_id=$2 and coalesce(access_status,'active')='active'", [targetId, automation.organization_id]);
+    if (!target.rowCount) throw new Error("O responsável pelo atendimento não pertence ao workspace ou está inativo.");
+    if (!source.client_id) return { action: "reassign_support", user_id: targetId, tickets: 0 };
+    const updated = await client.query("update tickets set assignee_id=$1,updated_at=now() where organization_id=$2 and client_id=$3 and status not in ('done','cancelled')", [targetId, automation.organization_id, source.client_id]);
+    return { action: "reassign_support", user_id: targetId, tickets: updated.rowCount || 0, client_id: source.client_id };
   }
   if (automation.action === "calculate_commission") {
     const baseAmount = Math.max(0, Number(source.total_value || source.value || config.base_amount || 0));
