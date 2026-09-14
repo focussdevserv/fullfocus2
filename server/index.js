@@ -226,8 +226,8 @@ app.get("/api/audit_events", async (req, res) => {
 });
 app.use("/api", async (req, res, next) => {
   const [, table] = req.path.split("/");
-  if (req.method !== "POST" || !["contacts", "companies", "clients"].includes(table)) return next();
-  const fields = ["document", "email", "phone"], values = fields.map((key) => normalizeIdentity(key, req.body?.[key]));
+  if (req.method !== "POST" || !["contacts", "companies", "clients", "leads"].includes(table)) return next();
+  const fields = table === "leads" ? ["email", "phone"] : ["document", "email", "phone"], values = fields.map((key) => normalizeIdentity(key, req.body?.[key]));
   if (!values.some(Boolean)) return next();
   const conditions = fields.map((key, index) => `${key}=$${index + 2}`).join(" or ");
   try {
