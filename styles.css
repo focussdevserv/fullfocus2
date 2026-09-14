@@ -1254,3 +1254,11 @@ body.dark-mode .dialog-field input, body.dark-mode .dialog-field select, body.da
 .priorities-card .priority-text strong, .priorities-card .priority-text small, .activity-card .activity-item strong, .activity-card .activity-item small, .agenda-card .agenda-item strong, .agenda-card .agenda-item small { color: #fff; }
 .priorities-card .task-progress > div { background: rgb(255 255 255 / 22%); }
 .priorities-card .task-progress i { background: #f3132d; }
+
+.app-sidebar {
+  background-color: #050b18;
+  background-image: linear-gradient(180deg, rgb(3 8 18 / 98%) 0%, rgb(3 8 18 / 84%) 52%, rgb(3 8 18 / 42%) 100%), url("assets/menu-spider.png");
+  background-position: center, center bottom;
+  background-repeat: no-repeat;
+  background-size: cover, 94% auto;
+}
