@@ -1,0 +1,15 @@
+alter table events add column if not exists event_type text default 'other';
+alter table events add column if not exists status text default 'pending';
+alter table events add column if not exists ends_at timestamptz;
+alter table events add column if not exists all_day boolean default false;
+alter table events add column if not exists client_id bigint references clients(id) on delete set null;
+alter table events add column if not exists project_id bigint references projects(id) on delete set null;
+alter table events add column if not exists contract_id bigint references contracts(id) on delete set null;
+alter table events add column if not exists location text;
+alter table events add column if not exists color text;
+alter table events add column if not exists participants text;
+alter table events add column if not exists meeting_notes text;
+alter table events add column if not exists reminder_channels text;
+alter table events add column if not exists recurrence_until date;
+create index if not exists idx_events_org_client on events(organization_id, client_id);
+create index if not exists idx_events_org_project on events(organization_id, project_id);
