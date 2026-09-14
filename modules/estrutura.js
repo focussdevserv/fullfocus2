@@ -90,3 +90,31 @@ const operationActionObserver = new MutationObserver(async () => {
 });
 operationActionObserver.observe(dashboardGrid, { childList: true, subtree: true });
 registerRoutes(Object.fromEntries(Object.keys(labels).map((key) => [key, () => renderEstrutura(key)])));
+
+/* A lista estruturada tambÃ©m precisa permitir manutenÃ§Ã£o dos registros. */
+const structuredMutationObserver = new MutationObserver(async () => {
+  const key = location.hash.replace(/^#/, "");
+  const kind = recordCreateKind[key];
+  if (!kind || ["auditoria", "lixeira"].includes(key)) return;
+  const list = dashboardGrid.querySelector(".automation-list");
+  if (!list || list.dataset.maintenanceActions === "1") return;
+  list.dataset.maintenanceActions = "1";
+  try {
+    const table = labels[key][1], rows = ((await api(`/api/${table}`))[table] || []);
+    list.querySelectorAll("article").forEach((article, index) => {
+      const row = rows[index]; if (!row) return;
+      const actions = document.createElement("span"); actions.className = "structured-actions";
+      const edit = document.createElement("button"); edit.type = "button"; edit.className = "compact-action"; edit.textContent = "Editar";
+      edit.addEventListener("click", () => openEditDialog(kind, row, `/api/${table}/${row.id}`));
+      const remove = document.createElement("button"); remove.type = "button"; remove.className = "compact-action"; remove.textContent = "Excluir";
+      remove.addEventListener("click", async () => {
+        if (remove.dataset.confirm !== "1") { remove.dataset.confirm = "1"; remove.textContent = "Confirmar"; return; }
+        remove.disabled = true;
+        try { await api(`/api/${table}/${row.id}`, { method: "DELETE" }); renderEstrutura(key); }
+        catch (error) { remove.disabled = false; remove.textContent = error.message; }
+      });
+      actions.append(edit, remove); article.append(actions);
+    });
+  } catch {}
+});
+structuredMutationObserver.observe(dashboardGrid, { childList: true, subtree: true });
