@@ -30,6 +30,11 @@ export function register(app, ctx) {
       res.json({ members: members.rows[0] || {}, tasks: tasks.rows[0] || {}, projects_by_responsible: projects.rows, hours: hours.rows[0] || {}, tickets: tickets.rows[0] || {}, upcoming_events: events.rows, absences: absences.rows });
     } catch { res.status(503).json({ error: "Não foi possível carregar o painel da equipe." }); }
   });
+  app.use("/api/team/:id/profile", async (req, res, next) => {
+    if (req.method !== "PATCH" || !req.body?.manager_id) return next();
+    const org = tenant(req, res); if (!org) return;
+    try { const q = await pool.query("select id from users where id=$1 and organization_id=$2", [req.body.manager_id, org]); if (!q.rowCount) return res.status(400).json({ error: "O gestor informado não pertence ao workspace." }); return next(); } catch { return res.status(503).json({ error: "Não foi possível validar o gestor." }); }
+  });
   app.patch("/api/team/:id/profile", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     if (String(req.params.id) !== String(req.user?.id) && !(await authorized(req, org))) return res.status(403).json({ error: "Você não tem permissão." });
