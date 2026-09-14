@@ -128,7 +128,7 @@ export function register(app, ctx) {
       const q = await pool.query("select * from integrations where id=$1 and organization_id=$2", [req.params.id, org]);
       if (!q.rowCount) return res.status(404).json({ error: "Integração não encontrada." });
       const integration = q.rows[0];
-      if (integration.provider !== "webhook") return res.json({ ok: true, status: 200 });
+      if (integration.provider !== "webhook") return res.status(409).json({ error: "Este provedor ainda não possui um teste de conexão implementado." });
       let target; try { target = await assertSafeOutboundUrl(integration.config?.url); } catch (error) { return res.status(400).json({ error: error.message || "URL de webhook inválida." }); }
       const response = await fetch(target, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: "test" }), redirect: "manual", signal: AbortSignal.timeout(5000) });
       res.json({ ok: response.ok, status: response.status });
