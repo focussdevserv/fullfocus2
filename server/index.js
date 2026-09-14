@@ -163,6 +163,17 @@ app.use("/api", async (req, res, next) => {
     return next();
   } catch { return res.status(503).json({ error: "Não foi possível aplicar a visibilidade do cargo." }); }
 });
+app.use("/api", (req, res, next) => {
+  if (!["POST", "PATCH"].includes(req.method)) return next();
+  const [, table] = req.path.split("/");
+  if (!["contacts", "companies", "clients"].includes(table)) return next();
+  const email = normalizeIdentity("email", req.body?.email);
+  if (email && !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: "email is invalid." });
+  const document = normalizeIdentity("document", req.body?.document);
+  if (document && ((table === "companies" && document.length !== 14) || (table === "clients" && ![11, 14].includes(document.length)))) return res.status(400).json({ error: "document is invalid." });
+  if (table === "clients" && req.body?.status !== undefined && !["lead", "prospecting", "active", "inactive", "blocked", "churned", "onboarding", "maintenance", "delinquent", "closed"].includes(String(req.body.status))) return res.status(400).json({ error: "status is invalid." });
+  return next();
+});
 Object.keys(entities).forEach(createCrud);
 
 app.get("/api/dashboard", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const [tasks, leads, projects, revenue] = await Promise.all([pool.query("select count(*)::int total from tasks where organization_id=$1 and status <> 'done'", [org]), pool.query("select count(*)::int total from leads where organization_id=$1 and status <> 'won'", [org]), pool.query("select count(*)::int total from projects where organization_id=$1 and status='active'", [org]), pool.query("select coalesce(sum(amount),0) total from revenues where organization_id=$1 and paid_at >= date_trunc('month',current_date)", [org])]); res.json({ tasks: tasks.rows[0].total, leads: leads.rows[0].total, projects: projects.rows[0].total, revenue: revenue.rows[0].total }); } catch { res.status(503).json({ error: "Não foi possível carregar o dashboard." }); } });
