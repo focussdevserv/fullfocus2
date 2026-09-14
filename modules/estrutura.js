@@ -47,4 +47,19 @@ const approvalActionsObserver = new MutationObserver(async () => {
   } catch {}
 });
 approvalActionsObserver.observe(dashboardGrid, { childList: true, subtree: true });
+const briefingLinkObserver = new MutationObserver(async () => {
+  if (location.hash.replace(/^#/, "") !== "briefings") return;
+  const list = dashboardGrid.querySelector(".automation-list");
+  if (!list || list.dataset.briefingLinks === "1") return;
+  list.dataset.briefingLinks = "1";
+  try {
+    const rows = (await api("/api/briefings")).briefings || [];
+    list.querySelectorAll("article").forEach((article, index) => {
+      const briefing = rows[index]; if (!briefing || briefing.status === "answered") return;
+      const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = briefing.public_token ? "Copiar link" : "Gerar link";
+      button.addEventListener("click", async () => { button.disabled = true; try { const data = briefing.public_token ? { path: `/briefing/${briefing.public_token}` } : await (await fetch(`/api/briefings/${briefing.id}/public-link`, { method: "POST", credentials: "same-origin" })).json(); if (!data.path) throw new Error(data.error || "Não foi possível gerar o link."); await navigator.clipboard?.writeText(`${location.origin}${data.path}`); button.textContent = "Link copiado"; toast("Link do briefing copiado.", "success"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); article.append(button);
+    });
+  } catch {}
+});
+briefingLinkObserver.observe(dashboardGrid, { childList: true, subtree: true });
 registerRoutes(Object.fromEntries(Object.keys(labels).map((key) => [key, () => renderEstrutura(key)])));
