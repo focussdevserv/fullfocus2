@@ -657,12 +657,23 @@ window.addEventListener("load", () => {
 
 /* Chamada de API autenticada (cookie same-origin) com erro legível em pt-BR. */
 async function api(path, { method = "GET", body, headers } = {}) {
-  const response = await fetch(path, {
-    method,
-    credentials: "same-origin",
-    headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      method,
+      credentials: "same-origin",
+      headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // fetch() em si falhou (rede caiu, DNS, conexão recusada) — não chegou nem a ter resposta do servidor.
+    // Mesmo tratamento do 5xx sem corpo: avisa e tenta de novo sozinho em telas de leitura.
+    const error = new Error("Não foi possível conectar ao servidor. Verifique sua internet — tentando de novo em instantes…");
+    error.status = 0;
+    error.transient = true;
+    if (method === "GET") scheduleTransientRetry();
+    throw error;
+  }
   const data = response.status === 204 ? {} : await response.json().catch(() => null);
   if (!response.ok) {
     // Resposta sem JSON em 5xx = servidor reiniciando (deploy) ou proxy indisponível: avisa e tenta de novo sozinho.
