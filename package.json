@@ -7,7 +7,8 @@
     "start": "node server/index.js",
     "test": "node --test",
     "check": "node scripts/check.mjs",
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "bump": "node scripts/bump-assets.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
