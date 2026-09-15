@@ -126,6 +126,11 @@ function setStatus(element, message = "", type = "success") {
   element.dataset.type = type;
 }
 
+/* Compatibilidade para módulos legados que usam toast(...) diretamente. */
+function toast(...args) {
+  return ui.toast(...args);
+}
+
 function setFieldError(input, message = "") {
   const field = input.closest(".field");
   const error = field.querySelector(".field-error");
