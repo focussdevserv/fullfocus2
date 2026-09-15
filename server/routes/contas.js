@@ -71,7 +71,7 @@ export function register(app, ctx) {
       const related = table === "contacts"
         ? await Promise.all([
           pool.query("select id,name,status,company_id,contact_id from clients where organization_id=$1 and contact_id=$2", [org, id]),
-          pool.query("select id,name,status,next_action_at from leads where organization_id=$1 and contact_id=$2 order by created_at desc", [org, id]),
+          pool.query("select id,name,status,created_at from leads where organization_id=$1 and contact_id=$2 order by created_at desc", [org, id]),
           pool.query("select id,name,stage,amount,status from opportunities where organization_id=$1 and contact_id=$2 order by created_at desc", [org, id]),
           pool.query("select id,subject,channel,status,last_message_at from conversations where organization_id=$1 and contact_id=$2 order by last_message_at desc nulls last limit 20", [org, id]),
           pool.query("select id,action,entity_type,entity_id,changes,created_at from audit_events where organization_id=$1 and ((entity_type='contacts' and entity_id=$2) or (entity_type='leads' and entity_id in (select id from leads where organization_id=$1 and contact_id=$2))) order by created_at desc limit 30", [org, id]),
