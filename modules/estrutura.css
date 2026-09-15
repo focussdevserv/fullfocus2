@@ -32,3 +32,5 @@
 @media (max-width: 900px) { .change-summary, .delivery-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 780px) { .approval-workspace-grid, .vault-summary, .vault-grid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .change-summary, .delivery-summary, .change-list .finance-toolbar, .delivery-list .finance-toolbar { grid-template-columns: 1fr; } .change-row-main, .delivery-row-main { flex-direction: column; gap: 10px; } .change-impact { text-align: left; } }
+/* Cartão ímpar sobrando no fim da grade de aprovações ocupa a largura toda. */
+.approval-workspace-grid > .approval-workspace-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
