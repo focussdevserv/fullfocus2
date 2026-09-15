@@ -40,10 +40,7 @@ const searchResults = $("search-results");
 const dashboardGrid = document.querySelector(".dashboard-grid");
 const initialDashboardMarkup = dashboardGrid?.innerHTML || "";
 const notificationButton = document.querySelector(".notification-button");
-const themeButton = document.createElement("button"); themeButton.className = "theme-toggle"; themeButton.type = "button"; themeButton.setAttribute("aria-label", "Alternar tema"); themeButton.textContent = document.body.classList.contains("dark-mode") ? "☾" : "☀"; document.querySelector(".topbar-actions")?.insertBefore(themeButton, document.querySelector(".create-menu-wrap"));
 const notificationPanel = document.createElement("div"); notificationPanel.className = "notification-panel"; notificationPanel.hidden = true; notificationPanel.innerHTML = '<div class="section-heading"><h2>Notificações</h2><button type="button" class="notification-close" aria-label="Fechar">×</button></div><div class="notification-list" aria-live="polite"></div><button type="button" class="text-action notification-read-all">Marcar todas como lidas</button>'; document.body.append(notificationPanel);
-const THEME_KEY = "focusdev_theme_v2";
-themeButton.addEventListener("click", () => { document.body.classList.toggle("dark-mode"); localStorage.setItem(THEME_KEY, document.body.classList.contains("dark-mode") ? "dark" : "light"); themeButton.textContent = document.body.classList.contains("dark-mode") ? "☾" : "☀"; });
 notificationButton?.addEventListener("click", async () => { notificationPanel.hidden = !notificationPanel.hidden; if (!notificationPanel.hidden) await refreshInternalNotifications(); }); notificationPanel.querySelector(".notification-close").addEventListener("click", () => { notificationPanel.hidden = true; });
 const notificationTime = (value) => value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
 async function refreshInternalNotifications() {
@@ -509,13 +506,14 @@ createDialog.innerHTML = '<form class="create-dialog" id="create-dialog-form"><b
 document.body.append(createDialog);
 const dialogForm = $("create-dialog-form"), dialogFields = $("dialog-fields"), dialogTitle = $("dialog-title"), dialogStatus = $("dialog-status");
 function closeCreateDialog() { createDialog.hidden = true; dialogForm.reset(); dialogStatus.textContent = ""; }
-function openCreateDialog(kind) { const config = createConfig[kind]; if (!config) return; dialogTitle.textContent = config.title; dialogFields.innerHTML = config.fields.map((field) => { const required = field.required === false ? "" : " required"; const ariaRequired = field.required === false ? "" : " aria-required=\"true\""; if (field.type === "select") return `<label class="dialog-field">${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}"${ariaRequired}>${field.options.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}</select></label>`; if (field.type === "textarea") return `<label class="dialog-field">${escapeHtml(field.label)}<textarea name="${escapeHtml(field.name)}" rows="${field.rows || 4}" placeholder="${escapeHtml(field.placeholder || "")}"${required}${ariaRequired}></textarea></label>`; if (field.type === "checkbox") return `<label class="dialog-field dialog-check"><input name="${escapeHtml(field.name)}" type="checkbox" value="true" />${escapeHtml(field.label)}</label>`; return `<label class="dialog-field">${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || "text")}" placeholder="${escapeHtml(field.placeholder || "")}"${required}${ariaRequired} /></label>`; }).join(""); dialogForm.dataset.kind = kind; delete dialogForm.dataset.method; delete dialogForm.dataset.endpoint; createDialog.hidden = false; dialogFields.querySelector("input, select, textarea")?.focus(); }
-function openEditDialog(kind, item, endpoint) { openCreateDialog(kind); dialogTitle.textContent = item?.id ? `Editar ${createConfig[kind]?.title?.replace(/^Novo\s+/i, "").toLowerCase() || "registro"}` : kind === "evento" ? "Editar evento" : "Editar tarefa"; dialogForm.dataset.method = "PATCH"; dialogForm.dataset.endpoint = endpoint; Object.entries(item).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (!field || value == null) return; if (field.type === "checkbox") { field.checked = value === true || value === "true" || value === 1; return; } const date = new Date(value); field.value = field.type === "datetime-local" && !Number.isNaN(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : field.type === "date" && !Number.isNaN(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : value; }); }
+function openCreateDialog(kind) { const config = createConfig[kind]; if (!config) return; dialogTitle.textContent = config.title; $("dialog-kicker").textContent = "Novo registro"; dialogFields.innerHTML = config.fields.map((field) => { const required = field.required === false ? "" : " required"; const ariaRequired = field.required === false ? "" : " aria-required=\"true\""; if (field.type === "select") return `<label class="dialog-field">${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}"${ariaRequired}>${field.options.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}</select></label>`; if (field.type === "textarea") return `<label class="dialog-field">${escapeHtml(field.label)}<textarea name="${escapeHtml(field.name)}" rows="${field.rows || 4}" placeholder="${escapeHtml(field.placeholder || "")}"${required}${ariaRequired}></textarea></label>`; if (field.type === "checkbox") return `<label class="dialog-field dialog-check"><input name="${escapeHtml(field.name)}" type="checkbox" value="true" />${escapeHtml(field.label)}</label>`; return `<label class="dialog-field">${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || "text")}" placeholder="${escapeHtml(field.placeholder || "")}"${required}${ariaRequired} /></label>`; }).join(""); dialogForm.dataset.kind = kind; delete dialogForm.dataset.method; delete dialogForm.dataset.endpoint; createDialog.hidden = false; dialogFields.querySelector("input, select, textarea")?.focus(); }
+function openEditDialog(kind, item, endpoint) { openCreateDialog(kind); const label = item?.id ? (createConfig[kind]?.title?.replace(/^Nov[oa]\s+/i, "") || "registro") : kind === "evento" ? "evento" : "tarefa"; dialogTitle.textContent = `Editar ${label}`; $("dialog-kicker").textContent = `Editar ${label}`; dialogForm.dataset.method = "PATCH"; dialogForm.dataset.endpoint = endpoint; Object.entries(item).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (!field || value == null) return; if (field.type === "checkbox") { field.checked = value === true || value === "true" || value === 1; return; } const date = new Date(value); field.value = field.type === "datetime-local" && !Number.isNaN(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : field.type === "date" && !Number.isNaN(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : value; }); }
 function openSubtaskDialog(task) { openCreateDialog("tarefa"); dialogTitle.textContent = `Nova subtarefa · ${task.title}`; dialogFields.insertAdjacentHTML("beforeend", `<input type="hidden" name="parent_id" value="${escapeHtml(String(task.id))}" />`); const status = dialogFields.querySelector('[name="status"]'); if (status) status.value = "todo"; }
 document.querySelectorAll(".create-menu a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); createMenu.hidden = true; createMenuTrigger?.setAttribute("aria-expanded", "false"); const text = link.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
 document.querySelectorAll(".quick-actions button").forEach((button) => button.addEventListener("click", () => { const text = button.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
 dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); const config = createConfig[dialogForm.dataset.kind]; const payload = Object.fromEntries(new FormData(dialogForm)); dialogForm.querySelectorAll('input[type="checkbox"]').forEach((input) => { payload[input.name] = input.checked; }); if (payload.amount) payload.amount = payload.amount.replace(",", "."); dialogForm.querySelectorAll('input[type="datetime-local"]').forEach((input) => { if (input.value) payload[input.name] = new Date(input.value).toISOString(); }); Object.keys(payload).forEach((key) => { if (payload[key] === "") delete payload[key]; }); const submit = dialogForm.querySelector("[type=submit]"); submit.disabled = true; dialogStatus.textContent = "Salvando..."; try { const method = dialogForm.dataset.method || "POST", endpoint = dialogForm.dataset.endpoint || config.endpoint; const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); closeCreateDialog(); /* Re-renderiza a tela atual (qualquer módulo) e atualiza o painel inicial. */ renderHashRoute(window.location.hash); if ((!window.location.hash || window.location.hash === "#inicio") && !routeRenderers.inicio) await syncDashboard(); } catch (error) { dialogStatus.textContent = error.message; } finally { submit.disabled = false; } });
 dialogForm.querySelector(".dialog-close").addEventListener("click", closeCreateDialog); $("dialog-cancel").addEventListener("click", closeCreateDialog);
+createDialog.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault(); closeCreateDialog(); } });
 
 document.addEventListener("click", (event) => {
   if (topAccountDropdown && !topAccountDropdown.hidden && !event.target.closest(".account-menu")) closeAccountMenu();
@@ -747,7 +745,9 @@ function renderWorkspaceView(hash, label) {
 
 
 const searchableItems = [...document.querySelectorAll(".nav-item")];
-function renderSearchResults(query) {
+let searchTimer;
+let searchRequest = 0;
+async function renderSearchResults(query) {
   const normalized = query.trim().toLocaleLowerCase("pt-BR");
   if (!normalized) {
     searchResults.hidden = true;
@@ -755,13 +755,29 @@ function renderSearchResults(query) {
     return;
   }
   const matches = searchableItems.filter((item) => item.textContent.toLocaleLowerCase("pt-BR").includes(normalized)).slice(0, 6);
-  searchResults.innerHTML = matches.length
-    ? matches.map((item) => `<a href="${item.getAttribute("href")}">${item.textContent.trim()}</a>`).join("")
-    : '<span style="display:block;padding:10px;color:#6d7f95;font-size:12px">Nenhum resultado encontrado.</span>';
+  const request = ++searchRequest;
+  searchResults.hidden = false;
+  searchResults.innerHTML = '<span style="display:block;padding:10px;color:#6d7f95;font-size:12px">Buscando...</span>';
+  const sources = [
+    ["clientes", "/api/clients", "clients", "name", "#clientes"],
+    ["contatos", "/api/contacts", "contacts", "name", "#contatos"],
+    ["tarefas", "/api/tasks", "tasks", "title", "#tarefas"],
+    ["projetos", "/api/projects", "projects", "name", "#projetos"]
+  ];
+  const responses = await Promise.allSettled(sources.map(([, path]) => api(`${path}?search=${encodeURIComponent(query.trim())}&limit=8`)));
+  if (request !== searchRequest || globalSearch.value.trim() !== query.trim()) return;
+  const records = responses.flatMap((result, index) => {
+    if (result.status !== "fulfilled") return [];
+    const [type, , key, field, href] = sources[index];
+    return (result.value?.[key] || []).map((item) => ({ type, label: item[field] || `#${item.id}`, href })).filter((item) => item.label.toLocaleLowerCase("pt-BR").includes(normalized));
+  });
+  const navHtml = matches.map((item) => `<a href="${escapeHtml(item.getAttribute("href"))}">${escapeHtml(item.textContent.trim())}</a>`).join("");
+  const recordHtml = records.slice(0, 8).map((item) => `<a href="${item.href}" data-search-record="true"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.type)}</small></a>`).join("");
+  searchResults.innerHTML = navHtml + recordHtml || '<span style="display:block;padding:10px;color:#6d7f95;font-size:12px">Nenhum resultado encontrado.</span>';
   searchResults.hidden = false;
 }
 
-globalSearch?.addEventListener("input", () => renderSearchResults(globalSearch.value));
+globalSearch?.addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { void renderSearchResults(globalSearch.value); }, 180); });
 globalSearch?.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     globalSearch.value = "";
@@ -892,7 +908,7 @@ const baseOpenEditDialog = openEditDialog;
 openEditDialog = function openEditDialogWithCorrectTitle(kind, item, endpoint) {
   baseOpenEditDialog(kind, item, endpoint);
   const title = createConfig[kind]?.title;
-  if (title) dialogTitle.textContent = title.replace(/^Novo\s+/i, "Editar ");
+  if (title) dialogTitle.textContent = title.replace(/^Nov[oa]\s+/i, "Editar ");
   Object.entries(item || {}).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field?.type === "checkbox") field.checked = value === true || value === "true" || value === "on"; });
 };
 dialogForm.addEventListener("formdata", (event) => {

@@ -266,9 +266,12 @@ function renderPulse({ opportunities, tasks, events }) {
 function renderPriorities(tasks) {
   const card = dashboardGrid.querySelector(".priorities-card");
   if (!card) return;
-  const list = card.querySelector(".priority-list"), count = card.querySelector(".task-count");
+  const list = card.querySelector(".priority-list"), count = card.querySelector(".task-count"), progress = card.querySelector(".task-progress strong"), progressBar = card.querySelector(".task-progress i");
   if (!tasks) { list.innerHTML = stateBlock.error("Não foi possível carregar as tarefas.", "inicio-retry"); list.querySelector(".inicio-retry")?.addEventListener("click", renderHome); if (count) count.textContent = "—"; return; }
   const open = tasks.filter((t) => t.status !== "done");
+  const done = tasks.length - open.length;
+  if (progress) progress.textContent = `${done} de ${tasks.length} concluída${done === 1 ? "" : "s"}`;
+  if (progressBar) progressBar.style.width = `${tasks.length ? (done / tasks.length) * 100 : 0}%`;
   const rank = (t) => (t.due_at ? new Date(t.due_at).getTime() : Number.MAX_SAFE_INTEGER);
   const items = open.sort((a, b) => rank(a) - rank(b)).slice(0, 6);
   if (count) count.textContent = `${plural(open.length, "tarefa", "tarefas")}`;
