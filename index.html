@@ -70,7 +70,24 @@
     <script type="module" src="modules/infraestrutura.js?v=11"></script>
     <script type="module" src="modules/gestao.js?v=13"></script>
     <script type="module" src="modules/configuracoes-enhanced.js?v=11"></script>
-    <script>if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));</script>
+    <script>
+      /* PWA: sem isso, uma aba já aberta continua rodando o JS antigo depois de um deploy,
+         mesmo com o service worker atualizado nos bastidores — só um F5 manual resolvia. */
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/service-worker.js").then((registration) => {
+            registration.update().catch(() => {});
+            setInterval(() => registration.update().catch(() => {}), 60 * 60 * 1000);
+          }).catch(() => {});
+        });
+        let refreshedOnce = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (refreshedOnce) return;
+          refreshedOnce = true;
+          window.location.reload();
+        });
+      }
+    </script>
   </head>
   <body>
     <script>try { if (localStorage.getItem("focusdev_theme_v2") !== "light") document.body.classList.add("dark-mode"); } catch { /* tema padrão */ }</script>
