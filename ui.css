@@ -23,12 +23,13 @@
 .ui-stat { display: grid; gap: 4px; padding: 16px 18px; border-radius: 14px; color: inherit; font: inherit; text-align: left; }
 button.ui-stat { cursor: pointer; }
 .ui-stat span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-.ui-stat strong { font-size: 24px; letter-spacing: -0.04em; }
+.ui-stat strong { font-size: 24px; letter-spacing: -0.04em; color: #eff5ff; }
 .ui-stat small { color: var(--muted); font-size: 11px; }
 .ui-stat.is-active { border-color: rgb(139 185 255 / 60%); }
 .ui-stat-red strong { color: #ff8a97; }
 .ui-stat-green strong { color: #55e0a6; }
 .ui-stat-orange strong { color: #ffc46b; }
+.ui-stat-blue strong { color: #8bb9ff; }
 
 .ui-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
 .ui-search { flex: 1 1 220px; min-width: 180px; }

@@ -318,11 +318,11 @@ body:not(.dark-mode) .state-error h2 { color: #c8102e; }
 .ticket-summary, .tasks-summary, .change-summary, .delivery-summary, .vault-summary { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
 .ticket-summary > .data-card, .tasks-summary > .data-card, .change-summary > .data-card, .delivery-summary > .data-card, .vault-summary > .data-card { display: grid; gap: 6px; align-content: start; padding: 18px 20px; }
 .ticket-summary > .data-card > span, .tasks-summary > .data-card > span, .change-summary > .data-card > span, .delivery-summary > .data-card > span, .vault-summary > .data-card > span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
-.ticket-summary > .data-card > strong, .tasks-summary > .data-card > strong, .change-summary > .data-card > strong, .delivery-summary > .data-card > strong, .vault-summary > .data-card > strong { font-size: 24px; letter-spacing: -0.04em; line-height: 1.1; }
+.ticket-summary > .data-card > strong, .tasks-summary > .data-card > strong, .change-summary > .data-card > strong, .delivery-summary > .data-card > strong, .vault-summary > .data-card > strong { font-size: 24px; letter-spacing: -0.04em; line-height: 1.1; color: #eff5ff; }
 .ticket-summary > .data-card > small, .change-summary > .data-card > small, .delivery-summary > .data-card > small, .vault-summary > .data-card > small { color: var(--muted); font-size: 11.5px; }
 .ui-stat, .finance-metric, .metric-card { display: grid; gap: 6px; align-content: start; padding: 18px 20px; }
 .finance-metric span:first-child, .metric-card span:first-child { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
-.finance-metric strong, .metric-card strong { font-size: 24px; letter-spacing: -0.04em; line-height: 1.1; }
+.finance-metric strong, .metric-card strong { font-size: 24px; letter-spacing: -0.04em; line-height: 1.1; color: #eff5ff; }
 /* O quadradinho de ícone do painel inicial só faz sentido quando há ícone; fora do Início ele some. */
 .metric-card:not(.metric-pink):not(.metric-blue):not(.metric-purple):not(.metric-orange)::before { display: none; }
 body:not([data-route="inicio"]) .metric-card { display: grid; min-height: 0; align-items: start; }
