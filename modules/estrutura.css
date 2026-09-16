@@ -29,8 +29,17 @@
 .change-row .finance-status.warning, .delivery-row .finance-status.warning { border-color: rgb(245 164 61 / 30%); background: rgb(245 164 61 / 12%); color: #f7bb62; }
 .change-row .finance-status.neutral, .delivery-row .finance-status.neutral { border-color: rgb(145 180 230 / 18%); background: rgb(145 180 230 / 8%); color: #a9bddd; }
 .delivery-row .finance-status.info { border-color: rgb(94 156 255 / 30%); background: rgb(94 156 255 / 12%); color: #7cafef; }
+.vault-card .section-heading > div, .vault-card .section-heading > div > div { min-width: 0; }
+.vault-card h3, .vault-card small, .vault-links span { min-width: 0; overflow-wrap: anywhere; }
+.vault-card h3 { text-wrap: balance; }
+.vault-secret-warning { margin: 0 0 14px; padding: 10px 12px; border: 1px solid rgb(245 164 61 / 30%); border-radius: 10px; background: rgb(245 164 61 / 10%); color: var(--muted); line-height: 1.5; }
 @media (max-width: 900px) { .change-summary, .delivery-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 780px) { .approval-workspace-grid, .vault-summary, .vault-grid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .change-summary, .delivery-summary, .change-list .finance-toolbar, .delivery-list .finance-toolbar { grid-template-columns: 1fr; } .change-row-main, .delivery-row-main { flex-direction: column; gap: 10px; } .change-impact { text-align: left; } }
 /* Cartão ímpar sobrando no fim da grade de aprovações ocupa a largura toda. */
 .approval-workspace-grid > .approval-workspace-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.approval-workspace-card button,.approval-workspace-card a{touch-action:manipulation}.approval-workspace-card button:focus-visible,.approval-workspace-card a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 55%,transparent);outline-offset:3px}.approval-inline-actions{display:flex;flex-wrap:wrap;gap:.45rem;min-width:0}
+.knowledge-reader{display:grid;gap:1rem}.knowledge-body{max-width:72ch;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;color:var(--text)}.knowledge-reader small{color:var(--muted)}
+.automation-list[data-structured-list] article{min-width:0;display:grid;grid-template-columns:minmax(0,2fr) minmax(7rem,1fr) minmax(9rem,auto);gap:.75rem;align-items:center}.automation-list[data-structured-list] article>*{min-width:0;overflow-wrap:anywhere}.automation-list[data-structured-list] article strong{font-weight:700}.automation-list[data-structured-list] .table-pagination{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}.automation-list[data-structured-list] .table-pagination button{touch-action:manipulation}.automation-list[data-structured-list] .table-pagination button:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 55%,transparent);outline-offset:2px}
+@media(max-width:640px){.automation-list[data-structured-list] article{grid-template-columns:1fr;gap:.35rem}.automation-list[data-structured-list] .table-pagination{justify-content:space-between}.automation-list[data-structured-list] .table-pagination button{flex:1}}
+.automation-list[data-structured-list] .structured-row-main{display:grid;gap:4px;min-width:0}.automation-list[data-structured-list] .structured-row-main span{color:var(--muted);font-size:11px}.automation-list[data-structured-list] .structured-row small{color:var(--muted);font-size:11px}

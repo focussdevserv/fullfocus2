@@ -27,12 +27,12 @@
     const submit = document.createElement("button"); submit.type = "submit"; submit.className = "button button-primary"; submit.textContent = labels[kind];
     const status = document.createElement("output"); status.setAttribute("role", "status"); form.append(submit, status); article.append(form);
     form.addEventListener("submit", async (event) => {
-      event.preventDefault(); submit.disabled = true; status.textContent = "Registrando...";
+      event.preventDefault(); submit.disabled = true; submit.setAttribute("aria-busy", "true"); status.textContent = "Registrando…";
       try {
         const response = await fetch(`${apiPath}/${kind === "proposal" ? "proposals" : "deliveries"}/${item.id}/approve`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
         const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível registrar a aprovação.");
         text(status, "Aprovação registrada."); article.replaceChildren(status); if (!list.children.length) card.hidden = true;
-      } catch (error) { status.textContent = error.message; submit.disabled = false; }
+      } catch (error) { status.textContent = error.message; submit.disabled = false; submit.removeAttribute("aria-busy"); }
     });
     return article;
   };

@@ -33,6 +33,8 @@
 .crm-followup time { color: #8bb9ff; font-size: 11.5px; font-weight: 700; }
 .crm-followup strong { display: block; font-size: 13px; }
 .crm-followup small { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-followup > div { min-width: 0; }
+.crm-followup button, .crm-check, .crm-inline-select { touch-action: manipulation; }
 .crm-followup.is-late { border-left: 3px solid #ff8a97; }
 .crm-followup.is-late time { color: #ff8a97; }
 .crm-followup.is-done { opacity: 0.55; }
@@ -55,8 +57,9 @@
 .crm-column-body { display: grid; gap: 6px; align-content: start; }
 .crm-column.is-drop-target { outline: 2px dashed var(--blue); outline-offset: 2px; }
 .crm-column-green h3 { color: #55e0a6; } .crm-column-red h3 { color: #ff8a97; } .crm-column-orange h3 { color: #ffc46b; } .crm-column-purple h3 { color: #c8b3ff; } .crm-column-blue h3 { color: #8bb9ff; }
-.crm-opp-card { display: grid; gap: 3px; padding: 10px; border: 1px solid rgb(145 180 230 / 20%); border-radius: 10px; background: rgb(13 79 194 / 12%); cursor: grab; }
-.crm-opp-card strong { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-opp-card { display: grid; gap: 3px; min-width: 0; padding: 10px; border: 1px solid rgb(145 180 230 / 20%); border-radius: 10px; background: rgb(13 79 194 / 12%); cursor: grab; touch-action: manipulation; }
+.crm-opp-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.crm-opp-card strong { font-size: 12.5px; overflow-wrap: anywhere; }
 .crm-opp-card b { font-size: 13px; }
 .crm-opp-card small { color: var(--muted); font-size: 10.5px; }
 .crm-opp-card.is-dragging { opacity: 0.5; }
@@ -78,4 +81,4 @@
 
 @media (max-width: 1100px) { .crm-kanban { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .crm-hub-grid { grid-template-columns: 1fr; } .crm-followup { grid-template-columns: auto minmax(0, 1fr); } .crm-followup time, .crm-followup > span { grid-column: 2; } .crm-item { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 640px) { .crm-kanban { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .crm-kanban { grid-template-columns: 1fr; } .crm-funnel-row { grid-template-columns: minmax(90px, auto) minmax(0, 1fr) auto; } .crm-funnel-row small { grid-column: 3; } .crm-followup { gap: 8px; } }

@@ -74,6 +74,9 @@
 .tasks-kanban-card small.is-late { color: #ff8a97; }
 .tasks-kanban-card small.is-today { color: #ffd38a; }
 .tasks-card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.tasks-kanban-status { max-width: 130px; padding: 5px 7px; border: 1px solid rgb(145 180 230 / 24%); border-radius: 7px; background: rgb(255 255 255 / 4%); color: inherit; font: inherit; font-size: 10px; }
+.tasks-kanban-status:focus-visible { outline: 0; border-color: var(--blue); box-shadow: var(--focus-ring); }
+.tasks-kanban-status option { color: #0f1f45; }
 .tasks-column-empty { margin: 8px 0; color: var(--muted); font-size: 11px; text-align: center; }
 
 .tasks-empty { display: grid; gap: 8px; justify-items: start; padding: 28px 4px; }

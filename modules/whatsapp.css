@@ -88,3 +88,10 @@
   .wa-grid { grid-template-columns: 1fr; }
   .wa-qr { grid-template-columns: 1fr; justify-items: center; text-align: center; }
 }
+
+.wa-form input:focus-visible, .wa-form textarea:focus-visible {
+  outline: 3px solid rgb(71 136 241 / 72%);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+.wa-form button { touch-action: manipulation; }

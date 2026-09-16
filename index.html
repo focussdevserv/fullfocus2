@@ -90,7 +90,9 @@
     </script>
   </head>
   <body>
-    <script>try { localStorage.removeItem("focusdev_theme_v2"); } catch { /* tema padrão */ } document.body.classList.add("dark-mode");</script>
+    <script>(function () { const media = window.matchMedia?.("(prefers-color-scheme: dark)"), color = document.querySelector('meta[name="theme-color"]'); const applyTheme = () => { let theme = "dark"; try { theme = localStorage.getItem("focusdev_theme_v2") || "dark"; } catch { /* usa o padrão */ } const isDark = theme === "dark" || (theme === "system" && Boolean(media?.matches)); document.body.classList.toggle("dark-mode", isDark); if (color) color.content = isDark ? "#050b18" : "#f5f7fb"; }; applyTheme(); media?.addEventListener?.("change", applyTheme); })();</script>
+    <a class="skip-link" href="#app-content">Pular para o conteúdo principal</a>
+
     <!-- ===================== Login / redefinição de senha ===================== -->
     <main class="login-shell" id="login-shell">
       <section class="hero" id="hero" data-scene="login" aria-label="FocusDev">
@@ -140,7 +142,7 @@
                   name="email"
                   type="email"
                   autocomplete="email"
-                  placeholder="nome@empresa.com"
+                  placeholder="nome@empresa.com…"
                   aria-describedby="email-error"
                   required
                 />
@@ -160,7 +162,7 @@
                   name="password"
                   type="password"
                   autocomplete="current-password"
-                  placeholder="Sua senha"
+                  placeholder="Sua senha…"
                   aria-describedby="password-error"
                   required
                 />
@@ -205,10 +207,10 @@
           <button class="link-button back-link" id="register-back" type="button">← Voltar para o login</button>
           <header class="auth-heading"><h1>Crie sua conta</h1><p>Comece a organizar seus projetos com foco.</p></header>
           <form class="form register-form" id="register-form" novalidate>
-            <div class="field"><label for="register-name">Nome</label><div class="control"><input id="register-name" type="text" placeholder="Seu nome completo" autocomplete="name" required /></div><p class="field-error"></p></div>
-            <div class="field"><label for="register-email">E-mail</label><div class="control"><input id="register-email" type="email" placeholder="nome@empresa.com" autocomplete="email" required /></div><p class="field-error"></p></div>
+            <div class="field"><label for="register-name">Nome</label><div class="control"><input id="register-name" type="text" placeholder="Seu nome completo…" autocomplete="name" required /></div><p class="field-error"></p></div>
+            <div class="field"><label for="register-email">E-mail</label><div class="control"><input id="register-email" type="email" placeholder="nome@empresa.com…" autocomplete="email" required /></div><p class="field-error"></p></div>
             <div class="field"><label for="register-password">Senha</label><div class="control"><input id="register-password" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" required /></div><p class="field-error"></p></div>
-            <div class="field"><label for="register-confirm">Confirmar senha</label><div class="control"><input id="register-confirm" type="password" placeholder="Repita sua senha" autocomplete="new-password" required /></div><p class="field-error"></p></div>
+            <div class="field"><label for="register-confirm">Confirmar senha</label><div class="control"><input id="register-confirm" type="password" placeholder="Repita sua senha…" autocomplete="new-password" required /></div><p class="field-error"></p></div>
             <button class="button button-primary" id="register-submit" type="submit"><span class="button-label">Criar conta</span><span class="button-spinner" aria-hidden="true"></span></button>
             <p class="form-status" id="register-status" role="status" aria-live="polite"></p>
           </form>
@@ -265,7 +267,7 @@
                   name="reset-email"
                   type="email"
                   autocomplete="email"
-                  placeholder="nome@empresa.com"
+                  placeholder="nome@empresa.com…"
                   aria-describedby="reset-email-error"
                   required
                 />
@@ -374,16 +376,16 @@
 
       <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
 
-      <section class="app-content" aria-label="Área de trabalho">
+      <section class="app-content" id="app-content" aria-label="Área de trabalho" tabindex="-1">
         <header class="app-topbar">
           <div>
             <p class="eyebrow">Meu dia</p>
-            <h1 id="app-title" tabindex="-1">Bom dia, FocusDev</h1>
+          <h1 id="app-title" tabindex="-1" aria-live="polite">Bom dia, FocusDev</h1>
           </div>
           <div class="topbar-actions">
             <label class="global-search">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
-              <input id="global-search" type="search" placeholder="Buscar no workspace" autocomplete="off" />
+              <input id="global-search" type="search" placeholder="Buscar no workspace…" aria-label="Buscar no workspace" autocomplete="off" />
               <kbd>⌘ K</kbd>
             </label>
             <button class="notification-button" type="button" aria-label="Ver notificações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span aria-hidden="true"></span></button>
@@ -408,7 +410,7 @@
         </header>
 
         <div class="dashboard-grid">
-          <section class="welcome-card dashboard-hero"><div class="hero-message"><p class="card-kicker">Visão geral <span class="live-pill"><i></i> Ao vivo</span></p><h2>Foco no que move o negócio.</h2><p>Tenha clareza sobre suas prioridades e avance no que realmente importa hoje.</p><div class="hero-actions"><button class="button button-light" type="button">Ver prioridades</button><button class="hero-link" type="button">Como funciona <span>→</span></button></div></div><div class="hero-weather" id="hero-weather" aria-live="polite"><span class="weather-symbol">☼</span><div><small>Clima agora</small><strong id="weather-temperature">Buscando...</strong><span id="weather-summary">Sua localização</span></div></div></section>
+          <section class="welcome-card dashboard-hero"><div class="hero-message"><p class="card-kicker">Visão geral <span class="live-pill"><i></i> Ao vivo</span></p><h2>Foco no que move o negócio.</h2><p>Tenha clareza sobre suas prioridades e avance no que realmente importa hoje.</p><div class="hero-actions"><button class="button button-light" type="button">Ver prioridades</button><button class="hero-link" type="button">Como funciona <span>→</span></button></div></div><div class="hero-weather" id="hero-weather" aria-live="polite"><span class="weather-symbol">☼</span><div><small>Clima agora</small><strong id="weather-temperature">Buscando…</strong><span id="weather-summary">Sua localização</span></div></div></section>
           <div class="dashboard-toolbar" aria-label="Personalização do dashboard"><div><span class="card-kicker">Painel personalizado</span><strong id="dashboard-profile-label">Visão geral do gestor</strong></div><label>Perfil <select id="dashboard-profile"><option value="manager">Gestor</option><option value="sales">Vendedor</option><option value="finance">Financeiro</option><option value="operations">Operação</option></select></label></div>
           <section class="metrics" aria-label="Indicadores principais">
             <article class="metric-card metric-pink"><div class="metric-copy"><span class="metric-label">Receita no mês</span><strong data-metric="revenue">—</strong><small>Carregando dados reais</small></div><svg class="metric-chart chart-bars" viewBox="0 0 120 45" aria-hidden="true"><path d="M3 42V27h12v15M23 42V18h12v24M43 42V8h12v34M63 42V22h12v20M83 42V13h12v29M103 42V4h12v38" /></svg></article>

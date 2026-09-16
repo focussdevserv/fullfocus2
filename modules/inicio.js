@@ -9,26 +9,32 @@
 const PROFILE_KEY = "focusdev_dashboard_profile";
 const DAY = 24 * 60 * 60 * 1000;
 
-const brl = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const brlFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
+const timeFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const topbarDateFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+const brl = (value) => brlFormatter.format(Number(value || 0));
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const safe = (value) => escapeHtml(value == null ? "" : String(value));
-const startOfDay = (date = new Date()) => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; };
-const isToday = (value) => value && new Date(value).toDateString() === new Date().toDateString();
-const sameMonth = (value, ref = new Date()) => { if (!value) return false; const d = new Date(value); return d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear(); };
+const asDate = (value) => { const date = value instanceof Date ? new Date(value) : new Date(value); return Number.isNaN(date.getTime()) ? null : date; };
+const startOfDay = (date = new Date()) => { const d = asDate(date) || new Date(); d.setHours(0, 0, 0, 0); return d; };
+const isToday = (value) => { const date = asDate(value); return Boolean(date && date.toDateString() === new Date().toDateString()); };
+const sameMonth = (value, ref = new Date()) => { const d = asDate(value); return Boolean(d && d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear()); };
 const previousMonthRef = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d; };
 const sum = (list, field = "amount") => list.reduce((acc, item) => acc + Number(item[field] || 0), 0);
 const isOpen = (item) => !["paid", "done", "cancelled", "canceled", "won", "lost"].includes(String(item.status || "").toLowerCase()) && !item.paid_at;
-const timeOf = (value) => new Date(value).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-const dateOf = (value) => (value ? new Date(value).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "Sem data");
+const timeOf = (value) => { const date = asDate(value); return date ? timeFormatter.format(date) : "Sem horário"; };
+const dateOf = (value) => { const date = asDate(value); return date ? dateFormatter.format(date) : "Sem data"; };
 
 function relativeTime(value) {
-  if (!value) return "";
-  const diff = Date.now() - new Date(value).getTime();
+  const date = asDate(value);
+  if (!date) return "";
+  const diff = Date.now() - date.getTime();
   if (diff < 60_000) return "agora";
   if (diff < 3_600_000) return `há ${Math.floor(diff / 60_000)} min`;
   if (diff < DAY) return `há ${Math.floor(diff / 3_600_000)} h`;
   if (diff < 7 * DAY) return `há ${plural(Math.floor(diff / DAY), "dia", "dias")}`;
-  return new Date(value).toLocaleDateString("pt-BR");
+  return new Intl.DateTimeFormat("pt-BR").format(date);
 }
 
 function dueLabel(value) {
@@ -69,17 +75,22 @@ async function loadWorkspace() {
    --------------------------------------------------------------------------- */
 
 let loadedAt = null;
+let homeRequest = 0;
 
 function renderHome() {
+  if (location.hash && location.hash !== "#inicio") return;
+  const request = homeRequest += 1;
+  dashboardGrid.setAttribute("aria-busy", "true");
   dashboardGrid.innerHTML = initialDashboardMarkup;
   bindSkeleton();
   dashboardGrid.querySelector(".dashboard-pulse")?.replaceChildren();
-  dashboardGrid.querySelector(".activity-list")?.replaceChildren(Object.assign(document.createElement("p"), { className: "inicio-empty", textContent: "Carregando atividades reais do workspace." }));
-  dashboardGrid.querySelector(".agenda-list")?.replaceChildren(Object.assign(document.createElement("p"), { className: "inicio-empty", textContent: "Carregando eventos reais do workspace." }));
+  dashboardGrid.querySelector(".activity-list")?.replaceChildren(Object.assign(document.createElement("p"), { className: "inicio-empty", textContent: "Carregando atividades…" }));
+  dashboardGrid.querySelector(".agenda-list")?.replaceChildren(Object.assign(document.createElement("p"), { className: "inicio-empty", textContent: "Carregando eventos…" }));
   const metricKeys = ["revenue", "leads", "tasks", "projects", "receivables", "overdue", "cashflow", "tickets"];
   metricKeys.forEach((key) => setMetric(key, "…", "Carregando"));
   setAvailability("Sincronizando com o workspace…", "loading");
   loadWorkspace().then(({ data, failed }) => {
+    if (request !== homeRequest || (location.hash && location.hash !== "#inicio")) return;
     loadedAt = new Date();
     renderMetrics(data);
     renderPulse(data);
@@ -88,9 +99,16 @@ function renderHome() {
     renderActivity(data);
     renderDueSoon(data.receivables);
     renderOnboarding(data);
+    dashboardGrid.removeAttribute("aria-busy");
     if (failed.length) setAvailability(`Workspace parcialmente indisponível: ${failed.map(labelOf).join(", ")} sem resposta.`, "warning");
     else setAvailability(`Dados sincronizados ${relativeTime(loadedAt)} · ${plural(Object.keys(SOURCES).length, "fonte", "fontes")} do workspace.`, "ok");
     renderTopbarStatus(data, failed);
+  }).catch((error) => {
+    if (request !== homeRequest || (location.hash && location.hash !== "#inicio")) return;
+    dashboardGrid.removeAttribute("aria-busy");
+    const message = dashboardGrid.querySelector(".workspace-data-status");
+    if (message) { message.setAttribute("role", "alert"); message.textContent = error.message || "Não foi possível carregar o workspace. Tente novamente."; }
+    dashboardGrid.querySelectorAll(".inicio-empty").forEach((region) => { region.textContent = "Não foi possível carregar este bloco. Tente atualizar os dados."; });
   });
 }
 
@@ -99,7 +117,7 @@ function renderTopbarStatus(data, failed) {
   const box = document.querySelector(".workspace-data-status");
   if (!box) return;
   const strong = box.querySelector("strong"), span = box.querySelector("span:last-child");
-  const today = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  const today = topbarDateFormatter.format(new Date());
   const openTasks = data.tasks ? data.tasks.filter((t) => t.status !== "done" && isToday(t.due_at)).length : null;
   const eventsToday = data.events ? data.events.filter((e) => isToday(e.starts_at)).length : null;
   const parts = [today.charAt(0).toUpperCase() + today.slice(1)];
@@ -115,13 +133,31 @@ const labelOf = (key) => ({ revenues: "receitas", expenses: "despesas", receivab
 function bindSkeleton() {
   dashboardGrid.querySelector(".hero-actions .button-light")?.addEventListener("click", () => { location.hash = "#tarefas"; });
   dashboardGrid.querySelector(".hero-link")?.addEventListener("click", toggleHelp);
+  dashboardGrid.querySelector(".agenda-card .icon-action")?.addEventListener("click", () => openCreateDialog("evento"));
+  const quickKinds = ["tarefa", "lead", "receita", "projeto"];
+  dashboardGrid.querySelectorAll(".quick-actions button").forEach((button, index) => {
+    const kind = quickKinds[index];
+    if (!kind) return;
+    button.dataset.create = kind;
+  });
   const select = dashboardGrid.querySelector("#dashboard-profile");
   if (select) {
-    select.value = localStorage.getItem(PROFILE_KEY) || "manager";
-    select.addEventListener("change", (event) => { localStorage.setItem(PROFILE_KEY, event.target.value); window.applyDashboardProfile?.(event.target.value); });
+    select.name = "dashboard_profile";
+    select.setAttribute("autocomplete", "off");
+    select.value = window.FocusStorage?.get(PROFILE_KEY, "manager") || "manager";
+    select.addEventListener("change", (event) => { window.FocusStorage?.set(PROFILE_KEY, event.target.value); window.applyDashboardProfile?.(event.target.value); });
     window.applyDashboardProfile?.(select.value);
   }
+  const toolbar = dashboardGrid.querySelector(".dashboard-toolbar");
+  if (toolbar && !toolbar.querySelector(".dashboard-refresh")) {
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "text-action dashboard-refresh"; button.textContent = "Atualizar dados";
+    button.addEventListener("click", () => { button.disabled = true; button.textContent = "Atualizando…"; renderHome(); });
+    toolbar.append(button);
+  }
   const availability = dashboardGrid.querySelector(".workspace-availability");
+  availability?.setAttribute("role", "status");
+  availability?.setAttribute("aria-live", "polite");
   if (availability && !availability.querySelector(".availability-refresh")) {
     const button = document.createElement("button");
     button.type = "button"; button.className = "text-action availability-refresh"; button.textContent = "Atualizar";
@@ -285,9 +321,22 @@ function renderPriorities(tasks) {
     return `<label class="priority-item ${due.tone}"><input type="checkbox" data-task="${safe(t.id)}" /><span class="checkmark"></span><span class="priority-text"><strong>${safe(t.title)}</strong><small>${safe(due.text)}${t.project_id ? " · projeto" : ""}</small></span>${label ? `<em class="${cls}">${label}</em>` : ""}</label>`;
   }).join("");
   list.querySelectorAll("[data-task]").forEach((input) => input.addEventListener("change", async () => {
+    const routeAtStart = location.hash;
     input.disabled = true;
-    try { await api(`/api/tasks/${input.dataset.task}`, { method: "PATCH", body: { status: "done" } }); input.closest(".priority-item").classList.add("is-done"); window.setTimeout(renderHome, 450); }
-    catch (error) { input.checked = false; input.disabled = false; setAvailability(error.message, "warning"); }
+    input.setAttribute("aria-busy", "true");
+    try {
+      await api(`/api/tasks/${input.dataset.task}`, { method: "PATCH", body: { status: "done" } });
+      if (location.hash !== routeAtStart || routeAtStart !== "#inicio" || !input.isConnected) return;
+      input.closest(".priority-item")?.classList.add("is-done");
+      window.setTimeout(() => { if (location.hash === routeAtStart) renderHome(); }, 450);
+    }
+    catch (error) {
+      if (location.hash !== routeAtStart || !input.isConnected) return;
+      input.checked = false;
+      input.disabled = false;
+      input.removeAttribute("aria-busy");
+      if (routeAtStart === "#inicio") ui.toast(error.message || "Não foi possível concluir a tarefa.", "error");
+    }
   }));
 }
 
@@ -299,9 +348,8 @@ function renderAgenda(events) {
   const card = dashboardGrid.querySelector(".agenda-card");
   if (!card) return;
   const list = card.querySelector(".agenda-list");
-  card.querySelector(".icon-action")?.addEventListener("click", () => openCreateDialog("evento"));
   if (!events) { list.innerHTML = stateBlock.error("Não foi possível carregar a agenda.", "inicio-retry-agenda"); list.querySelector(".inicio-retry-agenda")?.addEventListener("click", renderHome); return; }
-  const sorted = events.map((e) => ({ ...e, at: new Date(e.starts_at) })).sort((a, b) => a.at - b.at);
+  const sorted = events.map((e) => ({ ...e, at: asDate(e.starts_at) })).filter((e) => e.at).sort((a, b) => a.at - b.at);
   const today = sorted.filter((e) => isToday(e.starts_at));
   const upcoming = sorted.filter((e) => e.at > new Date() && !isToday(e.starts_at)).slice(0, 3);
   const row = (e, withDate = false) => `<article class="agenda-item ${e.at < new Date() && isToday(e.starts_at) ? "is-past" : ""}"><time>${withDate ? `${safe(dateOf(e.starts_at))}<br>` : ""}${safe(timeOf(e.starts_at))}</time><div><strong>${safe(e.title)}</strong><small>${safe(e.description || (e.recurrence && e.recurrence !== "none" ? `Recorrente (${{ daily: "diário", weekly: "semanal", monthly: "mensal" }[e.recurrence] || e.recurrence})` : "Sem descrição"))}</small></div></article>`;
@@ -353,16 +401,29 @@ function renderDueSoon(receivables) {
   dashboardGrid.querySelector(".inicio-due-card")?.remove();
   if (!receivables) return;
   const limit = startOfDay(); limit.setDate(limit.getDate() + 7);
-  const items = receivables.filter(isOpen).filter((r) => r.due_at && new Date(r.due_at) <= limit).sort((a, b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 5);
+  const items = receivables.filter(isOpen).map((r) => ({ ...r, dueDate: asDate(r.due_at) })).filter((r) => r.dueDate && r.dueDate <= limit).sort((a, b) => a.dueDate - b.dueDate).slice(0, 5);
   if (!items.length) return;
   const card = document.createElement("section");
   card.className = "data-card inicio-due-card";
   card.innerHTML = `<div class="section-heading"><div><p class="card-kicker">Financeiro</p><h2>Vencendo nos próximos 7 dias</h2></div><a class="text-action" href="#contas-a-receber">Contas a receber <span>→</span></a></div>
     <div class="inicio-due-list">${items.map((r) => { const due = dueLabel(r.due_at); return `<div class="inicio-due-item ${due.tone}"><div><strong>${safe(r.description)}</strong><small>${safe(due.text)}</small></div><b>${brl(r.amount)}</b><button class="text-action" type="button" data-paid="${safe(r.id)}">Recebido</button></div>`; }).join("")}</div>`;
   card.querySelectorAll("[data-paid]").forEach((button) => button.addEventListener("click", async () => {
+    const routeAtStart = location.hash;
     button.disabled = true;
-    try { await api(`/api/receivables/${button.dataset.paid}`, { method: "PATCH", body: { status: "paid", paid_at: new Date().toISOString() } }); renderHome(); }
-    catch (error) { button.disabled = false; setAvailability(error.message, "warning"); }
+    button.setAttribute("aria-busy", "true");
+    const originalLabel = button.textContent;
+    button.textContent = "Recebendo…";
+    try {
+      await api(`/api/receivables/${button.dataset.paid}`, { method: "PATCH", body: { status: "paid", paid_at: new Date().toISOString() } });
+      if (location.hash === routeAtStart && routeAtStart === "#inicio" && button.isConnected) renderHome();
+    }
+    catch (error) {
+      if (location.hash !== routeAtStart || !button.isConnected) return;
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      button.textContent = originalLabel;
+      if (routeAtStart === "#inicio") ui.toast(error.message || "Não foi possível registrar o recebimento.", "error");
+    }
   }));
   dashboardGrid.querySelector(".quick-actions-card")?.after(card);
 }
@@ -393,7 +454,28 @@ function renderOnboarding(data) {
   const anchor = dashboardGrid.querySelector(".workspace-availability") || dashboardGrid.querySelector(".dashboard-toolbar");
   anchor?.after(card);
   // Estado real do WhatsApp (não bloqueia a tela).
-  api("/api/whatsapp/status").then((status) => { if (status.state === "open") { const li = card.querySelectorAll(".inicio-steps li")[5]; li?.classList.add("is-done"); li?.querySelector("button")?.remove(); const mark = li?.querySelector(".inicio-step-mark"); if (mark) mark.textContent = "✓"; } }).catch(() => {});
+  api("/api/whatsapp/status").then((status) => {
+    if (location.hash !== "#inicio" || !card.isConnected || status.state !== "open") return;
+    const li = card.querySelectorAll(".inicio-steps li")[5];
+    if (!li || li.classList.contains("is-done")) return;
+    li.classList.add("is-done");
+    li.querySelector("button")?.remove();
+    const mark = li.querySelector(".inicio-step-mark"); if (mark) mark.textContent = "✓";
+    const finishedLabel = card.querySelector(".task-count");
+    if (finishedLabel) finishedLabel.textContent = `${steps.filter((step) => step.done || step === steps[5]).length} de ${steps.length}`;
+    const progress = card.querySelector(".inicio-progress i");
+    if (progress) progress.style.width = `${Math.round((steps.filter((step) => step.done || step === steps[5]).length / steps.length) * 100)}%`;
+  }).catch(() => {});
 }
 
 registerRoutes({ inicio: renderHome });
+
+new MutationObserver(() => {
+  dashboardGrid.querySelectorAll(".workspace-availability, .inicio-empty, [data-metric]").forEach((region) => {
+    region.setAttribute("aria-live", "polite");
+  });
+  dashboardGrid.querySelectorAll("button").forEach((button) => {
+    if (button.disabled) button.setAttribute("aria-busy", "true");
+    else button.removeAttribute("aria-busy");
+  });
+}).observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });

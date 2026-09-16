@@ -13,17 +13,19 @@ const CAMPAIGN_STATUS = { draft: ["Rascunho", "gray"], active: ["Ativa", "green"
 const PROPOSAL_STATUS = { draft: ["Rascunho", "gray"], sent: ["Enviada", "blue"], viewed: ["Visualizada", "purple"], negotiation: ["Em negociação", "orange"], accepted: ["Aprovada", "green"], rejected: ["Recusada", "red"], expired: ["Expirada", "gray"], cancelled: ["Cancelada", "red"] };
 const SOURCES = [["site", "Site"], ["indicacao", "Indicação"], ["instagram", "Instagram"], ["whatsapp", "WhatsApp"], ["google", "Google"], ["evento", "Evento"], ["outro", "Outro"]];
 
-const { esc, money, date, dateTime, relative, badge, avatar, header, button, stats, toolbar, table, empty, rowActions, confirmInline, toast, form, drawer, facts, keepSearchFocus, downloadCsv } = ui;
+const { esc, money, date, dateTime, relative, badge, avatar, header, button, stats, toolbar, table, empty, rowActions, confirmInline, toast: uiToast, form, drawer, facts, keepSearchFocus, downloadCsv } = ui;
 const label = (map, key) => map[key]?.[0] || key || "—";
 const tone = (map, key) => map[key]?.[1] || "gray";
 const pageStatus = (text, isError = false) => { const p = dashboardGrid.querySelector("[data-page-status]"); if (p) { p.textContent = text; p.classList.toggle("crm-error", isError); } };
-const wrap = (title, kicker, promise) => promise.catch((error) => { dashboardGrid.innerHTML = header({ kicker, title }) + stateBlock.error(error.message, "crm-retry"); dashboardGrid.querySelector(".crm-retry")?.addEventListener("click", () => renderHashRoute(window.location.hash)); });
+const crmRoutes = { "CRM comercial": "#crm", Leads: "#leads", "Funil de vendas": "#funil", Oportunidades: "#oportunidades", Campanhas: "#campanhas", Propostas: "#propostas", "Follow-ups": "#follow-ups" };
+const toast = (...args) => { if (Object.values(crmRoutes).includes(location.hash)) uiToast(...args); };
+const wrap = (title, kicker, promise, isCurrent = () => true) => promise.catch((error) => { if (!isCurrent() || (crmRoutes[title] && location.hash !== crmRoutes[title])) return; dashboardGrid.innerHTML = header({ kicker, title }) + stateBlock.error(error.message, "crm-retry"); dashboardGrid.querySelector(".crm-retry")?.addEventListener("click", () => renderHashRoute(window.location.hash)); });
 
 /* Cache leve de listas usadas em selects. */
-const cache = { leads: null, clients: null, opportunities: null, campaigns: null, catalog: null };
+const cache = { leads: null, clients: null, opportunities: null, campaigns: null, projects: null, catalog: null };
 async function options(kind) {
   if (!cache[kind]) {
-    const path = { leads: "/api/leads", clients: "/api/clients", opportunities: "/api/opportunities", campaigns: "/api/campaigns", catalog: "/api/catalog-items" }[kind];
+    const path = { leads: "/api/leads", clients: "/api/clients", opportunities: "/api/opportunities", campaigns: "/api/campaigns", projects: "/api/projects", catalog: "/api/catalog-items" }[kind];
     try { cache[kind] = (await api(path))[kind === "catalog" ? "catalog_items" : kind] || []; } catch { cache[kind] = []; }
   }
   return cache[kind];
@@ -34,10 +36,13 @@ const invalidate = () => { Object.keys(cache).forEach((k) => (cache[k] = null));
    Hub
    ========================================================================== */
 
+const hubState = { request: 0 };
 async function renderHub() {
+  if (location.hash !== "#crm") return;
+  const request = hubState.request = (hubState.request || 0) + 1;
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "CRM comercial", description: "Carregando…" }) + stateBlock.loading("Carregando resumo…");
   await wrap("CRM comercial", "CRM", (async () => {
-    const [summary, followups] = await Promise.all([api("/api/crm/summary"), api("/api/followups")]);
+    const [summary, followups] = await Promise.all([api("/api/crm/summary"), api("/api/followups")]); if (request !== hubState.request || location.hash !== "#crm") return;
     const leadsTotal = summary.leads.reduce((n, r) => n + r.total, 0), leadsOpen = summary.leads.filter((r) => !["won", "lost"].includes(r.status)).reduce((n, r) => n + r.total, 0);
     const won = summary.opportunities.find((r) => r.stage === "won"), lost = summary.opportunities.find((r) => r.stage === "lost");
     const openOpps = summary.opportunities.filter((r) => !["won", "lost"].includes(r.stage));
@@ -61,9 +66,80 @@ async function renderHub() {
     dashboardGrid.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { location.hash = b.dataset.go; }));
     dashboardGrid.querySelector("[data-new-lead]").addEventListener("click", () => leadForm(null, renderHub));
     dashboardGrid.querySelector("[data-new-opp]").addEventListener("click", () => opportunityForm(null, renderHub));
-    dashboardGrid.querySelectorAll("[data-done]").forEach((b) => b.addEventListener("click", async () => { try { await api(`/api/followups/${b.dataset.done}`, { method: "PATCH", body: { done: true } }); toast("Follow-up concluído.", "success"); renderHub(); } catch (error) { toast(error.message, "error"); } }));
-  })());
+  })(), () => request === hubState.request);
 }
+
+dashboardGrid.addEventListener("click", async (event) => {
+  if (location.hash.replace(/^#/, "") !== "crm") return;
+  const button = event.target.closest?.("[data-done]");
+  if (!button) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (button.dataset.crmBusy === "1") return;
+  const actionRequest = hubState.request;
+  button.dataset.crmBusy = "1";
+  button.dataset.crmLabel = button.textContent;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.textContent = "Concluindo…";
+  try {
+    await api(`/api/followups/${button.dataset.done}`, { method: "PATCH", body: { done: true } });
+    if (actionRequest !== hubState.request || location.hash !== "#crm" || !button.isConnected) return;
+    toast("Follow-up concluído.", "success");
+    renderHub();
+  } catch (error) {
+    if (actionRequest !== hubState.request || location.hash !== "#crm" || !button.isConnected) return;
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    button.textContent = button.dataset.crmLabel || "Concluir";
+    delete button.dataset.crmBusy;
+    delete button.dataset.crmLabel;
+    toast(error.message, "error");
+  }
+}, true);
+
+dashboardGrid.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-delete]");
+  if (!button || location.hash !== "#leads" || button.dataset.crmDeleteGuarded === "1") return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  button.dataset.crmDeleteGuarded = "1";
+  const routeAtStart = location.hash;
+  const requestAtStart = leadsState.request;
+  confirmInline(button, {
+    text: "Excluir lead?",
+    onConfirm: async () => {
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      button.textContent = "Excluindo…";
+      try {
+        await api(`/api/leads/${button.dataset.delete}`, { method: "DELETE" });
+        if (location.hash !== routeAtStart || routeAtStart !== "#leads" || requestAtStart !== leadsState.request) return;
+        invalidate();
+        toast("Lead excluído.", "success");
+        renderLeads();
+      } catch (error) {
+        if (location.hash !== routeAtStart) return;
+        throw error;
+      } finally {
+        delete button.dataset.crmDeleteGuarded;
+      }
+    },
+    onCancel: () => { delete button.dataset.crmDeleteGuarded; },
+  });
+}, true);
+
+window.addEventListener("hashchange", () => {
+  hubState.request += 1;
+  leadsState.request += 1;
+  funnelState.request += 1;
+  oppState.request += 1;
+  campaignState.request += 1;
+  proposalState.request += 1;
+  followupState.request += 1;
+  [leadsState, oppState, followupState].forEach((state) => { clearTimeout(state.timer); state.timer = null; });
+});
 
 function funnelBars(rows) {
   const stages = Object.keys(STAGES).filter((k) => !["won", "lost"].includes(k));
@@ -75,17 +151,22 @@ function funnelBars(rows) {
    Leads
    ========================================================================== */
 
-const leadsState = { query: "", status: "open", source: "all", sort: "recent" };
+const leadsState = { query: "", status: "open", source: "all", sort: "recent", request: 0 };
 
 async function renderLeads() {
+  if (location.hash !== "#leads") return;
+  const request = leadsState.request = (leadsState.request || 0) + 1;
+  const restoreSearchFocus = keepSearchFocus(dashboardGrid);
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Leads", description: "Carregando…" }) + stateBlock.loading("Carregando leads…");
   await wrap("Leads", "CRM", (async () => {
     const params = new URLSearchParams(); if (leadsState.query.trim()) params.set("search", leadsState.query.trim()); if (leadsState.status !== "all") params.set("status", leadsState.status); if (leadsState.source !== "all") params.set("source", leadsState.source);
     const [leadsRes, campaignsRes] = await Promise.allSettled([api(`/api/leads?${params}`), api("/api/campaigns")]);
+    if (request !== leadsState.request || location.hash !== "#leads") return;
     if (leadsRes.status === "rejected") throw leadsRes.reason;
     const leads = leadsRes.value.leads || [], campaigns = campaignsRes.status === "fulfilled" ? campaignsRes.value.campaigns || [] : [];
     cache.campaigns = campaigns; cache.leads = leads;
     drawLeads(leads, campaigns);
+    restoreSearchFocus();
   })());
 }
 
@@ -124,7 +205,28 @@ function drawLeads(leads, campaigns) {
   dashboardGrid.querySelectorAll("[data-quick]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.quick; if (k === "new") { s.status = "all"; s.sort = "recent"; } else s.status = k; redraw(); }));
   dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => leadForm(null, renderLeads)));
   dashboardGrid.querySelector("[data-export]")?.addEventListener("click", () => downloadCsv("leads.csv", ["Nome", "Empresa", "E-mail", "Telefone", "Origem", "Situação", "Valor", "Criado em"], list.map((l) => [l.name, l.company || "", l.email || "", l.phone || "", l.source || "", label(LEAD_STATUS, l.status), l.value || "", dateTime(l.created_at)])));
-  dashboardGrid.querySelectorAll("[data-status]").forEach((sel) => sel.addEventListener("change", async () => { try { await api(`/api/leads/${sel.dataset.status}`, { method: "PATCH", body: { status: sel.value } }); const l = leads.find((x) => String(x.id) === sel.dataset.status); if (l) l.status = sel.value; toast("Situação atualizada.", "success"); redraw(); } catch (error) { toast(error.message, "error"); redraw(); } }));
+  dashboardGrid.querySelectorAll("[data-status]").forEach((sel) => sel.addEventListener("change", async () => {
+    const routeAtStart = location.hash, requestAtStart = leadsState.request, nextStatus = sel.value, lead = leads.find((x) => String(x.id) === sel.dataset.status), previousStatus = lead?.status;
+    if (routeAtStart !== "#leads" || !sel.isConnected || sel.dataset.crmBusy === "1") return;
+    sel.dataset.crmBusy = "1";
+    sel.disabled = true;
+    sel.setAttribute("aria-busy", "true");
+    try {
+      await api(`/api/leads/${sel.dataset.status}`, { method: "PATCH", body: { status: nextStatus } });
+      if (location.hash !== routeAtStart || requestAtStart !== leadsState.request || !sel.isConnected) return;
+      if (lead) lead.status = nextStatus;
+      toast("Situação atualizada.", "success");
+      redraw();
+    } catch (error) {
+      if (location.hash !== routeAtStart || !sel.isConnected) return;
+      sel.value = previousStatus || sel.value;
+      toast(error.message, "error");
+      redraw();
+    } finally {
+      if (sel.isConnected) { sel.disabled = false; sel.removeAttribute("aria-busy"); }
+      delete sel.dataset.crmBusy;
+    }
+  }));
   dashboardGrid.querySelectorAll("tr[data-open]").forEach((row) => row.addEventListener("click", (event) => { if (event.target.closest("button, select, a")) return; leadDrawer(leads.find((l) => String(l.id) === row.dataset.open), campaigns, renderLeads); }));
   dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => leadForm(leads.find((l) => String(l.id) === b.dataset.edit), renderLeads)));
   dashboardGrid.querySelectorAll("[data-convert]").forEach((b) => b.addEventListener("click", () => convertLead(leads.find((l) => String(l.id) === b.dataset.convert), renderLeads)));
@@ -183,7 +285,7 @@ function convertLead(lead, after) {
 function convertLeadToClient(lead, after) {
   if (!lead) return;
   const proceed = async () => {
-    action.disabled = true; action.textContent = "Convertendo...";
+    action.disabled = true; action.textContent = "Convertendo…";
     try { await api(`/api/leads/${lead.id}/convert-to-client`, { method: "POST", body: {} }); invalidate(); toast("Cliente criado e histórico preservado.", "success"); after(); }
     catch (error) { action.disabled = false; action.textContent = "Converter em cliente"; toast(error.message, "error"); }
   };
@@ -195,27 +297,57 @@ function convertLeadToClient(lead, after) {
    Funil e Oportunidades
    ========================================================================== */
 
+const funnelState = { request: 0 };
 async function renderFunnel() {
+  if (location.hash !== "#funil") return;
+  const request = funnelState.request = (funnelState.request || 0) + 1;
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Funil de vendas", description: "Carregando…" }) + stateBlock.loading("Carregando funil…");
   await wrap("Funil de vendas", "CRM", (async () => {
-    const opps = (await api("/api/opportunities")).opportunities || []; cache.opportunities = opps;
+    const opps = (await api("/api/opportunities")).opportunities || []; if (request !== funnelState.request || location.hash !== "#funil") return; cache.opportunities = opps;
     const open = opps.filter((o) => !["won", "lost"].includes(o.stage));
     dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Funil de vendas", description: `${open.length} em aberto · ${money(open.reduce((n, o) => n + Number(o.amount || 0), 0))} · arraste os cards entre os estágios`, actions: button({ label: "+ Oportunidade", attr: "data-new" }) })
       + `<section class="crm-kanban">${Object.entries(STAGES).map(([stage, [name, t]]) => { const list = opps.filter((o) => o.stage === stage); return `<section class="crm-column crm-column-${t}" data-column="${stage}"><h3>${name}<span>${list.length} · ${money(list.reduce((n, o) => n + Number(o.amount || 0), 0))}</span></h3><div class="crm-column-body">${list.map((o) => `<article class="crm-opp-card" draggable="true" data-opp="${esc(o.id)}"><strong>${esc(o.name)}</strong><b>${money(o.amount)}</b><small>${o.expected_close ? `Fecha em ${esc(date(o.expected_close))}` : "Sem previsão"}${o.probability != null ? ` · ${esc(o.probability)}%` : ""}</small></article>`).join("") || `<p class="crm-column-empty">Solte aqui</p>`}</div></section>`; }).join("")}</section>`;
     dashboardGrid.querySelector("[data-new]").addEventListener("click", () => opportunityForm(null, renderFunnel));
-    dashboardGrid.querySelectorAll("[data-opp]").forEach((card) => { card.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", card.dataset.opp); card.classList.add("is-dragging"); }); card.addEventListener("click", () => opportunityDrawer(opps.find((o) => String(o.id) === card.dataset.opp), renderFunnel)); });
+    dashboardGrid.querySelectorAll("[data-opp]").forEach((card) => { card.tabIndex = 0; card.setAttribute("role", "button"); card.setAttribute("aria-label", `Abrir oportunidade ${card.querySelector("strong")?.textContent?.trim() || ""}`); card.addEventListener("dragstart", (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", card.dataset.opp); card.classList.add("is-dragging"); }); card.addEventListener("dragend", () => card.classList.remove("is-dragging")); card.addEventListener("click", () => opportunityDrawer(opps.find((o) => String(o.id) === card.dataset.opp), renderFunnel)); card.addEventListener("keydown", (e) => { if (e.key !== "Enter" && e.key !== " ") return; e.preventDefault(); card.click(); }); });
     dashboardGrid.querySelectorAll("[data-column]").forEach((col) => {
       col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("is-drop-target"); });
       col.addEventListener("dragleave", () => col.classList.remove("is-drop-target"));
-      col.addEventListener("drop", async (e) => { e.preventDefault(); col.classList.remove("is-drop-target"); const id = e.dataTransfer.getData("text/plain"); const o = opps.find((x) => String(x.id) === id); if (!o || o.stage === col.dataset.column) return; try { await api(`/api/opportunities/${id}`, { method: "PATCH", body: { stage: col.dataset.column } }); toast(`Movida para ${label(STAGES, col.dataset.column)}.`, "success"); renderFunnel(); } catch (error) { toast(error.message, "error"); } });
     });
   })());
 }
 
-const oppState = { query: "", stage: "open", sort: "amount" };
+dashboardGrid.addEventListener("drop", async (event) => {
+  if (location.hash.replace(/^#/, "") !== "funil") return;
+  const column = event.target.closest?.("[data-column]");
+  if (!column) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (column.dataset.crmDropBusy === "1") return;
+  const id = event.dataTransfer?.getData("text/plain");
+  const opportunity = cache.opportunities?.find((item) => String(item.id) === String(id));
+  if (!opportunity || opportunity.stage === column.dataset.column) return;
+  column.dataset.crmDropBusy = "1";
+  column.setAttribute("aria-busy", "true");
+  column.querySelector("h3")?.setAttribute("aria-label", `Movendo para ${label(STAGES, column.dataset.column)}…`);
+  try {
+    await api(`/api/opportunities/${id}`, { method: "PATCH", body: { stage: column.dataset.column } });
+    toast(`Movida para ${label(STAGES, column.dataset.column)}.`, "success");
+    renderFunnel();
+  } catch (error) {
+    column.removeAttribute("aria-busy");
+    delete column.dataset.crmDropBusy;
+    column.querySelector("h3")?.removeAttribute("aria-label");
+    toast(error.message, "error");
+  }
+}, true);
+
+const oppState = { query: "", stage: "open", sort: "amount", request: 0 };
 async function renderOpportunities() {
+  if (location.hash !== "#oportunidades") return;
+  const request = oppState.request = (oppState.request || 0) + 1;
+  const restoreSearchFocus = keepSearchFocus(dashboardGrid);
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Oportunidades", description: "Carregando…" }) + stateBlock.loading("Carregando oportunidades…");
-  await wrap("Oportunidades", "CRM", (async () => { const params = new URLSearchParams(); if (oppState.query.trim()) params.set("search", oppState.query.trim()); if (oppState.stage !== "all") params.set("stage", oppState.stage); const opps = (await api(`/api/opportunities?${params}`)).opportunities || []; cache.opportunities = opps; drawOpportunities(opps); })());
+  await wrap("Oportunidades", "CRM", (async () => { const params = new URLSearchParams(); if (oppState.query.trim()) params.set("search", oppState.query.trim()); if (oppState.stage !== "all") params.set("stage", oppState.stage); const opps = (await api(`/api/opportunities?${params}`)).opportunities || []; if (request !== oppState.request) return; cache.opportunities = opps; drawOpportunities(opps); restoreSearchFocus(); })());
 }
 
 function drawOpportunities(opps) {
@@ -249,7 +381,28 @@ function drawOpportunities(opps) {
   dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { s[el.dataset.filter] = el.value; renderOpportunities(); }));
   dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => opportunityForm(null, renderOpportunities)));
   dashboardGrid.querySelector("[data-export]")?.addEventListener("click", () => downloadCsv("oportunidades.csv", ["Nome", "Estágio", "Valor", "Probabilidade", "Previsão", "Criado em"], list.map((o) => [o.name, label(STAGES, o.stage), o.amount, o.probability ?? "", o.expected_close || "", dateTime(o.created_at)])));
-  dashboardGrid.querySelectorAll("[data-stage]").forEach((sel) => sel.addEventListener("change", async () => { try { await api(`/api/opportunities/${sel.dataset.stage}`, { method: "PATCH", body: { stage: sel.value } }); const o = opps.find((x) => String(x.id) === sel.dataset.stage); if (o) o.stage = sel.value; toast("Estágio atualizado.", "success"); redraw(); } catch (error) { toast(error.message, "error"); redraw(); } }));
+  dashboardGrid.querySelectorAll("[data-stage]").forEach((sel) => sel.addEventListener("change", async () => {
+    const routeAtStart = location.hash, requestAtStart = oppState.request, nextStage = sel.value, opportunity = opps.find((x) => String(x.id) === sel.dataset.stage), previousStage = opportunity?.stage;
+    if (routeAtStart !== "#oportunidades" || !sel.isConnected || sel.dataset.crmBusy === "1") return;
+    sel.dataset.crmBusy = "1";
+    sel.disabled = true;
+    sel.setAttribute("aria-busy", "true");
+    try {
+      await api(`/api/opportunities/${sel.dataset.stage}`, { method: "PATCH", body: { stage: nextStage } });
+      if (location.hash !== routeAtStart || requestAtStart !== oppState.request || !sel.isConnected) return;
+      if (opportunity) opportunity.stage = nextStage;
+      toast("Estágio atualizado.", "success");
+      redraw();
+    } catch (error) {
+      if (location.hash !== routeAtStart || !sel.isConnected) return;
+      sel.value = previousStage || sel.value;
+      toast(error.message, "error");
+      redraw();
+    } finally {
+      if (sel.isConnected) { sel.disabled = false; sel.removeAttribute("aria-busy"); }
+      delete sel.dataset.crmBusy;
+    }
+  }));
   dashboardGrid.querySelectorAll("tr[data-open]").forEach((row) => row.addEventListener("click", (event) => { if (event.target.closest("button, select, a")) return; opportunityDrawer(opps.find((o) => String(o.id) === row.dataset.open), renderOpportunities); }));
   dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => opportunityForm(opps.find((o) => String(o.id) === b.dataset.edit), renderOpportunities)));
   dashboardGrid.querySelectorAll("[data-proposal]").forEach((b) => b.addEventListener("click", () => proposalForm({ opportunity_id: b.dataset.proposal, title: `Proposta · ${opps.find((o) => String(o.id) === b.dataset.proposal)?.name || ""}` }, () => { location.hash = "#propostas"; })));
@@ -257,7 +410,9 @@ function drawOpportunities(opps) {
 }
 
 async function opportunityForm(opp, after) {
+  const routeAtStart = location.hash;
   const leads = await options("leads");
+  if (location.hash !== routeAtStart || !Object.values(crmRoutes).includes(routeAtStart)) return;
   form({ title: opp ? "Editar oportunidade" : "Nova oportunidade", subtitle: "CRM", submitLabel: opp ? "Salvar" : "Criar", values: opp ? { ...opp, lead_id: opp.lead_id ? String(opp.lead_id) : "" } : { stage: "prospecting", probability: 50 }, fields: [
     { name: "name", label: "Nome" },
     { name: "amount", label: "Valor (R$)", type: "number", half: true },
@@ -291,10 +446,13 @@ function opportunityDrawer(opp, after) {
    Campanhas
    ========================================================================== */
 
+const campaignState = { request: 0 };
 async function renderCampaigns() {
+  if (location.hash !== "#campanhas") return;
+  const request = campaignState.request = (campaignState.request || 0) + 1;
   dashboardGrid.innerHTML = header({ kicker: "Marketing", title: "Campanhas", description: "Carregando…" }) + stateBlock.loading("Carregando campanhas…");
   await wrap("Campanhas", "Marketing", (async () => {
-    const campaigns = (await api("/api/campaigns")).campaigns || []; cache.campaigns = campaigns;
+    const campaigns = (await api("/api/campaigns")).campaigns || []; if (request !== campaignState.request || location.hash !== "#campanhas") return; cache.campaigns = campaigns;
     const active = campaigns.filter((c) => c.status === "active");
     dashboardGrid.innerHTML = header({ kicker: "Marketing", title: "Campanhas", description: `${active.length} ativas · ${money(active.reduce((n, c) => n + Number(c.budget || 0), 0))} em orçamento ativo`, actions: button({ label: "+ Nova campanha", attr: "data-new" }) })
       + stats([{ label: "Ativas", value: String(active.length) }, { label: "Orçamento total", value: money(campaigns.reduce((n, c) => n + Number(c.budget || 0), 0)) }, { label: "Leads gerados", value: String(campaigns.reduce((n, c) => n + Number(c.leads_count || 0), 0)), note: "leads com campanha" }, { label: "Concluídas", value: String(campaigns.filter((c) => c.status === "done").length) }])
@@ -308,9 +466,8 @@ async function renderCampaigns() {
       ], rows: campaigns }) : empty({ title: "Nenhuma campanha.", text: "Registre ações de marketing e associe leads a elas para medir o custo por lead.", cta: "Criar campanha", attr: "data-new" })}</section>`;
     dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => campaignForm(null, renderCampaigns)));
     dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => campaignForm(campaigns.find((c) => String(c.id) === b.dataset.edit), renderCampaigns)));
-    dashboardGrid.querySelectorAll("[data-set]").forEach((b) => b.addEventListener("click", async () => { const [id, status] = b.dataset.set.split(":"); try { await api(`/api/campaigns/${id}`, { method: "PATCH", body: { status } }); toast("Campanha atualizada.", "success"); renderCampaigns(); } catch (error) { toast(error.message, "error"); } }));
     dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/campaigns/${b.dataset.delete}`, { method: "DELETE" }); toast("Campanha excluída."); renderCampaigns(); } })));
-  })());
+  })(), () => request === campaignState.request);
 }
 
 function campaignForm(c, after) {
@@ -328,19 +485,51 @@ function campaignForm(c, after) {
    Propostas
    ========================================================================== */
 
-const proposalState = { query: "", status: "all" };
+dashboardGrid.addEventListener("click", async (event) => {
+  if (location.hash.replace(/^#/, "") !== "campanhas") return;
+  const button = event.target.closest?.("[data-set]");
+  if (!button) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (button.dataset.crmBusy === "1") return;
+  const [id, status] = button.dataset.set.split(":");
+  button.dataset.crmBusy = "1";
+  button.dataset.crmLabel = button.textContent;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.textContent = "Atualizando…";
+  try {
+    await api(`/api/campaigns/${id}`, { method: "PATCH", body: { status } });
+    if (location.hash !== "#campanhas" || !button.isConnected) return;
+    toast("Campanha atualizada.", "success");
+    renderCampaigns();
+  } catch (error) {
+    if (location.hash !== "#campanhas" || !button.isConnected) return;
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    button.textContent = button.dataset.crmLabel || "Atualizar";
+    delete button.dataset.crmBusy;
+    delete button.dataset.crmLabel;
+    toast(error.message, "error");
+  }
+}, true);
+
+const proposalState = { query: "", status: "all", request: 0 };
 async function renderProposals() {
+  if (location.hash !== "#propostas") return;
+  const request = proposalState.request = (proposalState.request || 0) + 1;
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Propostas", description: "Carregando…" }) + stateBlock.loading("Carregando propostas…");
   await wrap("Propostas", "CRM", (async () => {
     const params = new URLSearchParams();
     if (proposalState.query.trim()) params.set("search", proposalState.query.trim());
     if (proposalState.status !== "all") params.set("status", proposalState.status);
     const proposals = (await api(`/api/proposals?${params}`)).proposals || [];
+    if (request !== proposalState.request || location.hash !== "#propostas") return;
     const sent = proposals.filter((p) => p.status === "sent"), accepted = proposals.filter((p) => p.status === "accepted");
     const rate = proposals.filter((p) => ["accepted", "rejected"].includes(p.status)).length ? Math.round((accepted.length / proposals.filter((p) => ["accepted", "rejected"].includes(p.status)).length) * 100) : null;
     dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Propostas", description: `${sent.length} aguardando resposta · ${money(sent.reduce((n, p) => n + Number(p.amount || 0), 0))}`, actions: button({ label: "+ Nova proposta", attr: "data-new" }) })
       + stats([{ label: "Enviadas", value: String(sent.length), note: money(sent.reduce((n, p) => n + Number(p.amount || 0), 0)) }, { label: "Aceitas", value: String(accepted.length), note: money(accepted.reduce((n, p) => n + Number(p.amount || 0), 0)), tone: "green" }, { label: "Taxa de aceite", value: rate === null ? "—" : `${rate}%` }, { label: "Rascunhos", value: String(proposals.filter((p) => p.status === "draft").length) }])
-      + `<section class="data-card crm-card">${toolbar({ search: { value: proposalState.query, placeholder: "Buscar proposta..." }, filters: [
+      + `<section class="data-card crm-card">${toolbar({ search: { value: proposalState.query, placeholder: "Buscar proposta…" }, filters: [
         { key: "status", value: proposalState.status, options: [["all", "Todas"], ...Object.entries(PROPOSAL_STATUS).map(([k, [v]]) => [k, v])] },
       ] })}${proposals.length ? table({ columns: [
         { key: "title", label: "Proposta", render: (p) => `<strong>${esc(p.title)}</strong><small>${esc(p.opportunity_name || p.lead_name || "Sem vínculo")}${p.items_count ? ` · ${esc(p.items_count)} ${p.items_count === 1 ? "item" : "itens"}` : ""}</small>` },
@@ -356,14 +545,15 @@ async function renderProposals() {
     dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => proposalForm(proposals.find((p) => String(p.id) === b.dataset.edit), renderProposals)));
     dashboardGrid.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => proposalDrawer(b.dataset.open, renderProposals)));
     dashboardGrid.querySelectorAll("[data-contract]").forEach((b) => b.addEventListener("click", () => { sessionStorage.setItem("focusdev.contractProposalId", b.dataset.contract); location.hash = "#contratos"; }));
-    dashboardGrid.querySelectorAll("[data-set]").forEach((b) => b.addEventListener("click", async () => { const [id, status] = b.dataset.set.split(":"); try { await api(`/api/proposals/${id}`, { method: "PATCH", body: { status } }); toast(status === "accepted" ? "Proposta aceita — oportunidade marcada como ganha." : status === "sent" ? "Marcada como enviada." : "Proposta recusada.", status === "rejected" ? "info" : "success"); renderProposals(); } catch (error) { toast(error.message, "error"); } }));
-    dashboardGrid.querySelectorAll("tbody tr").forEach((row, index) => { const proposal = proposals[index], cell = row.lastElementChild; if (!proposal || !cell) return; if (["sent", "viewed", "negotiation"].includes(proposal.status)) { const share = document.createElement("button"); share.type = "button"; share.className = "compact-action"; share.textContent = "Link para aprovação"; share.addEventListener("click", async () => { share.disabled = true; share.textContent = "Gerando..."; try { const data = await api(`/api/proposals/${proposal.id}/public-link`, { method: "POST", body: {} }); const link = `${location.origin}${data.path}`; await navigator.clipboard?.writeText(link); share.textContent = "Link copiado"; toast("Link de aprovação copiado.", "success"); } catch (error) { share.disabled = false; share.textContent = "Link para aprovação"; toast(error.message, "error"); } }); cell.append(" ", share); } if (proposal.status !== "accepted") return; const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = "Gerar contrato"; button.title = "Abrir contrato preenchido pela proposta"; button.addEventListener("click", () => { sessionStorage.setItem("focusdev.contractProposalId", proposal.id); location.hash = "#contratos"; }); cell.append(" ", button); });
+    dashboardGrid.querySelectorAll("tbody tr").forEach((row, index) => { const proposal = proposals[index], cell = row.lastElementChild; if (!proposal || !cell) return; if (["sent", "viewed", "negotiation"].includes(proposal.status)) { const share = document.createElement("button"); share.type = "button"; share.className = "compact-action"; share.textContent = "Link para aprovação"; share.setAttribute("aria-label", `Copiar link de aprovação da proposta ${proposal.title || "selecionada"}`); share.addEventListener("click", async () => { share.disabled = true; share.setAttribute("aria-busy", "true"); share.textContent = "Gerando…"; try { const data = await api(`/api/proposals/${proposal.id}/public-link`, { method: "POST", body: {} }); const link = `${location.origin}${data.path}`; await ui.copyText(link); share.textContent = "Link copiado"; share.disabled = false; share.removeAttribute("aria-busy"); toast("Link de aprovação copiado.", "success"); } catch (error) { share.disabled = false; share.removeAttribute("aria-busy"); share.textContent = "Link para aprovação"; toast(error.message, "error"); } }); cell.append(" ", share); } if (proposal.status !== "accepted") return; const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = "Gerar contrato"; button.title = "Abrir contrato preenchido pela proposta"; button.addEventListener("click", () => { sessionStorage.setItem("focusdev.contractProposalId", proposal.id); location.hash = "#contratos"; }); cell.append(" ", button); });
     dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/proposals/${b.dataset.delete}`, { method: "DELETE" }); toast("Proposta excluída."); renderProposals(); } })));
   })());
 }
 
 async function proposalForm(p, after) {
+  const routeAtStart = location.hash;
   const [opps, leads, clients, projects] = await Promise.all([options("opportunities"), options("leads"), options("clients"), options("projects")]);
+  if (location.hash !== routeAtStart || !Object.values(crmRoutes).includes(routeAtStart)) return;
   form({ title: p?.id ? "Editar proposta" : "Nova proposta", subtitle: "CRM", submitLabel: p?.id ? "Salvar" : "Criar", values: p ? { ...p, opportunity_id: p.opportunity_id ? String(p.opportunity_id) : "", lead_id: p.lead_id ? String(p.lead_id) : "", client_id: p.client_id ? String(p.client_id) : "", project_id: p.project_id ? String(p.project_id) : "" } : {}, fields: [
     { name: "title", label: "Título" },
     { name: "opportunity_id", label: "Oportunidade", type: "select", required: false, options: [["", "Sem oportunidade"], ...opps.map((o) => [String(o.id), `${o.name} · ${money(o.amount)}`])], half: true },
@@ -399,10 +589,10 @@ async function proposalDrawer(id, after) {
         ${facts([["Oportunidade", p.opportunity_name], ["Lead", p.lead_name], ["Validade", p.valid_until ? date(p.valid_until) : null], ["Enviada em", p.sent_at ? dateTime(p.sent_at) : null], ["Decidida em", p.decided_at ? dateTime(p.decided_at) : null]])}
         ${p.notes ? `<div><h3>Condições</h3><p class="crm-notes">${esc(p.notes)}</p></div>` : ""}
         <div><h3>Itens</h3>
-          <div class="crm-items">${items.length ? items.map((i, index) => `<div class="crm-item"><input type="text" value="${esc(i.description)}" data-item="${index}" data-field="description" placeholder="Descrição" /><input type="number" step="0.01" min="0.01" value="${esc(i.quantity)}" data-item="${index}" data-field="quantity" aria-label="Quantidade" /><input type="number" step="0.01" min="0" value="${esc(i.unit_price)}" data-item="${index}" data-field="unit_price" aria-label="Preço unitário" /><b>${money(Number(i.quantity || 0) * Number(i.unit_price || 0))}</b><button class="ui-icon is-danger" type="button" data-remove="${index}" aria-label="Remover">×</button></div>`).join("") : `<p class="crm-hint">Nenhum item. Adicione do catálogo ou um item livre.</p>`}</div>
-          <div class="crm-items-actions">${catalog.length ? `<select class="ui-select" data-catalog><option value="">Adicionar do catálogo…</option>${catalog.filter((c) => c.active !== false).map((c) => `<option value="${esc(c.id)}">${esc(c.name)} · ${money(c.price)}</option>`).join("")}</select>` : `<a class="text-action" href="#catalogo">Cadastrar itens no catálogo →</a>`}<button class="text-action" type="button" data-add>+ Item livre</button><span></span>${button({ label: "Salvar itens", kind: "secondary", attr: "data-save" })}</div>
+          <div class="crm-items">${items.length ? items.map((i, index) => `<div class="crm-item"><input type="text" name="description" autocomplete="off" value="${esc(i.description)}" data-item="${index}" data-field="description" placeholder="Descrição do item…" aria-label="Descrição do item" /><input type="number" name="quantity" autocomplete="off" step="0.01" min="0.01" value="${esc(i.quantity)}" data-item="${index}" data-field="quantity" aria-label="Quantidade" /><input type="number" name="unit_price" autocomplete="off" step="0.01" min="0" value="${esc(i.unit_price)}" data-item="${index}" data-field="unit_price" aria-label="Preço unitário" /><b>${money(Number(i.quantity || 0) * Number(i.unit_price || 0))}</b><button class="ui-icon is-danger" type="button" data-remove="${index}" aria-label="Remover item">×</button></div>`).join("") : `<p class="crm-hint">Nenhum item. Adicione do catálogo ou um item livre.</p>`}</div>
+          <div class="crm-items-actions">${catalog.length ? `<select class="ui-select" name="catalog_item_id" autocomplete="off" data-catalog aria-label="Adicionar item do catálogo"><option value="">Adicionar do catálogo…</option>${catalog.filter((c) => c.active !== false).map((c) => `<option value="${esc(c.id)}">${esc(c.name)} · ${money(c.price)}</option>`).join("")}</select>` : `<a class="text-action" href="#catalogo">Cadastrar itens no catálogo →</a>`}<button class="text-action" type="button" data-add>+ Item livre</button><span></span>${button({ label: "Salvar itens", kind: "secondary", attr: "data-save" })}</div>
           <p class="crm-items-total">Subtotal: <strong>${money(total)}</strong></p>
-          <div class="crm-pricing"><label>Desconto<input type="number" min="0" step="0.01" data-price="discount" value="${esc(p.discount || 0)}"></label><label>Taxas adicionais<input type="number" min="0" step="0.01" data-price="additional_fees" value="${esc(p.additional_fees || 0)}"></label><label>Entrada<input type="number" min="0" step="0.01" data-price="down_payment" value="${esc(p.down_payment || 0)}"></label><label>Parcelas<input type="number" min="1" step="1" data-price="installments" value="${esc(p.installments || 1)}"></label><button class="compact-action" type="button" data-recalculate>Calcular valores</button><p data-price-summary>Valor final: ${money(p.final_amount ?? total)} · Saldo: ${money(p.balance_remaining ?? total)}</p></div>
+          <div class="crm-pricing"><label>Desconto<input name="discount" autocomplete="off" type="number" min="0" step="0.01" data-price="discount" value="${esc(p.discount || 0)}"></label><label>Taxas adicionais<input name="additional_fees" autocomplete="off" type="number" min="0" step="0.01" data-price="additional_fees" value="${esc(p.additional_fees || 0)}"></label><label>Entrada<input name="down_payment" autocomplete="off" type="number" min="0" step="0.01" data-price="down_payment" value="${esc(p.down_payment || 0)}"></label><label>Parcelas<input name="installments" autocomplete="off" type="number" min="1" step="1" data-price="installments" value="${esc(p.installments || 1)}"></label><button class="compact-action" type="button" data-recalculate>Calcular valores</button><p data-price-summary role="status" aria-live="polite">Valor final: ${money(p.final_amount ?? total)} · Saldo: ${money(p.balance_remaining ?? total)}</p></div>
         </div>
         <div class="crm-drawer-actions">${p.status === "draft" ? button({ label: "Marcar como enviada", attr: 'data-status="sent"' }) : ""}${p.status === "sent" ? button({ label: "Aceita", attr: 'data-status="accepted"' }) + button({ label: "Recusada", kind: "secondary", attr: 'data-status="rejected"' }) : ""}${button({ label: "Imprimir / PDF", kind: "secondary", attr: "data-print" })}${button({ label: "Editar", kind: "secondary", attr: "data-edit" })}</div>`;
       d.body.querySelectorAll("[data-item]").forEach((input) => input.addEventListener("input", () => { items[Number(input.dataset.item)][input.dataset.field] = input.value; if (input.dataset.field !== "description") render(); }));
@@ -417,13 +607,13 @@ async function proposalDrawer(id, after) {
         if (summary) summary.textContent = `Valor final: ${money(finalAmount)} · Entrada: ${money(down)} · Saldo: ${money(balance)} · ${installments}x de ${money(installmentAmount)}`;
       };
       d.body.querySelectorAll("[data-price]").forEach((input) => input.addEventListener("input", updatePricingPreview));
-      d.body.querySelector("[data-save]").addEventListener("click", async () => { try { const { proposal } = await api(`/api/proposals/${p.id}/items`, { method: "PUT", body: { items } }); p.amount = proposal.amount; const pricing = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: pricingValues() }); Object.assign(p, pricing.proposal); toast("Itens e valores salvos.", "success"); after(); render(); } catch (error) { toast(error.message, "error"); } });
-      d.body.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", async () => { try { await api(`/api/proposals/${p.id}`, { method: "PATCH", body: { status: b.dataset.status } }); d.close(); toast("Situação atualizada.", "success"); after(); } catch (error) { toast(error.message, "error"); } }));
+      d.body.querySelector("[data-save]").addEventListener("click", async (event) => { const save = event.currentTarget, routeAtStart = location.hash; if (save.disabled || routeAtStart !== "#propostas") return; save.disabled = true; save.setAttribute("aria-busy", "true"); save.textContent = "Salvando…"; try { const { proposal } = await api(`/api/proposals/${p.id}/items`, { method: "PUT", body: { items } }); if (location.hash !== routeAtStart || !d.body.isConnected) return; p.amount = proposal.amount; const pricing = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: pricingValues() }); if (location.hash !== routeAtStart || !d.body.isConnected) return; Object.assign(p, pricing.proposal); toast("Itens e valores salvos.", "success"); after(); render(); } catch (error) { if (location.hash !== routeAtStart || !d.body.isConnected) return; save.disabled = false; save.removeAttribute("aria-busy"); save.textContent = "Salvar itens"; toast(error.message, "error"); } finally { if (save.isConnected) { save.disabled = false; save.removeAttribute("aria-busy"); } } });
+      d.body.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", async () => { b.disabled = true; b.setAttribute("aria-busy", "true"); try { await api(`/api/proposals/${p.id}`, { method: "PATCH", body: { status: b.dataset.status } }); d.close(); toast("Situação atualizada.", "success"); after(); } catch (error) { b.disabled = false; b.removeAttribute("aria-busy"); toast(error.message, "error"); } }));
       d.body.querySelector("[data-edit]").addEventListener("click", () => { d.close(); proposalForm(p, after); });
       d.body.querySelector("[data-print]").addEventListener("click", () => printProposal(p, items));
     };
     render();
-    d.body.addEventListener("click", async (event) => { const button = event.target.closest?.("[data-recalculate]"); if (!button) return; const values = Object.fromEntries([...d.body.querySelectorAll("[data-price]")].map((input) => [input.dataset.price, input.value])); button.disabled = true; try { const data = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: values }); Object.assign(p, data.proposal); render(); toast("Valores da proposta recalculados.", "success"); } catch (error) { toast(error.message, "error"); } finally { button.disabled = false; } });
+    d.body.addEventListener("click", async (event) => { const button = event.target.closest?.("[data-recalculate]"), routeAtStart = location.hash; if (!button || button.disabled || routeAtStart !== "#propostas") return; const values = Object.fromEntries([...d.body.querySelectorAll("[data-price]")].map((input) => [input.dataset.price, input.value])); button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Calculando…"; try { const data = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: values }); if (location.hash !== routeAtStart || !d.body.isConnected) return; Object.assign(p, data.proposal); render(); toast("Valores da proposta recalculados.", "success"); } catch (error) { if (location.hash === routeAtStart && button.isConnected) { toast(error.message, "error"); button.disabled = false; button.removeAttribute("aria-busy"); button.textContent = "Calcular valores"; } } finally { if (button.isConnected) { button.disabled = false; button.removeAttribute("aria-busy"); } } });
   } catch (error) { d.body.innerHTML = stateBlock.error(error.message, "crm-drawer-retry"); }
 }
 
@@ -440,8 +630,38 @@ function printProposal(p, items) {
    Follow-ups
    ========================================================================== */
 
-const followupState = { query: "", status: "open", channel: "all" };
+dashboardGrid.addEventListener("click", async (event) => {
+  if (location.hash.replace(/^#/, "") !== "propostas") return;
+  const button = event.target.closest?.("[data-set]");
+  if (!button) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (button.dataset.crmBusy === "1") return;
+  const [id, status] = button.dataset.set.split(":");
+  const actionLabel = { sent: "Enviando…", accepted: "Aceitando…", rejected: "Recusando…" }[status] || "Atualizando…";
+  button.dataset.crmBusy = "1";
+  button.dataset.crmLabel = button.textContent;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.textContent = actionLabel;
+  try {
+    await api(`/api/proposals/${id}`, { method: "PATCH", body: { status } });
+    toast(status === "accepted" ? "Proposta aceita — oportunidade marcada como ganha." : status === "sent" ? "Marcada como enviada." : "Proposta recusada.", status === "rejected" ? "info" : "success");
+    renderProposals();
+  } catch (error) {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    button.textContent = button.dataset.crmLabel || "Atualizar";
+    delete button.dataset.crmBusy;
+    delete button.dataset.crmLabel;
+    toast(error.message, "error");
+  }
+}, true);
+
+const followupState = { query: "", status: "open", channel: "all", request: 0 };
 async function renderFollowups() {
+  if (location.hash !== "#follow-ups") return;
+  const request = followupState.request = (followupState.request || 0) + 1;
   dashboardGrid.innerHTML = header({ kicker: "CRM", title: "Follow-ups", description: "Carregando…" }) + stateBlock.loading("Carregando follow-ups…");
   await wrap("Follow-ups", "CRM", (async () => {
     const params = new URLSearchParams();
@@ -449,6 +669,7 @@ async function renderFollowups() {
     if (followupState.status !== "all") params.set("status", followupState.status);
     if (followupState.channel !== "all") params.set("channel", followupState.channel);
     const items = (await api(`/api/followups?${params}`)).followups || [];
+    if (request !== followupState.request || location.hash !== "#follow-ups") return;
     const now = new Date(), today = now.toDateString();
     const pending = items.filter((f) => !f.done_at), done = items.filter((f) => f.done_at);
     const groups = [["late", "Atrasados", pending.filter((f) => new Date(f.due_at) < now && new Date(f.due_at).toDateString() !== today)], ["today", "Hoje", pending.filter((f) => new Date(f.due_at).toDateString() === today)], ["next", "Próximos", pending.filter((f) => new Date(f.due_at) > now && new Date(f.due_at).toDateString() !== today)], ["done", "Concluídos", done.slice(0, 15)]];
@@ -457,12 +678,14 @@ async function renderFollowups() {
       + stats([{ label: "Atrasados", value: String(groups[0][2].length), tone: groups[0][2].length ? "red" : undefined }, { label: "Hoje", value: String(groups[1][2].length), tone: "orange" }, { label: "Próximos", value: String(groups[2][2].length) }, { label: "Concluídos", value: String(done.length), tone: "green" }])
       + `<section class="data-card crm-card">${pending.length || done.length ? groups.filter(([, , list]) => list.length).map(([k, name, list]) => `<section class="crm-group crm-group-${k}"><h3>${name} <span>${list.length}</span></h3><div class="crm-followup-list">${list.map((f) => row(f, k === "done")).join("")}</div></section>`).join("") : empty({ title: "Nenhum follow-up.", text: "Agende o próximo contato com cada lead e acompanhe por aqui.", cta: "Agendar follow-up", attr: "data-new" })}</section>`;
     const followupCard = dashboardGrid.querySelector(".crm-card");
-    const followupToolbar = toolbar({ search: { value: followupState.query, placeholder: "Buscar follow-up..." }, filters: [{ key: "status", value: followupState.status, options: [["open", "Pendentes"], ["all", "Todos"], ["late", "Atrasados"], ["today", "Hoje"], ["done", "Concluídos"]] }, { key: "channel", value: followupState.channel, options: [["all", "Todos os canais"], ["whatsapp", "WhatsApp"], ["ligacao", "Ligação"], ["email", "E-mail"], ["reuniao", "Reunião"]] }] });
+    const pageStatus = dashboardGrid.querySelector("[data-page-status]");
+    if (pageStatus) pageStatus.textContent = `${pending.length} pendentes${groups[0][2].length ? ` · ${groups[0][2].length} atrasados` : ""}`;
+    const followupToolbar = toolbar({ search: { value: followupState.query, placeholder: "Buscar follow-up…" }, filters: [{ key: "status", value: followupState.status, options: [["open", "Pendentes"], ["all", "Todos"], ["late", "Atrasados"], ["today", "Hoje"], ["done", "Concluídos"]] }, { key: "channel", value: followupState.channel, options: [["all", "Todos os canais"], ["whatsapp", "WhatsApp"], ["ligacao", "Ligação"], ["email", "E-mail"], ["reuniao", "Reunião"]] }] });
     if (followupCard) followupCard.insertAdjacentHTML("afterbegin", followupToolbar);
+    dashboardGrid.querySelectorAll("[data-toggle]").forEach((input) => { const lead = input.closest(".crm-followup")?.querySelector("strong")?.textContent?.trim() || "lead"; input.setAttribute("aria-label", `${input.checked ? "Reabrir" : "Concluir"} follow-up de ${lead}`); });
     dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (e) => { followupState.query = e.target.value; clearTimeout(followupState.timer); followupState.timer = setTimeout(() => renderFollowups(), 250); });
     dashboardGrid.querySelectorAll("[data-filter]").forEach((el) => el.addEventListener("change", () => { followupState[el.dataset.filter] = el.value; renderFollowups(); }));
     dashboardGrid.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => followupForm(null, renderFollowups)));
-    dashboardGrid.querySelectorAll("[data-toggle]").forEach((input) => input.addEventListener("change", async () => { try { await api(`/api/followups/${input.dataset.toggle}`, { method: "PATCH", body: { done: input.checked } }); toast(input.checked ? "Follow-up concluído." : "Reaberto.", "success"); renderFollowups(); } catch (error) { toast(error.message, "error"); input.checked = !input.checked; } }));
     dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => followupForm(items.find((f) => String(f.id) === b.dataset.edit), renderFollowups)));
     dashboardGrid.querySelectorAll("[data-wa]").forEach((b) => b.addEventListener("click", () => window.open(`https://wa.me/${b.dataset.wa}`, "_blank", "noopener")));
     dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/followups/${b.dataset.delete}`, { method: "DELETE" }); toast("Follow-up excluído."); renderFollowups(); } })));
@@ -470,7 +693,9 @@ async function renderFollowups() {
 }
 
 async function followupForm(f, after) {
+  const routeAtStart = location.hash;
   const leads = await options("leads");
+  if (location.hash !== routeAtStart || !Object.values(crmRoutes).includes(routeAtStart)) return;
   const editing = Boolean(f?.id);
   form({ title: editing ? "Editar follow-up" : "Novo follow-up", subtitle: "CRM", submitLabel: editing ? "Salvar" : "Agendar", values: { ...(f || {}), lead_id: f?.lead_id ? String(f.lead_id) : "", due_at: f?.due_at || new Date(Date.now() + 86400e3).toISOString(), channel: f?.channel || "whatsapp" }, fields: [
     { name: "lead_id", label: "Lead", type: "select", options: leads.length ? leads.map((l) => [String(l.id), `${l.name}${l.company ? ` · ${l.company}` : ""}`]) : [["", "Nenhum lead cadastrado"]] },
@@ -480,7 +705,166 @@ async function followupForm(f, after) {
   ], onSubmit: async (values) => { if (!values.lead_id) throw new Error("Cadastre um lead antes de agendar."); if (editing) await api(`/api/followups/${f.id}`, { method: "PATCH", body: values }); else await api("/api/followups", { method: "POST", body: values }); toast(editing ? "Follow-up atualizado." : "Follow-up agendado.", "success"); after(); } });
 }
 
+let crmSearchSnapshot;
+dashboardGrid.addEventListener("input", (event) => {
+  const input = event.target.closest?.("[data-search]");
+  if (input) crmSearchSnapshot = { value: input.value, position: input.selectionStart };
+}, true);
+const crmSearchObserver = new MutationObserver(() => {
+  if (!crmSearchSnapshot) return;
+  const input = dashboardGrid.querySelector("[data-search]");
+  if (!input) return;
+  input.setAttribute("autocomplete", "off");
+  if (input.value === crmSearchSnapshot.value) {
+    input.focus();
+    try { input.setSelectionRange(crmSearchSnapshot.position, crmSearchSnapshot.position); } catch { /* busca sem cursor em alguns navegadores */ }
+  }
+  crmSearchSnapshot = null;
+});
+crmSearchObserver.observe(dashboardGrid, { childList: true, subtree: true });
+
+const proposalShareObserver = new MutationObserver(() => {
+  if (location.hash !== "#propostas") return;
+  dashboardGrid.querySelectorAll("button.compact-action").forEach((button) => {
+    if (button.dataset.shareFallbackBound === "1" || !button.textContent.includes("Link")) return;
+    const row = button.closest("tr"), trigger = row?.querySelector("[data-open]");
+    if (!trigger) return;
+    button.dataset.shareFallbackBound = "1";
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (button.dataset.busy === "1") return;
+      button.dataset.busy = "1";
+      button.disabled = true;
+      button.textContent = "Gerando…";
+      try {
+        const data = await api(`/api/proposals/${trigger.dataset.open}/public-link`, { method: "POST", body: {} });
+        await ui.copyText(`${location.origin}${data.path}`);
+        button.textContent = "Link copiado";
+        toast("Link de aprovação copiado.", "success");
+      } catch (error) {
+        button.textContent = "Link para aprovação";
+        toast(error.message, "error");
+      } finally {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+        button.dataset.busy = "";
+      }
+    }, true);
+  });
+});
+proposalShareObserver.observe(dashboardGrid, { childList: true, subtree: true });
+
+dashboardGrid.addEventListener("click", async (event) => {
+  const button = event.target.closest?.("[data-set]");
+  if (!button || location.hash !== "#campanhas") return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (button.dataset.busy === "1") return;
+  const [id, status] = button.dataset.set.split(":");
+  button.dataset.busy = "1";
+  button.disabled = true;
+  try {
+    await api(`/api/campaigns/${id}`, { method: "PATCH", body: { status } });
+    toast("Campanha atualizada.", "success");
+    renderCampaigns();
+  } catch (error) {
+    button.disabled = false;
+    button.dataset.busy = "";
+    toast(error.message, "error");
+  }
+}, true);
+
+dashboardGrid.addEventListener("change", async (event) => {
+  const input = event.target.closest?.("[data-toggle]");
+  if (!input || location.hash !== "#follow-ups") return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (input.dataset.busy === "1") return;
+  input.dataset.busy = "1";
+  input.disabled = true;
+  try {
+    await api(`/api/followups/${input.dataset.toggle}`, { method: "PATCH", body: { done: input.checked } });
+    toast(input.checked ? "Follow-up concluído." : "Reaberto.", "success");
+    renderFollowups();
+  } catch (error) {
+    input.checked = !input.checked;
+    toast(error.message, "error");
+  } finally {
+    input.disabled = false;
+    input.dataset.busy = "";
+  }
+}, true);
+
 registerRoutes({ crm: renderHub, leads: renderLeads, funil: renderFunnel, oportunidades: renderOpportunities, campanhas: renderCampaigns, propostas: renderProposals, "follow-ups": renderFollowups }, { parent: "#crm", titles: { crm: "CRM comercial", leads: "Leads", funil: "Funil de vendas", oportunidades: "Oportunidades", campanhas: "Campanhas", propostas: "Propostas", "follow-ups": "Follow-ups" } });
+const crmControlObserver = new MutationObserver(() => {
+  dashboardGrid.querySelectorAll("input, select, textarea").forEach((control) => {
+    if (!control.name) control.name = control.dataset.search !== undefined ? "search" : control.dataset.filter || control.dataset.price || (control.dataset.status !== undefined ? "status" : control.dataset.stage !== undefined ? "stage" : control.dataset.field || "field");
+    if (!control.getAttribute("autocomplete") && control.type !== "password") control.setAttribute("autocomplete", "off");
+    if (control.placeholder?.includes("...")) control.placeholder = control.placeholder.replaceAll("...", "…");
+  });
+});
+crmControlObserver.observe(dashboardGrid, { childList: true, subtree: true });
+
+const crmProposalControlObserver = new MutationObserver(() => {
+  document.querySelectorAll("[data-item], [data-price], [data-price-summary]").forEach((control) => {
+    if (control.matches("[data-price-summary]")) {
+      control.setAttribute("role", "status");
+      control.setAttribute("aria-live", "polite");
+      return;
+    }
+    if (!control.name) control.name = control.dataset.price || `item_${control.dataset.item || "0"}_${control.dataset.field || "value"}`;
+    if (!control.getAttribute("autocomplete")) control.setAttribute("autocomplete", "off");
+    if (control.matches('[data-field="description"]')) {
+      control.setAttribute("aria-label", "Descrição do item");
+      if (!control.placeholder || control.placeholder === "Descrição") control.placeholder = "Descrição do item…";
+    }
+  });
+});
+crmProposalControlObserver.observe(document.body, { childList: true, subtree: true });
+
+const crmResultsObserver = new MutationObserver(() => {
+  dashboardGrid.querySelectorAll(".crm-card").forEach((card) => {
+    const toolbar = card.querySelector(".ui-toolbar");
+    if (!toolbar) return;
+    let status = card.querySelector("[data-crm-results]");
+    if (!status) {
+      status = document.createElement("p");
+      status.className = "ui-filter-status";
+      status.dataset.crmResults = "true";
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      toolbar.insertAdjacentElement("afterend", status);
+    }
+    const count = card.querySelectorAll("tbody tr, .crm-followup-list > .crm-followup").length;
+    status.textContent = `${ui.number(count)} ${count === 1 ? "registro encontrado" : "registros encontrados"}.`;
+  });
+});
+crmResultsObserver.observe(dashboardGrid, { childList: true, subtree: true });
+
+const crmRowAccessibilityObserver = new MutationObserver(() => {
+  dashboardGrid.querySelectorAll("tr.is-clickable[data-open]").forEach((row) => {
+    row.setAttribute("tabindex", "0");
+    row.setAttribute("role", "button");
+    if (!row.getAttribute("aria-label")) row.setAttribute("aria-label", `Abrir ${row.querySelector("strong")?.textContent?.trim() || "registro"}`);
+  });
+});
+crmRowAccessibilityObserver.observe(dashboardGrid, { childList: true, subtree: true });
+dashboardGrid.addEventListener("keydown", (event) => {
+  const row = event.target.closest?.("tr.is-clickable[data-open]");
+  if (!row || !["Enter", " "].includes(event.key) || event.target !== row) return;
+  event.preventDefault();
+  row.click();
+});
+
+const crmActionStateObserver = new MutationObserver(() => {
+  dashboardGrid.querySelectorAll("button, input, select").forEach((control) => {
+    if (control.disabled) { control.setAttribute("aria-busy", "true"); if (control.textContent?.includes("...")) control.textContent = control.textContent.replaceAll("...", "…"); }
+    else control.removeAttribute("aria-busy");
+  });
+});
+crmActionStateObserver.observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
+
 followupForm = async function followupFormConnected(f, after) {
   const [leads, clients, opportunities] = await Promise.all([options("leads"), options("clients"), options("opportunities")]);
   const editing = Boolean(f?.id);
@@ -494,3 +878,55 @@ followupForm = async function followupFormConnected(f, after) {
     { name: "reminder_minutes", label: "Lembrete (minutos antes)", type: "number", required: false, half: true }, { name: "next_action", label: "Próxima ação", required: false }, { name: "note", label: "Observações", type: "textarea", required: false, rows: 3 }
   ], onSubmit: async (values) => { if (!values.lead_id && !values.client_id && !values.opportunity_id) throw new Error("Vincule um lead, cliente ou oportunidade."); if (editing) await api(`/api/followups/${f.id}`, { method: "PATCH", body: values }); else await api("/api/followups", { method: "POST", body: values }); toast(editing ? "Follow-up atualizado." : "Follow-up agendado.", "success"); after(); } });
 };
+
+dashboardGrid.addEventListener("change", (event) => {
+  const control = event.target.closest?.("[data-status], [data-stage]");
+  if (!control || control.disabled) return;
+  control.disabled = true;
+  control.setAttribute("aria-busy", "true");
+}, true);
+
+new MutationObserver(() => {
+  dashboardGrid.querySelectorAll("button, select, input, textarea").forEach((control) => { control.style.touchAction = "manipulation"; });
+  dashboardGrid.querySelectorAll("h2, h3").forEach((heading) => { heading.style.textWrap = "balance"; });
+  dashboardGrid.querySelectorAll("table").forEach((table) => {
+    if (!table.caption) {
+      const caption = document.createElement("caption");
+      caption.className = "sr-only";
+      caption.textContent = `Dados de ${location.hash.replace(/^#/, "CRM")}`;
+      table.prepend(caption);
+    }
+    table.querySelectorAll("thead th").forEach((header) => header.setAttribute("scope", "col"));
+  });
+}).observe(dashboardGrid, { childList: true, subtree: true });
+
+dashboardGrid.addEventListener("click", (event) => {
+  const action = event.target.closest?.("[data-delete]");
+  const route = location.hash.replace(/^#/, "");
+  const config = { leads: ["leads", renderLeads], oportunidades: ["opportunities", renderOpportunities], campanhas: ["campaigns", renderCampaigns], propostas: ["proposals", renderProposals], "follow-ups": ["followups", renderFollowups] }[route];
+  if (!action || !config) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (action.dataset.crmDeleteBusy === "1") return;
+  confirmInline(action, {
+    text: "Excluir este registro?",
+    onConfirm: async () => {
+      const originalLabel = action.textContent;
+      action.dataset.crmDeleteBusy = "1";
+      action.disabled = true;
+      action.setAttribute("aria-busy", "true");
+      action.textContent = "Excluindo…";
+      try {
+        await api(`/api/${config[0]}/${action.dataset.delete}`, { method: "DELETE" });
+        toast("Registro excluído.", "success");
+        config[1]();
+      } catch (error) {
+        action.disabled = false;
+        action.removeAttribute("aria-busy");
+        action.textContent = originalLabel;
+        delete action.dataset.crmDeleteBusy;
+        throw error;
+      }
+    }
+  });
+}, true);

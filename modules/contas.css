@@ -5,3 +5,21 @@
 
 /* Linhas de Contatos/Empresas/Clientes: informação à esquerda, badge e ações à direita, sem esticar botões. */
 .conta-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 4px}.conta-row>div:first-child{flex:1 1 260px;min-width:0}.conta-row>div:first-child strong,.conta-row>div:first-child small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.conta-row>small{flex:0 1 auto;color:var(--muted);font-size:12px}.conta-row>.ui-badge,.conta-row>.status-pill{flex:0 0 auto}.conta-row>.compact-action{flex:0 0 auto;margin:0}.conta-row>.compact-action:first-of-type{margin-left:auto}@media(max-width:700px){.conta-row>.compact-action:first-of-type{margin-left:0}}
+.conta-row{content-visibility:auto;contain-intrinsic-size:0 72px}
+.contas-list h2,.contas-intro h2{ text-wrap:balance }
+.conta-drawer { overscroll-behavior: contain; }
+.conta-close:focus-visible, .conta-row .compact-action:focus-visible, .contas-list input:focus-visible,
+.contas-list select:focus-visible, .cnpj-card input:focus-visible, .cnpj-card button:focus-visible {
+  outline: 3px solid rgb(71 136 241 / 72%);
+  outline-offset: 2px;
+}
+.conta-row .compact-action, .contas-list input, .contas-list select, .cnpj-card button { touch-action: manipulation; }
+.conta-list-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; min-width: 0; }
+.conta-list-filters label { display: grid; gap: 4px; min-width: min(100%, 220px); }
+.conta-list-filters input, .conta-list-filters select { min-width: 0; }
+@media (max-width: 700px) {
+  .contas-list .section-heading { align-items: stretch; flex-direction: column; }
+  .conta-list-filters { width: 100%; }
+  .conta-list-filters label { flex: 1 1 100%; }
+  .conta-list-filters button { flex: 1 1 auto; }
+}

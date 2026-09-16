@@ -32,8 +32,18 @@ const maskIntegration = (row) => {
   for (const key of ["apiKey", "token", "secret", "password"]) {
     if (config[key]) config[key] = `••••${String(config[key]).slice(-4)}`;
   }
+  Object.assign(config, maskNestedConfig(config));
+  Object.entries(config).forEach(([key, value]) => { if (value && typeof value === "object" && !Array.isArray(value)) config[key] = maskNestedConfig(value); });
   return { ...row, config };
 };
+function maskNestedConfig(value) {
+  const secretKeys = new Set(["apikey", "api_key", "token", "secret", "password", "clientsecret", "client_secret"]);
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => {
+    const normalized = key.replace(/[-_]/g, "").toLowerCase();
+    if (secretKeys.has(normalized) && child) return [key, `\u2022\u2022\u2022\u2022${String(child).slice(-4)}`];
+    return [key, child && typeof child === "object" && !Array.isArray(child) ? maskNestedConfig(child) : child];
+  }));
+}
 const text = (value) => String(value ?? "").trim();
 const checkOneOf = (value, values, name) => value === undefined || values.includes(value) ? null : `Valor inválido para ${name}.`;
 const jsonValue = (value, fallback) => value === undefined ? fallback : value;
@@ -77,6 +87,21 @@ export function register(app, ctx) {
     try { const q = await pool.query(`select i.* from integrations i where ${where.join(" and ")} order by i.created_at desc limit $${params.length - 1} offset $${params.length}`, params); return res.json({ integrations: q.rows.map(maskIntegration), pagination: { limit, offset, returned: q.rows.length } }); } catch (error) { return fail(res, error, "Não foi possível carregar as integrações."); }
   });
 
+  app.use("/api/integrations", async (req, res, next) => {
+    if (req.method !== "PATCH" || !req.body?.config || typeof req.body.config !== "object") return next();
+    const org = tenant(req, res); if (!org) return;
+    try {
+      const integrationId = req.path.split("/").filter(Boolean).at(-1);
+      const current = await pool.query("select config from integrations where id=$1 and organization_id=$2", [integrationId, org]);
+      if (!current.rowCount) return res.status(404).json({ error: "Integração não encontrada." });
+      const existing = current.rows[0]?.config && typeof current.rows[0].config === "object" ? current.rows[0].config : {};
+      const nextConfig = { ...req.body.config };
+      const secretKeys = ["apiKey", "api_key", "token", "secret", "password", "clientSecret", "client_secret"];
+      secretKeys.forEach((key) => { if (existing[key] !== undefined && (nextConfig[key] === undefined || (typeof nextConfig[key] === "string" && /^\u2022{4}/.test(nextConfig[key])))) nextConfig[key] = existing[key]; });
+      req.body.config = nextConfig;
+      return next();
+    } catch { return res.status(503).json({ error: "Não foi possível preservar a configuração protegida." }); }
+  });
   const definitions = {
     automations: {
       path: "/api/automations", singular: "automation",

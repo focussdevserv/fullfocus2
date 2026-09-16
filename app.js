@@ -1,4 +1,10 @@
 const $ = (id) => document.getElementById(id);
+const safeStorage = {
+  get(key, fallback = null) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, value); return true; } catch { return false; } },
+  remove(key) { try { localStorage.removeItem(key); } catch { /* armazenamento indisponível */ } },
+};
+window.FocusStorage = safeStorage;
 
 const loginShell = $("login-shell");
 const hero = $("hero");
@@ -39,13 +45,57 @@ const globalSearch = $("global-search");
 const searchResults = $("search-results");
 const dashboardGrid = document.querySelector(".dashboard-grid");
 const initialDashboardMarkup = dashboardGrid?.innerHTML || "";
+document.addEventListener("change", async (event) => {
+  const input = event.target.closest?.("[data-home-task]");
+  if (!input) return;
+  event.stopImmediatePropagation();
+  const checked = input.checked;
+  input.disabled = true;
+  try {
+    await api(`/api/tasks/${input.dataset.homeTask}`, { method: "PATCH", body: { status: checked ? "done" : "doing" } });
+    await refreshHomePanels();
+  } catch (error) {
+    input.checked = !checked;
+    toast(error.message || "Não foi possível atualizar a tarefa.", "error");
+  } finally {
+    if (input.isConnected) input.disabled = false;
+  }
+}, true);
+document.addEventListener("click", (event) => {
+  const action = event.target.closest?.(".hero-actions .button-light, .hero-actions .hero-link");
+  if (!action) return;
+  if (action.classList.contains("button-light")) { window.location.hash = "#tarefas"; return; }
+  ui.drawer({
+    title: "Como funciona o FocusDev",
+    subtitle: "Uma visão simples para decidir melhor",
+    html: `<ol class="hero-how-it-works"><li><strong>Comece pelo seu dia</strong><span>As tarefas, eventos e pendências mais importantes aparecem no início.</span></li><li><strong>Organize por contexto</strong><span>Use CRM, projetos e financeiro para encontrar o próximo passo certo.</span></li><li><strong>Acompanhe o avanço</strong><span>Registros e indicadores atualizados ajudam você a agir sem perder o histórico.</span></li></ol><p class="ui-drawer-note">Você pode ajustar a visão do painel pelo seletor de perfil acima.</p>`,
+  });
+});
+const tableHeaderObserver = dashboardGrid ? new MutationObserver(() => {
+  dashboardGrid.querySelectorAll("thead th").forEach((header) => {
+    if (!header.textContent.trim() && !header.hasAttribute("aria-label")) header.setAttribute("aria-label", "Ações");
+    header.setAttribute("scope", "col");
+  });
+  dashboardGrid.querySelectorAll("input, select, textarea").forEach((control) => {
+    if (!control.name) control.name = control.dataset.filter || control.dataset.search || control.type || "field";
+    if (!control.getAttribute("autocomplete") && control.type !== "password") control.setAttribute("autocomplete", "off");
+    if (control.placeholder && !control.placeholder.endsWith("…")) control.placeholder += "…";
+  });
+}) : null;
+tableHeaderObserver?.observe(dashboardGrid, { childList: true, subtree: true });
 const notificationButton = document.querySelector(".notification-button");
-const notificationPanel = document.createElement("div"); notificationPanel.className = "notification-panel"; notificationPanel.hidden = true; notificationPanel.innerHTML = '<div class="section-heading"><h2>Notificações</h2><button type="button" class="notification-close" aria-label="Fechar">×</button></div><div class="notification-list" aria-live="polite"></div><button type="button" class="text-action notification-read-all">Marcar todas como lidas</button>'; document.body.append(notificationPanel);
-notificationButton?.addEventListener("click", async () => { notificationPanel.hidden = !notificationPanel.hidden; if (!notificationPanel.hidden) await refreshInternalNotifications(); }); notificationPanel.querySelector(".notification-close").addEventListener("click", () => { notificationPanel.hidden = true; });
-const notificationTime = (value) => value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
+const notificationPanel = document.createElement("div"); notificationPanel.className = "notification-panel"; notificationPanel.id = "notification-panel"; notificationPanel.setAttribute("role", "region"); notificationPanel.setAttribute("aria-label", "Notificações do workspace"); notificationPanel.hidden = true; notificationPanel.innerHTML = '<div class="section-heading"><h2>Notificações</h2><button type="button" class="notification-close" aria-label="Fechar">×</button></div><div class="notification-list" aria-live="polite"></div><button type="button" class="text-action notification-read-all">Marcar todas como lidas</button>'; document.body.append(notificationPanel);
+notificationButton?.setAttribute("aria-controls", "notification-panel"); notificationButton?.setAttribute("aria-expanded", "false");
+notificationButton?.addEventListener("click", async () => { notificationPanel.hidden = !notificationPanel.hidden; notificationButton.setAttribute("aria-expanded", String(!notificationPanel.hidden)); if (!notificationPanel.hidden) await refreshInternalNotifications(); }); notificationPanel.querySelector(".notification-close").addEventListener("click", () => { notificationRequest += 1; notificationPanel.hidden = true; notificationButton?.setAttribute("aria-expanded", "false"); });
+const notificationTimeFormatter = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
+const notificationTime = (value) => { if (!value) return ""; const date = new Date(value); return Number.isNaN(date.getTime()) ? "" : notificationTimeFormatter.format(date); };
+let notificationRequest = 0;
+notificationPanel.querySelector("h2")?.setAttribute("id", "notification-panel-title");
+notificationPanel.setAttribute("aria-labelledby", "notification-panel-title");
 async function refreshInternalNotifications() {
   const list = notificationPanel.querySelector(".notification-list"); if (!list || appShell.hidden) return;
-  try { const data = await api("/api/notifications?limit=30"); list.innerHTML = data.notifications?.length ? data.notifications.map((item) => `<button type="button" class="notification-item ${item.read_at ? "is-read" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}"><strong>${item.read_at ? "Notificação" : "Nova notificação"}</strong><span>${escapeHtml(item.message)}</span><time>${escapeHtml(notificationTime(item.created_at))}</time></button>`).join("") : '<p class="notification-empty">Tudo em dia.</p>'; list.querySelectorAll("[data-notification-id]").forEach((item, index) => { const dataItem = data.notifications[index], href = dataItem?.automation_id ? "#automacoes" : dataItem?.entity_type === "tickets" ? "#tickets" : dataItem?.entity_type === "files" ? "#arquivos" : ""; if (href) { const link = document.createElement("a"); link.href = href; link.className = "notification-origin"; link.textContent = "Abrir registro"; link.addEventListener("click", (event) => event.stopPropagation()); item.append(link); } item.addEventListener("click", async () => { await api(`/api/notifications/${item.dataset.notificationId}/read`, { method: "PATCH" }); item.classList.remove("is-unread"); item.classList.add("is-read"); await refreshInboxBadge(); }); }); } catch (error) { list.innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`; }
+  const request = notificationRequest = (notificationRequest || 0) + 1;
+  try { const data = await api("/api/notifications?limit=30"); if (request !== notificationRequest || notificationPanel.hidden || appShell.hidden) return; list.innerHTML = data.notifications?.length ? data.notifications.map((item) => `<button type="button" class="notification-item ${item.read_at ? "is-read" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}"><strong>${item.read_at ? "Notificação" : "Nova notificação"}</strong><span>${escapeHtml(item.message)}</span><time>${escapeHtml(notificationTime(item.created_at))}</time></button>`).join("") : '<p class="notification-empty">Tudo em dia.</p>'; list.querySelectorAll("[data-notification-id]").forEach((item, index) => { const dataItem = data.notifications[index], href = dataItem?.automation_id ? "#automacoes" : dataItem?.entity_type === "tickets" ? "#tickets" : dataItem?.entity_type === "files" ? "#arquivos" : ""; if (href) { const link = document.createElement("a"); link.href = href; link.className = "notification-origin"; link.textContent = "Abrir registro"; link.addEventListener("click", (event) => event.stopPropagation()); item.append(link); } item.addEventListener("click", async () => { if (item.dataset.readBusy === "1") return; item.dataset.readBusy = "1"; try { await api(`/api/notifications/${item.dataset.notificationId}/read`, { method: "PATCH" }); if (!item.isConnected) return; item.classList.remove("is-unread"); item.classList.add("is-read"); await refreshInboxBadge(); } catch (error) { if (item.isConnected) ui.toast(error.message || "Não foi possível marcar a notificação como lida.", "error"); } finally { delete item.dataset.readBusy; } }); }); } catch (error) { list.innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`; }
 }
 notificationPanel.querySelector(".notification-read-all").addEventListener("click", async () => { try { await api("/api/notifications/read-all", { method: "POST" }); await refreshInternalNotifications(); await refreshInboxBadge(); } catch (error) { notificationPanel.querySelector(".notification-list").innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`; } });
 
@@ -68,9 +118,10 @@ function sendBrowserNotifications(tasks, events) {
   const now = Date.now();
   const due = events.filter((event) => { const start = new Date(event.starts_at).getTime(); return start >= now && start - now <= (Number(event.reminder_minutes) || 30) * 60000; }).map((event) => ({ key: "event-" + event.id + "-" + event.starts_at, title: "Próximo evento", body: event.title }));
   const overdue = tasks.filter((task) => task.status !== "done" && task.due_at && new Date(task.due_at).getTime() < now).slice(0, 3).map((task) => ({ key: "task-" + task.id + "-" + task.due_at, title: "Tarefa atrasada", body: task.title }));
-  const notified = JSON.parse(localStorage.getItem("focusdev_browser_notifications") || "[]");
+  let notified = [];
+  try { notified = JSON.parse(safeStorage.get("focusdev_browser_notifications", "[]")) || []; } catch { notified = []; }
   [...due, ...overdue].filter((item) => !notified.includes(item.key)).forEach((item) => { new Notification(item.title, { body: item.body, icon: "/assets/icon-192.svg", tag: item.key }); notified.push(item.key); });
-  localStorage.setItem("focusdev_browser_notifications", JSON.stringify(notified.slice(-100)));
+  safeStorage.set("focusdev_browser_notifications", JSON.stringify(notified.slice(-100)));
 }
 
 async function pollBrowserNotifications() {
@@ -130,6 +181,12 @@ function setStatus(element, message = "", type = "success") {
 function toast(...args) {
   return ui.toast(...args);
 }
+
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason;
+  console.error("Falha assíncrona não tratada", reason);
+  if (!appShell.hidden) toast(reason?.message || "Não foi possível concluir a ação. Tente novamente.", "error");
+});
 
 function setFieldError(input, message = "") {
   const field = input.closest(".field");
@@ -221,7 +278,7 @@ function saveSession(user) {
 
 function readSavedSession() {
   try {
-    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    const saved = JSON.parse(safeStorage.get(SESSION_KEY, "null"));
     return saved?.id && saved?.email ? saved : null;
   } catch {
     return null;
@@ -236,7 +293,7 @@ async function restoreSession() {
     if (transition !== authTransition) return;
     if (response.status === 401) {
       // Sessão expirada ou inválida: a cópia local não vale mais.
-      localStorage.removeItem(SESSION_KEY);
+      safeStorage.remove(SESSION_KEY);
       showLogin();
       return;
     }
@@ -462,6 +519,7 @@ newPasswordForm?.addEventListener("submit", async (event) => {
 
 function openSidebar() {
   appSidebar.classList.add("is-open");
+  document.body.classList.add("sidebar-open");
   sidebarBackdrop.hidden = false;
   mobileMenu.setAttribute("aria-expanded", "true");
   mobileMenu.setAttribute("aria-label", "Fechar menu");
@@ -469,6 +527,7 @@ function openSidebar() {
 
 function closeSidebar() {
   appSidebar.classList.remove("is-open");
+  document.body.classList.remove("sidebar-open");
   sidebarBackdrop.hidden = true;
   mobileMenu.setAttribute("aria-expanded", "false");
   mobileMenu.setAttribute("aria-label", "Abrir menu");
@@ -487,6 +546,7 @@ mobileMenu.addEventListener("click", () => {
 });
 
 sidebarBackdrop.addEventListener("click", closeSidebar);
+window.addEventListener("resize", () => { if (window.innerWidth > 780 && appSidebar.classList.contains("is-open")) closeSidebar(); });
 
 topAccountTrigger?.addEventListener("click", () => {
   topAccountDropdown.hidden ? openAccountMenu() : closeAccountMenu();
@@ -507,18 +567,36 @@ const createConfig = {
 const createDialog = document.createElement("div");
 createDialog.className = "create-dialog-backdrop";
 createDialog.hidden = true;
-createDialog.innerHTML = '<form class="create-dialog" id="create-dialog-form"><button class="dialog-close" type="button" aria-label="Fechar">×</button><p class="card-kicker" id="dialog-kicker">Novo registro</p><h2 id="dialog-title"></h2><div id="dialog-fields"></div><p class="dialog-status" id="dialog-status" role="status"></p><div class="dialog-actions"><button class="button button-secondary" id="dialog-cancel" type="button">Cancelar</button><button class="button save-button" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12l2 2v14H5Z"/><path d="M8 4v6h8V4M8 20v-5h8v5"/></svg><span>Salvar</span></button></div></form>';
+createDialog.innerHTML = '<form class="create-dialog" id="create-dialog-form" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="dialog-close" type="button" aria-label="Fechar">×</button><p class="card-kicker" id="dialog-kicker">Novo registro</p><h2 id="dialog-title"></h2><div id="dialog-fields"></div><p class="dialog-status" id="dialog-status" role="status"></p><div class="dialog-actions"><button class="button button-secondary" id="dialog-cancel" type="button">Cancelar</button><button class="button save-button" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12l2 2v14H5Z"/><path d="M8 4v6h8V4M8 20v-5h8v5"/></svg><span>Salvar</span></button></div></form>';
 document.body.append(createDialog);
 const dialogForm = $("create-dialog-form"), dialogFields = $("dialog-fields"), dialogTitle = $("dialog-title"), dialogStatus = $("dialog-status");
-function closeCreateDialog() { createDialog.hidden = true; dialogForm.reset(); dialogStatus.textContent = ""; }
-function openCreateDialog(kind) { const config = createConfig[kind]; if (!config) return; dialogTitle.textContent = config.title; $("dialog-kicker").textContent = "Novo registro"; dialogFields.innerHTML = config.fields.map((field) => { const required = field.required === false ? "" : " required"; const ariaRequired = field.required === false ? "" : " aria-required=\"true\""; if (field.type === "select") return `<label class="dialog-field">${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}"${ariaRequired}>${field.options.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}</select></label>`; if (field.type === "textarea") return `<label class="dialog-field">${escapeHtml(field.label)}<textarea name="${escapeHtml(field.name)}" rows="${field.rows || 4}" placeholder="${escapeHtml(field.placeholder || "")}"${required}${ariaRequired}></textarea></label>`; if (field.type === "checkbox") return `<label class="dialog-field dialog-check"><input name="${escapeHtml(field.name)}" type="checkbox" value="true" />${escapeHtml(field.label)}</label>`; return `<label class="dialog-field">${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || "text")}" placeholder="${escapeHtml(field.placeholder || "")}"${required}${ariaRequired} /></label>`; }).join(""); dialogForm.dataset.kind = kind; delete dialogForm.dataset.method; delete dialogForm.dataset.endpoint; createDialog.hidden = false; dialogFields.querySelector("input, select, textarea")?.focus(); }
+let dialogRequest = 0;
+let dialogPreviouslyFocused = null;
+function closeCreateDialog() { dialogRequest += 1; createDialog.hidden = true; dialogForm.reset(); dialogStatus.textContent = ""; if (dialogPreviouslyFocused instanceof HTMLElement && dialogPreviouslyFocused.isConnected) dialogPreviouslyFocused.focus(); dialogPreviouslyFocused = null; }
+function openCreateDialog(kind) { const config = createConfig[kind]; if (!config) return; dialogRequest += 1; dialogPreviouslyFocused = document.activeElement; dialogTitle.textContent = config.title; $("dialog-kicker").textContent = "Novo registro"; dialogFields.innerHTML = config.fields.map((field) => { const required = field.required === false ? "" : " required"; const ariaRequired = field.required === false ? "" : " aria-required=\"true\""; if (field.type === "select") return `<label class="dialog-field">${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}" autocomplete="off"${ariaRequired}>${field.options.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}</select></label>`; if (field.type === "textarea") return `<label class="dialog-field">${escapeHtml(field.label)}<textarea name="${escapeHtml(field.name)}" autocomplete="off" rows="${field.rows || 4}" placeholder="${escapeHtml(field.placeholder || "")}"${required}${ariaRequired}></textarea></label>`; if (field.type === "checkbox") return `<label class="dialog-field dialog-check"><input name="${escapeHtml(field.name)}" type="checkbox" value="true" />${escapeHtml(field.label)}</label>`; const autocomplete = field.autocomplete || (field.type === "email" ? "email" : field.type === "password" ? "current-password" : "off"); return `<label class="dialog-field">${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" autocomplete="${escapeHtml(autocomplete)}" type="${escapeHtml(field.type || "text")}" placeholder="${escapeHtml(field.placeholder || "")}"${required}${ariaRequired} /></label>`; }).join(""); dialogForm.dataset.kind = kind; delete dialogForm.dataset.method; delete dialogForm.dataset.endpoint; createDialog.hidden = false; dialogFields.querySelector("input, select, textarea")?.focus(); }
 function openEditDialog(kind, item, endpoint) { openCreateDialog(kind); const label = item?.id ? (createConfig[kind]?.title?.replace(/^Nov[oa]\s+/i, "") || "registro") : kind === "evento" ? "evento" : "tarefa"; dialogTitle.textContent = `Editar ${label}`; $("dialog-kicker").textContent = `Editar ${label}`; dialogForm.dataset.method = "PATCH"; dialogForm.dataset.endpoint = endpoint; Object.entries(item).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (!field || value == null) return; if (field.type === "checkbox") { field.checked = value === true || value === "true" || value === 1; return; } const date = new Date(value); field.value = field.type === "datetime-local" && !Number.isNaN(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : field.type === "date" && !Number.isNaN(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : value; }); }
 function openSubtaskDialog(task) { openCreateDialog("tarefa"); dialogTitle.textContent = `Nova subtarefa · ${task.title}`; dialogFields.insertAdjacentHTML("beforeend", `<input type="hidden" name="parent_id" value="${escapeHtml(String(task.id))}" />`); const status = dialogFields.querySelector('[name="status"]'); if (status) status.value = "todo"; }
 document.querySelectorAll(".create-menu a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); createMenu.hidden = true; createMenuTrigger?.setAttribute("aria-expanded", "false"); const text = link.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
 document.querySelectorAll(".quick-actions button").forEach((button) => button.addEventListener("click", () => { const text = button.textContent.toLocaleLowerCase("pt-BR"); openCreateDialog(text.includes("tarefa") ? "tarefa" : text.includes("lead") ? "lead" : text.includes("receita") ? "receita" : "projeto"); }));
-dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); const config = createConfig[dialogForm.dataset.kind]; const payload = Object.fromEntries(new FormData(dialogForm)); dialogForm.querySelectorAll('input[type="checkbox"]').forEach((input) => { payload[input.name] = input.checked; }); if (payload.amount) payload.amount = payload.amount.replace(",", "."); dialogForm.querySelectorAll('input[type="datetime-local"]').forEach((input) => { if (input.value) payload[input.name] = new Date(input.value).toISOString(); }); Object.keys(payload).forEach((key) => { if (payload[key] === "") delete payload[key]; }); const submit = dialogForm.querySelector("[type=submit]"); submit.disabled = true; dialogStatus.textContent = "Salvando..."; try { const method = dialogForm.dataset.method || "POST", endpoint = dialogForm.dataset.endpoint || config.endpoint; const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); closeCreateDialog(); /* Re-renderiza a tela atual (qualquer módulo) e atualiza o painel inicial. */ renderHashRoute(window.location.hash); if ((!window.location.hash || window.location.hash === "#inicio") && !routeRenderers.inicio) await syncDashboard(); } catch (error) { dialogStatus.textContent = error.message; } finally { submit.disabled = false; } });
+dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); if (dialogForm.dataset.busy === "1") return; const config = createConfig[dialogForm.dataset.kind]; if (!config) return; const request = dialogRequest, routeAtStart = window.location.hash; const payload = Object.fromEntries(new FormData(dialogForm)); dialogForm.querySelectorAll('input[type="checkbox"]').forEach((input) => { payload[input.name] = input.checked; }); if (payload.amount) payload.amount = payload.amount.replace(",", "."); dialogForm.querySelectorAll('input[type="datetime-local"]').forEach((input) => { if (input.value) payload[input.name] = new Date(input.value).toISOString(); }); Object.keys(payload).forEach((key) => { if (payload[key] === "") delete payload[key]; }); const submit = dialogForm.querySelector("[type=submit]"); dialogForm.dataset.busy = "1"; submit.disabled = true; submit.setAttribute("aria-busy", "true"); dialogStatus.setAttribute("role", "status"); dialogStatus.setAttribute("aria-live", "polite"); dialogStatus.textContent = "Salvando…"; try { const method = dialogForm.dataset.method || "POST", endpoint = dialogForm.dataset.endpoint || config.endpoint; const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); if (request !== dialogRequest || createDialog.hidden || routeAtStart !== window.location.hash) return; closeCreateDialog(); /* Re-renderiza a tela atual (qualquer módulo) e atualiza o painel inicial. */ renderHashRoute(window.location.hash); if ((!window.location.hash || window.location.hash === "#inicio") && !routeRenderers.inicio) await syncDashboard(); } catch (error) { if (request === dialogRequest && !createDialog.hidden) { dialogStatus.setAttribute("role", "alert"); dialogStatus.textContent = error.message || "Não foi possível salvar. Tente novamente."; } } finally { if (request === dialogRequest) { delete dialogForm.dataset.busy; submit.disabled = false; submit.removeAttribute("aria-busy"); } } });
+new MutationObserver(() => {
+  dialogFields.querySelectorAll("input, select, textarea").forEach((control) => {
+    if (!control.getAttribute("autocomplete") && control.type !== "password") control.setAttribute("autocomplete", "off");
+    if (control.type === "file" && !control.accept) control.accept = "image/*,application/pdf,text/plain";
+    if (control.placeholder && !control.placeholder.endsWith("…")) control.placeholder += "…";
+  });
+}).observe(dialogFields, { childList: true, subtree: true });
 dialogForm.querySelector(".dialog-close").addEventListener("click", closeCreateDialog); $("dialog-cancel").addEventListener("click", closeCreateDialog);
-createDialog.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault(); closeCreateDialog(); } });
+window.addEventListener("hashchange", () => { ui.closeOverlays?.(); if (!createDialog.hidden) closeCreateDialog(); });
+createDialog.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") { event.preventDefault(); closeCreateDialog(); return; }
+  if (event.key !== "Tab") return;
+  const focusable = [...dialogForm.querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex=\"-1\"])")].filter((element) => !element.disabled && element.getAttribute("aria-hidden") !== "true");
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+});
 
 document.addEventListener("click", (event) => {
   if (topAccountDropdown && !topAccountDropdown.hidden && !event.target.closest(".account-menu")) closeAccountMenu();
@@ -543,6 +621,7 @@ const navItemsByHash = new Map([...document.querySelectorAll(".nav-item")].map((
 // Início durante a janela de inicialização.
 let modulesLoading = true;
 function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
+  const focusRouteHeading = document.activeElement?.closest?.(".nav-item");
   let hash = requestedHash || "#inicio";
   let key = hash.replace(/^#/, "");
   // Rota válida = item do menu ou rota registrada por um módulo (sub-tela). Fora disso, volta ao Início.
@@ -560,10 +639,13 @@ function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   document.title = `${key === "inicio" ? "Início" : label} · FocusDev`;
   appTitle.textContent = key === "inicio" ? homeGreeting : label;
   document.querySelector(".eyebrow").textContent = navItem?.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
+  document.querySelectorAll(".nav-item[aria-current]").forEach((item) => item.removeAttribute("aria-current"));
+  navItem?.setAttribute("aria-current", "page");
   document.body.dataset.route = key;
   dashboardGrid?.setAttribute("data-route", key);
   renderWorkspaceView(hash, label);
   closeSidebar();
+  if (focusRouteHeading) appTitle?.focus({ preventScroll: true });
 }
 document.addEventListener("click", (event) => {
   const item = event.target.closest?.(".nav-item");
@@ -617,7 +699,7 @@ document.querySelectorAll(".nav-item").forEach((item) => {
   item.insertAdjacentHTML("afterbegin", `<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">${navIconPaths[key] || '<circle cx="12" cy="12" r="3"/>'}</svg>`);
 });
 
-const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character]));
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
 
 /* ---------------------------------------------------------------------------
    Registro de rotas dos módulos (modules/*.js)
@@ -713,15 +795,15 @@ const stateBlock = {
   error: (message = "Não foi possível carregar os dados.", retryClass = "state-retry") => `<section class="data-card state-card state-error" role="alert"><h2>Algo deu errado</h2><p>${escapeHtml(message)}</p><button class="button button-secondary compact-action ${retryClass}" type="button">Tentar novamente</button></section>`,
 };
 /* Compatibilidade: telas antigas escutam .state-retry, enquanto as novas passam uma classe específica. */
-stateBlock.error = (message = "NÃ£o foi possÃ­vel carregar os dados.", retryClass = "state-retry") => `<section class="data-card state-card state-error" role="alert"><h2>Algo deu errado</h2><p>${escapeHtml(message)}</p><button class="button button-secondary compact-action state-retry ${retryClass}" type="button">Tentar novamente</button></section>`;
+stateBlock.error = (message = "Não foi possível carregar os dados.", retryClass = "state-retry") => `<section class="data-card state-card state-error" role="alert"><h2>Algo deu errado</h2><p>${escapeHtml(message)}</p><button class="button button-secondary compact-action state-retry ${retryClass}" type="button">Tentar novamente</button></section>`;
 
 const DASHBOARD_PROFILE_KEY = "focusdev_dashboard_profile";
-function applyDashboardProfile(profile = localStorage.getItem(DASHBOARD_PROFILE_KEY) || "manager") {
+function applyDashboardProfile(profile = safeStorage.get(DASHBOARD_PROFILE_KEY, "manager")) {
   const selector = document.querySelector("#dashboard-profile");
   const label = document.querySelector("#dashboard-profile-label");
   if (!selector || !label) return;
   selector.value = profile;
-  selector.onchange = (event) => { localStorage.setItem(DASHBOARD_PROFILE_KEY, event.target.value); applyDashboardProfile(event.target.value); };
+  selector.onchange = (event) => { safeStorage.set(DASHBOARD_PROFILE_KEY, event.target.value); applyDashboardProfile(event.target.value); };
   const labels = { manager: "Visão geral do gestor", sales: "Foco comercial do vendedor", finance: "Controle financeiro", operations: "Execução operacional" };
   label.textContent = labels[profile] || labels.manager;
   const cards = [...document.querySelectorAll(".metrics .metric-card")];
@@ -745,18 +827,22 @@ function renderWorkspaceView(hash, label) {
     dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Workspace</p><h2>${escapeHtml(label || "Módulo")}</h2><p>Este módulo ainda não está conectado ao banco nesta versão.</p></div></section>${stateBlock.empty("Nenhum dado disponível", "A tela será habilitada quando o fluxo persistente estiver implementado.")}`;
     return;
   }
-  if (render) {
+  {
+    const routeAtStart = window.location.hash || "#inicio";
     try {
       const result = render(key, label);
-      if (result && typeof result.catch === "function") result.catch((error) => { console.error(`Falha ao renderizar ${key}`, error); dashboardGrid.innerHTML = stateBlock.error(error?.message); });
+      if (result && typeof result.catch === "function") result.catch((error) => { console.error(`Falha ao renderizar ${key}`, error); if (window.location.hash === routeAtStart) dashboardGrid.innerHTML = stateBlock.error(error?.message); });
     } catch (error) {
       console.error(`Falha ao renderizar ${key}`, error);
-      dashboardGrid.innerHTML = stateBlock.error(error?.message);
+      if (window.location.hash === routeAtStart) dashboardGrid.innerHTML = stateBlock.error(error?.message);
     }
-    return;
   }
 
+  return;
+
+  /* Legacy fallback retained only for historical reference; every menu route has a dedicated renderer.
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">${view.kicker}</p><h2>${view.title}</h2><p>${view.intro}</p></div><button class="button button-primary compact-action" type="button">+ Novo</button></section><section class="data-card table-card"><div class="section-heading"><div><p class="card-kicker">Visão geral</p><h2>Registros recentes</h2></div><button class="filter-button" type="button">Filtrar <span>⌄</span></button></div><div class="table-wrap"><table><thead><tr>${view.columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead><tbody>${view.rows.map((row) => `<tr>${row.map((cell, index) => `<td class="${index === row.length - 1 ? "status-cell" : ""}">${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section><section class="quick-summary"><article class="data-card"><span class="metric-label">Total de registros</span><strong>${view.rows.length}</strong><small class="positive">↑ 4,2% este mês</small></article><article class="data-card"><span class="metric-label">Atualizados hoje</span><strong>08</strong><small class="neutral">Última atualização há 12 min</small></article><article class="data-card"><span class="metric-label">Precisam de atenção</span><strong>03</strong><small class="warning">Verificar pendências</small></article></section>`;
+  */
 }
 
 
@@ -773,7 +859,7 @@ async function renderSearchResults(query) {
   const matches = searchableItems.filter((item) => item.textContent.toLocaleLowerCase("pt-BR").includes(normalized)).slice(0, 6);
   const request = ++searchRequest;
   searchResults.hidden = false;
-  searchResults.innerHTML = '<span style="display:block;padding:10px;color:#6d7f95;font-size:12px">Buscando...</span>';
+  searchResults.innerHTML = '<span style="display:block;padding:10px;color:#6d7f95;font-size:12px">Buscando…</span>';
   const sources = [
     ["clientes", "/api/clients", "clients", "name", "#clientes"],
     ["contatos", "/api/contacts", "contacts", "name", "#contatos"],
@@ -805,7 +891,7 @@ searchResults?.addEventListener("click", (event) => {
   const link = event.target.closest("a");
   if (!link) return;
   const target = searchableItems.find((item) => item.getAttribute("href") === link.getAttribute("href"));
-  if (!target) return;
+  if (!target) { globalSearch.value = ""; renderSearchResults(""); return; }
   event.preventDefault();
   target.click();
   globalSearch.value = "";
@@ -825,7 +911,7 @@ topLogoutButton?.addEventListener("click", async () => {
   authTransition += 1;
   closeAccountMenu();
   await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
-  localStorage.removeItem(SESSION_KEY);
+  safeStorage.remove(SESSION_KEY);
   showLogin();
   emailInput.focus();
 });
@@ -854,7 +940,7 @@ openCreateDialog = function openCreateDialogWithGithub(kind) {
   repository.insertAdjacentElement("afterend", button);
   button.addEventListener("click", async () => {
     if (!repository.value) { repository.focus(); return; }
-    button.disabled = true; button.textContent = "Lendo GitHub...";
+    button.disabled = true; button.textContent = "Lendo GitHub…";
     try {
       const response = await fetch(`/api/projects/github-preview?url=${encodeURIComponent(repository.value)}`);
       const data = await response.json();
@@ -873,7 +959,7 @@ openCreateDialog = function openCreateDialogWithCep(kind) {
   const zip = dialogFields.querySelector('[name="zip_code"]');
   if (!zip || dialogFields.querySelector("[data-cep-fill]")) return;
   const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.cepFill = "true"; button.textContent = "Consultar CEP"; zip.insertAdjacentElement("afterend", button);
-  button.addEventListener("click", async () => { if (!zip.value) { zip.focus(); return; } button.disabled = true; button.textContent = "Consultando..."; try { const response = await fetch(`/api/cep/${encodeURIComponent(zip.value)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível consultar o CEP."); Object.entries(data).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value) field.value = value; }); dialogStatus.textContent = "Endereço preenchido pelo CEP. Revise antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Consultar CEP"; } });
+  button.addEventListener("click", async () => { if (!zip.value) { zip.focus(); return; } button.disabled = true; button.textContent = "Consultando…"; try { const response = await fetch(`/api/cep/${encodeURIComponent(zip.value)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível consultar o CEP."); Object.entries(data).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value) field.value = value; }); dialogStatus.textContent = "Endereço preenchido pelo CEP. Revise antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Consultar CEP"; } });
 };
 
 const companyDialog = openCreateDialog;
@@ -883,7 +969,7 @@ openCreateDialog = function openCreateDialogWithCnpj(kind) {
   const documentInput = dialogFields.querySelector('[name="document"]');
   if (!documentInput || dialogFields.querySelector("[data-cnpj-fill]")) return;
   const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.cnpjFill = "true"; button.textContent = "Consultar CNPJ"; documentInput.insertAdjacentElement("afterend", button);
-  button.addEventListener("click", async () => { if (!documentInput.value) { documentInput.focus(); return; } button.disabled = true; button.textContent = "Consultando..."; try { const response = await fetch(`/api/cnpj/${encodeURIComponent(documentInput.value)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível consultar o CNPJ."); const values = { name: data.razao_social || data.nome_fantasia, legal_name: data.razao_social, trade_name: data.nome_fantasia, document: data.cnpj, status: data.situacao, founded_on: data.abertura, primary_activity: data.cnae, zip_code: data.cep, street: data.logradouro, street_number: data.numero, city: data.municipio, state: data.uf, country: "Brasil", phone: data.telefone, email: data.email }; Object.entries(values).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value !== undefined && value !== null && value !== "") field.value = value; }); dialogStatus.textContent = "Dados da empresa preenchidos. Revise antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Consultar CNPJ"; } });
+  button.addEventListener("click", async () => { if (!documentInput.value) { documentInput.focus(); return; } button.disabled = true; button.textContent = "Consultando…"; try { const response = await fetch(`/api/cnpj/${encodeURIComponent(documentInput.value)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível consultar o CNPJ."); const values = { name: data.razao_social || data.nome_fantasia, legal_name: data.razao_social, trade_name: data.nome_fantasia, document: data.cnpj, status: data.situacao, founded_on: data.abertura, primary_activity: data.cnae, zip_code: data.cep, street: data.logradouro, street_number: data.numero, city: data.municipio, state: data.uf, country: "Brasil", phone: data.telefone, email: data.email }; Object.entries(values).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value !== undefined && value !== null && value !== "") field.value = value; }); dialogStatus.textContent = "Dados da empresa preenchidos. Revise antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Consultar CNPJ"; } });
 };
 
 const contractDialog = openCreateDialog;
@@ -893,7 +979,7 @@ openCreateDialog = function openCreateDialogWithContractAutofill(kind) {
   const proposal = dialogFields.querySelector('[name="proposal_id"]');
   if (!proposal || dialogFields.querySelector("[data-contract-fill]")) return;
   const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.dataset.contractFill = "true"; button.textContent = "Preencher da proposta/projeto"; proposal.insertAdjacentElement("afterend", button);
-  button.addEventListener("click", async () => { const project = dialogFields.querySelector('[name="project_id"]'); const client = dialogFields.querySelector('[name="client_id"]'); const query = new URLSearchParams(); if (proposal.value) query.set("proposal_id", proposal.value); if (project?.value) query.set("project_id", project.value); if (client?.value) query.set("client_id", client.value); if (!query.toString()) { proposal.focus(); return; } button.disabled = true; button.textContent = "Preenchendo..."; try { const response = await fetch(`/api/contracts/autofill?${query}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível preparar o contrato."); Object.entries(data).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value !== undefined && value !== null && value !== "") field.value = value; }); const total = Number(dialogFields.querySelector('[name="total_value"]')?.value || dialogFields.querySelector('[name="value"]')?.value || 0); const entry = Number(dialogFields.querySelector('[name="down_payment"]')?.value || 0); const installments = Number(dialogFields.querySelector('[name="installments"]')?.value || 1); const installment = dialogFields.querySelector('[name="installment_value"]'); if (installment && installments > 0) installment.value = ((total - entry) / installments).toFixed(2); dialogStatus.textContent = "Dados preenchidos. Revise cláusulas e valores antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Preencher da proposta/projeto"; } });
+  button.addEventListener("click", async () => { const project = dialogFields.querySelector('[name="project_id"]'); const client = dialogFields.querySelector('[name="client_id"]'); const query = new URLSearchParams(); if (proposal.value) query.set("proposal_id", proposal.value); if (project?.value) query.set("project_id", project.value); if (client?.value) query.set("client_id", client.value); if (!query.toString()) { proposal.focus(); return; } button.disabled = true; button.textContent = "Preenchendo…"; try { const response = await fetch(`/api/contracts/autofill?${query}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível preparar o contrato."); Object.entries(data).forEach(([name, value]) => { const field = dialogFields.querySelector(`[name="${name}"]`); if (field && value !== undefined && value !== null && value !== "") field.value = value; }); const total = Number(dialogFields.querySelector('[name="total_value"]')?.value || dialogFields.querySelector('[name="value"]')?.value || 0); const entry = Number(dialogFields.querySelector('[name="down_payment"]')?.value || 0); const installments = Number(dialogFields.querySelector('[name="installments"]')?.value || 1); const installment = dialogFields.querySelector('[name="installment_value"]'); if (installment && installments > 0) installment.value = ((total - entry) / installments).toFixed(2); dialogStatus.textContent = "Dados preenchidos. Revise cláusulas e valores antes de salvar."; } catch (error) { dialogStatus.textContent = error.message; } finally { button.disabled = false; button.textContent = "Preencher da proposta/projeto"; } });
 };
 
 const accessibleDialog = openCreateDialog;
@@ -933,5 +1019,88 @@ dialogForm.addEventListener("formdata", (event) => {
 const baseAuthenticatedApi = api;
 api = async function apiWithSessionExpiry(path, options) {
   try { return await baseAuthenticatedApi(path, options); }
-  catch (error) { if (error?.status === 401) { authTransition += 1; localStorage.removeItem(SESSION_KEY); showLogin(); } throw error; }
+  catch (error) { if (error?.status === 401) { authTransition += 1; safeStorage.remove(SESSION_KEY); showLogin(); } throw error; }
+};
+
+let createDialogReturnFocus = null;
+const baseCreateDialogOpen = openCreateDialog;
+openCreateDialog = function openCreateDialogWithFocus(kind) {
+  createDialogReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  baseCreateDialogOpen(kind);
+};
+const baseCreateDialogClose = closeCreateDialog;
+closeCreateDialog = function closeCreateDialogWithFocus() {
+  baseCreateDialogClose();
+  if (createDialogReturnFocus?.isConnected) createDialogReturnFocus.focus();
+  createDialogReturnFocus = null;
+};
+dialogForm.querySelector(".dialog-close")?.addEventListener("click", () => closeCreateDialog());
+$("dialog-cancel")?.addEventListener("click", () => closeCreateDialog());
+createDialog.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !createDialog.hidden) closeCreateDialog();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && notificationPanel && !notificationPanel.hidden) {
+    notificationPanel.hidden = true;
+    notificationButton?.setAttribute("aria-expanded", "false");
+    notificationButton?.focus();
+  }
+});
+document.addEventListener("click", (event) => {
+  if (!notificationPanel || notificationPanel.hidden || notificationPanel.contains(event.target) || notificationButton?.contains(event.target)) return;
+  notificationPanel.hidden = true;
+  notificationButton?.setAttribute("aria-expanded", "false");
+});
+new MutationObserver(() => {
+  notificationPanel.querySelectorAll("button").forEach((button) => {
+    if (!button.getAttribute("type")) button.setAttribute("type", "button");
+  });
+}).observe(notificationPanel, { childList: true, subtree: true });
+
+notificationPanel.addEventListener("click", async (event) => {
+  const item = event.target.closest?.("[data-notification-id]");
+  if (!item || event.target.closest("a") || item.dataset.busy === "1") return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  item.dataset.busy = "1";
+  item.disabled = true;
+  item.setAttribute("aria-busy", "true");
+  try {
+    await api(`/api/notifications/${item.dataset.notificationId}/read`, { method: "PATCH" });
+    item.classList.remove("is-unread");
+    item.classList.add("is-read");
+    await refreshInboxBadge();
+  } catch (error) {
+    const message = document.createElement("span");
+    message.className = "notification-error";
+    message.setAttribute("role", "alert");
+    message.textContent = error.message || "Não foi possível marcar a notificação como lida.";
+    item.append(message);
+  } finally {
+    if (item.isConnected) {
+      item.disabled = false;
+      item.removeAttribute("aria-busy");
+      item.dataset.busy = "";
+    }
+  }
+}, true);
+
+refreshInternalNotifications = async function refreshInternalNotificationsSafe() {
+  const list = notificationPanel.querySelector(".notification-list");
+  if (!list || appShell.hidden) return;
+  const request = notificationRequest = (notificationRequest || 0) + 1;
+  try {
+    const data = await api("/api/notifications?limit=30");
+    if (request !== notificationRequest || notificationPanel.hidden || appShell.hidden) return;
+    list.innerHTML = data.notifications?.length ? data.notifications.map((item) => `<button type="button" class="notification-item ${item.read_at ? "is-read" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}"><strong>${item.read_at ? "Notificação" : "Nova notificação"}</strong><span>${escapeHtml(item.message)}</span><time>${escapeHtml(notificationTime(item.created_at))}</time></button>`).join("") : '<p class="notification-empty">Tudo em dia.</p>';
+    list.querySelectorAll("[data-notification-id]").forEach((item, index) => {
+      const dataItem = data.notifications[index];
+      const href = dataItem?.automation_id ? "#automacoes" : dataItem?.entity_type === "tickets" ? "#tickets" : dataItem?.entity_type === "files" ? "#arquivos" : "";
+      if (href) { const link = document.createElement("a"); link.href = href; link.className = "notification-origin"; link.textContent = "Abrir registro"; link.addEventListener("click", (event) => event.stopPropagation()); item.append(link); }
+    });
+  } catch (error) {
+    if (request !== notificationRequest || notificationPanel.hidden || appShell.hidden) return;
+    list.innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`;
+  }
 };

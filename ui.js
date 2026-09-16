@@ -6,10 +6,15 @@
 
 const ui = (() => {
   const esc = (value) => escapeHtml(value == null ? "" : String(value));
-  const money = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const number = (value) => Number(value || 0).toLocaleString("pt-BR");
-  const date = (value) => (value ? new Date(value).toLocaleDateString("pt-BR") : "—");
-  const dateTime = (value) => (value ? `${new Date(value).toLocaleDateString("pt-BR")} ${new Date(value).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "—");
+  const moneyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+  const numberFormatter = new Intl.NumberFormat("pt-BR");
+  const dateFormatter = new Intl.DateTimeFormat("pt-BR");
+  const timeFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  let activeOverlayCleanup = null;
+  const money = (value) => moneyFormatter.format(Number(value || 0));
+  const number = (value) => numberFormatter.format(Number(value || 0));
+  const date = (value) => { if (!value) return "—"; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "Data indisponível" : dateFormatter.format(parsed); };
+  const dateTime = (value) => { if (!value) return "—"; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "Data indisponível" : `${dateFormatter.format(parsed)} ${timeFormatter.format(parsed)}`; };
   const plural = (n, one, many) => `${number(n)} ${Number(n) === 1 ? one : many}`;
   function relative(value) {
     if (!value) return "";
@@ -36,15 +41,15 @@ const ui = (() => {
 
   /* Barra de busca + filtros + botões. */
   function toolbar({ search, filters = [], actions = "", extra = "" }) {
-    const searchHtml = search ? `<input class="ui-search" type="search" data-search placeholder="${esc(search.placeholder || "Buscar…")}" value="${esc(search.value || "")}" aria-label="${esc(search.placeholder || "Buscar")}" />` : "";
-    const filtersHtml = filters.map((f) => `<select class="ui-select" data-filter="${esc(f.key)}" aria-label="${esc(f.label || f.key)}">${f.options.map(([value, label]) => `<option value="${esc(value)}" ${String(f.value ?? "") === String(value) ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>`).join("");
+    const searchHtml = search ? `<input class="ui-search" type="search" name="search" autocomplete="off" data-search placeholder="${esc(search.placeholder || "Buscar…")}" value="${esc(search.value || "")}" aria-label="${esc(search.placeholder || "Buscar")}" />` : "";
+    const filtersHtml = filters.map((f) => `<select class="ui-select" name="${esc(f.key)}" autocomplete="off" data-filter="${esc(f.key)}" aria-label="${esc(f.label || f.key)}">${f.options.map(([value, label]) => `<option value="${esc(value)}" ${String(f.value ?? "") === String(value) ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>`).join("");
     return `<div class="ui-toolbar">${searchHtml}${filtersHtml}${extra}<div class="ui-toolbar-actions">${actions}</div></div>`;
   }
 
   /* Tabela responsiva. columns: [{ key, label, render(row), align, width, hideOnNarrow }] */
   function table({ columns, rows, rowAttr = () => "", empty = "Nenhum registro.", rowClass = () => "" }) {
     if (!rows.length) return `<div class="ui-empty-inline">${esc(empty)}</div>`;
-    return `<div class="table-wrap ui-table-wrap"><table class="ui-table"><thead><tr>${columns.map((c) => `<th class="${c.align ? `is-${c.align}` : ""} ${c.hideOnNarrow ? "ui-hide-narrow" : ""}" ${c.width ? `style="width:${c.width}"` : ""}>${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr class="${rowClass(row)}" ${rowAttr(row)}>${columns.map((c) => `<td class="${c.align ? `is-${c.align}` : ""} ${c.hideOnNarrow ? "ui-hide-narrow" : ""}">${c.render ? c.render(row) : esc(row[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    return `<div class="table-wrap ui-table-wrap"><table class="ui-table"><thead><tr>${columns.map((c) => `<th scope="col" class="${c.align ? `is-${c.align}` : ""} ${c.hideOnNarrow ? "ui-hide-narrow" : ""}" ${c.width ? `style="width:${c.width}"` : ""}>${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr class="${rowClass(row)}" ${rowAttr(row)}>${columns.map((c) => `<td class="${c.align ? `is-${c.align}` : ""} ${c.hideOnNarrow ? "ui-hide-narrow" : ""}">${c.render ? c.render(row) : esc(row[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   }
 
   /* Estado vazio com CTA. */
@@ -57,59 +62,105 @@ const ui = (() => {
   function confirmInline(buttonEl, { text = "Excluir?", onConfirm, onCancel }) {
     const holder = document.createElement("span"); holder.className = "ui-confirm";
     holder.innerHTML = `${esc(text)} <button class="text-action" type="button" data-yes>Sim</button> <button class="text-action" type="button" data-no>Não</button>`;
-    const original = buttonEl; original.replaceWith(holder);
-    holder.querySelector("[data-no]").addEventListener("click", () => { holder.replaceWith(original); onCancel?.(); });
-    holder.querySelector("[data-yes]").addEventListener("click", async () => { holder.querySelectorAll("button").forEach((b) => (b.disabled = true)); try { await onConfirm(); } catch (error) { holder.textContent = error.message; } });
+    const original = buttonEl;
+    const wasHidden = original.hidden;
+    const hadAriaHidden = original.hasAttribute("aria-hidden");
+    const restore = () => {
+      if (holder.isConnected) holder.replaceWith(original);
+      original.hidden = wasHidden;
+      if (hadAriaHidden) original.setAttribute("aria-hidden", "true");
+      else original.removeAttribute("aria-hidden");
+    };
+    original.hidden = true;
+    original.setAttribute("aria-hidden", "true");
+    original.after(holder);
+    holder.querySelector("[data-no]").addEventListener("click", () => { restore(); onCancel?.(); });
+    holder.querySelector("[data-yes]").addEventListener("click", async () => { const confirmButton = holder.querySelector("[data-yes]"); holder.querySelectorAll("button").forEach((b) => { b.disabled = true; b.setAttribute("aria-busy", "true"); }); confirmButton?.setAttribute("aria-label", "Confirmando…"); try { await onConfirm(); restore(); } catch (error) { holder.querySelectorAll("button").forEach((b) => { b.disabled = false; b.removeAttribute("aria-busy"); }); confirmButton?.setAttribute("aria-label", "Confirmar exclusão"); let message = holder.querySelector("[data-confirm-error]"); if (!message) { message = document.createElement("small"); message.dataset.confirmError = "true"; message.className = "ui-confirm-error"; message.setAttribute("role", "alert"); holder.append(" ", message); } message.textContent = error.message || "Não foi possível concluir a ação."; } });
   }
 
   /* Toast discreto. */
   let toastTimer = null;
   function toast(message, tone = "info") {
     let el = document.querySelector(".ui-toast");
-    if (!el) { el = document.createElement("div"); el.className = "ui-toast"; el.setAttribute("role", "status"); document.body.append(el); }
+    if (!el) { el = document.createElement("div"); el.className = "ui-toast"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); el.setAttribute("aria-atomic", "true"); document.body.append(el); }
     el.textContent = message; el.dataset.tone = tone; el.classList.add("is-visible");
     window.clearTimeout(toastTimer); toastTimer = window.setTimeout(() => el.classList.remove("is-visible"), 3200);
   }
 
   /* Formulário em modal. fields: [{ name, label, type, options, required, value, placeholder, rows, min, max, step, help, half }] */
   function form({ title, subtitle = "", fields, submitLabel = "Salvar", values = {}, onSubmit, danger = null }) {
-    document.querySelector(".ui-modal-backdrop")?.remove();
+    activeOverlayCleanup?.();
+    document.querySelectorAll(".ui-modal-backdrop, .ui-drawer-backdrop").forEach((overlay) => overlay.remove());
+    const previouslyFocused = document.activeElement;
     const backdrop = document.createElement("div"); backdrop.className = "ui-modal-backdrop";
     const control = (f) => {
       const value = values[f.name] ?? f.value ?? "";
-      const common = `name="${esc(f.name)}" ${f.required === false ? "" : "required"} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""}`;
+      const autocomplete = f.autocomplete || (f.type === "email" ? "email" : f.type === "password" ? (/confirm|new/i.test(f.name) ? "new-password" : "current-password") : "off");
+      const inputmode = f.inputmode || (f.type === "number" ? "decimal" : f.type === "tel" ? "tel" : f.type === "email" ? "email" : "text");
+      const spellcheck = f.type === "email" || f.type === "password" || /email|username|code|token/i.test(f.name) ? 'spellcheck="false"' : "";
+      const common = `name="${esc(f.name)}" autocomplete="${esc(autocomplete)}" inputmode="${esc(inputmode)}" ${spellcheck} ${f.required === false ? "" : "required"} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""}`;
       if (f.type === "select") return `<select ${common}>${(f.options || []).map(([v, l]) => `<option value="${esc(v)}" ${String(value) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
       if (f.type === "textarea") return `<textarea ${common} rows="${f.rows || 3}">${esc(value)}</textarea>`;
-      if (f.type === "checkbox") return `<label class="ui-check"><input type="checkbox" name="${esc(f.name)}" ${value ? "checked" : ""} /> <span>${esc(f.text || "")}</span></label>`;
+      if (f.type === "checkbox") return `<label class="ui-check"><input type="checkbox" name="${esc(f.name)}" autocomplete="off" ${value ? "checked" : ""} /> <span>${esc(f.text || "")}</span></label>`;
       const v = f.type === "datetime-local" ? toLocalInput(value) : f.type === "date" ? toDateInput(value) : value;
       return `<input type="${esc(f.type || "text")}" ${common} value="${esc(v)}" ${f.min !== undefined ? `min="${esc(f.min)}"` : ""} ${f.max !== undefined ? `max="${esc(f.max)}"` : ""} ${f.step !== undefined ? `step="${esc(f.step)}"` : ""} ${f.type === "number" && f.step === undefined ? 'step="0.01"' : ""} />`;
     };
-    backdrop.innerHTML = `<form class="ui-modal" novalidate>
+    backdrop.innerHTML = `<form class="ui-modal" role="dialog" aria-modal="true" aria-labelledby="ui-modal-title" novalidate>
       <button class="ui-modal-close" type="button" aria-label="Fechar">×</button>
-      <p class="card-kicker">${esc(subtitle || "Formulário")}</p><h2>${esc(title)}</h2>
+      <p class="card-kicker">${esc(subtitle || "Formulário")}</p><h2 id="ui-modal-title">${esc(title)}</h2>
       <div class="ui-modal-fields">${fields.map((f) => f.type === "checkbox" ? `<div class="ui-field ${f.half ? "is-half" : ""}">${control(f)}</div>` : `<label class="ui-field ${f.half ? "is-half" : ""}">${esc(f.label)}${f.required === false ? "" : " *"}${control(f)}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`).join("")}</div>
-      <p class="ui-modal-status" role="status"></p>
+      <p class="ui-modal-status" role="status" aria-live="polite"></p>
       <div class="ui-modal-actions">${danger ? `<button class="text-action ui-danger-text" type="button" data-danger>${esc(danger.label)}</button>` : ""}<span></span><button class="button button-secondary compact-action" type="button" data-cancel>Cancelar</button><button class="button button-primary compact-action" type="submit">${esc(submitLabel)}</button></div>
     </form>`;
     document.body.append(backdrop);
     const formEl = backdrop.querySelector("form"), status = backdrop.querySelector(".ui-modal-status");
     let dirty = false, discardPending = false;
-    const close = (force = false) => { const saving = formEl.querySelector("[type=submit]")?.disabled; if (!force && !saving && dirty && !discardPending) { discardPending = true; status.textContent = "Existem alterações não salvas. Clique novamente em Descartar alterações para sair."; const cancel = formEl.querySelector("[data-cancel]"); if (cancel) cancel.textContent = "Descartar alterações"; return; } backdrop.remove(); document.removeEventListener("keydown", onKey); };
-    const onKey = (event) => { if (event.key === "Escape") close(); };
+    const cleanup = () => { document.removeEventListener("keydown", onKey); if (activeOverlayCleanup === cleanup) activeOverlayCleanup = null; };
+    activeOverlayCleanup = cleanup;
+    const close = (force = false) => { if (!backdrop.isConnected) { cleanup(); return; } const saving = formEl.querySelector("[type=submit]")?.disabled; if (!force && !saving && dirty && !discardPending) { discardPending = true; status.textContent = "Existem alterações não salvas. Clique novamente em Descartar alterações para sair."; const cancel = formEl.querySelector("[data-cancel]"); if (cancel) cancel.textContent = "Descartar alterações"; return; } backdrop.remove(); cleanup(); if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus(); };
+    const onKey = (event) => {
+      if (event.key === "Escape") { close(); return; }
+      if (event.key !== "Tab") return;
+      const focusable = [...backdrop.querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex=\"-1\"])" )].filter((element) => !element.disabled && element.getAttribute("aria-hidden") !== "true");
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
     document.addEventListener("keydown", onKey);
-    backdrop.querySelector(".ui-modal-close").addEventListener("click", close);
+    const closeButton = backdrop.querySelector(".ui-modal-close");
+    closeButton.addEventListener("click", close);
+    closeButton.focus();
     backdrop.querySelector("[data-cancel]").addEventListener("click", close);
     backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
-    formEl.addEventListener("input", () => { dirty = true; });
-    backdrop.querySelector("[data-danger]")?.addEventListener("click", async () => { status.textContent = ""; try { await danger.onClick(); close(true); } catch (error) { status.textContent = error.message; } });
+    const markDirty = () => { dirty = true; discardPending = false; };
+    formEl.addEventListener("input", markDirty);
+    formEl.addEventListener("change", markDirty);
+    backdrop.querySelector("[data-danger]")?.addEventListener("click", async () => { status.textContent = ""; try { await danger.onClick(); if (backdrop.isConnected) close(true); } catch (error) { if (backdrop.isConnected) status.textContent = error.message; } });
     formEl.addEventListener("submit", async (event) => {
       event.preventDefault();
       const missing = fields.find((f) => f.required !== false && f.type !== "checkbox" && !String(formEl.elements[f.name]?.value ?? "").trim());
-      if (missing) { status.textContent = `Preencha "${missing.label}".`; formEl.elements[missing.name]?.focus(); return; }
+      if (missing) { status.setAttribute("role", "alert"); status.textContent = `Preencha "${missing.label}".`; formEl.elements[missing.name]?.focus(); return; }
+      if (!formEl.checkValidity()) {
+        const invalid = [...formEl.elements].find((element) => element.willValidate && !element.validity.valid);
+        status.setAttribute("role", "alert");
+        status.textContent = invalid?.validationMessage || "Revise os campos destacados antes de salvar.";
+        invalid?.focus();
+        invalid?.reportValidity?.();
+        return;
+      }
+      const invalidJson = fields.find((f) => f.json && String(formEl.elements[f.name]?.value || "").trim() && (() => { try { JSON.parse(formEl.elements[f.name].value); return false; } catch { return true; } })());
+      if (invalidJson) {
+        const invalid = formEl.elements[invalidJson.name];
+        status.setAttribute("role", "alert");
+        status.textContent = `Corrija o JSON em "${invalidJson.label}" antes de salvar.`;
+        invalid?.focus();
+        return;
+      }
       const out = {};
-      fields.forEach((f) => { const el = formEl.elements[f.name]; if (!el) return; if (f.type === "checkbox") { out[f.name] = el.checked; return; } let v = el.value; if (f.type === "datetime-local") v = v ? new Date(v).toISOString() : null; else if (f.type === "number") v = v === "" ? null : Number(String(v).replace(",", ".")); else if (v === "") v = null; out[f.name] = v; });
-      const submit = formEl.querySelector("[type=submit]"); submit.disabled = true; status.textContent = "Salvando…";
-      try { await onSubmit(out); close(); } catch (error) { status.textContent = error.message || "Não foi possível salvar."; submit.disabled = false; }
+      fields.forEach((f) => { const el = formEl.elements[f.name]; if (!el) return; if (f.type === "checkbox") { out[f.name] = el.checked; return; } let v = el.value; if (f.type === "datetime-local") v = v ? new Date(v).toISOString() : null; else if (f.type === "number") v = v === "" ? null : Number(String(v).replace(",", ".")); else if (f.json) v = v.trim() ? JSON.parse(v) : null; else if (v === "") v = null; out[f.name] = v; });
+      const submit = formEl.querySelector("[type=submit]"); submit.disabled = true; submit.setAttribute("aria-busy", "true"); status.setAttribute("role", "status"); status.textContent = "Salvando…";
+      try { await onSubmit(out); if (backdrop.isConnected) close(); } catch (error) { status.setAttribute("role", "alert"); status.textContent = error.message || "Não foi possível salvar. Tente novamente."; submit.disabled = false; submit.removeAttribute("aria-busy"); }
     });
     formEl.querySelector("input, select, textarea")?.focus();
     return { close };
@@ -117,17 +168,37 @@ const ui = (() => {
 
   /* Painel lateral (drawer) para detalhes. */
   function drawer({ title, subtitle = "", html, onOpen }) {
-    document.querySelector(".ui-drawer-backdrop")?.remove();
+    activeOverlayCleanup?.();
+    document.querySelectorAll(".ui-modal-backdrop, .ui-drawer-backdrop").forEach((overlay) => overlay.remove());
+    const previouslyFocused = document.activeElement;
     const backdrop = document.createElement("div"); backdrop.className = "ui-drawer-backdrop";
-    backdrop.innerHTML = `<aside class="ui-drawer" role="dialog" aria-label="${esc(title)}"><header><div><p class="card-kicker">${esc(subtitle)}</p><h2>${esc(title)}</h2></div><button class="ui-modal-close" type="button" aria-label="Fechar">×</button></header><div class="ui-drawer-body">${html}</div></aside>`;
+    backdrop.innerHTML = `<aside class="ui-drawer" role="dialog" aria-modal="true" aria-labelledby="ui-drawer-title"><header><div><p class="card-kicker">${esc(subtitle)}</p><h2 id="ui-drawer-title">${esc(title)}</h2></div><button class="ui-modal-close" type="button" aria-label="Fechar">×</button></header><div class="ui-drawer-body">${html}</div></aside>`;
     document.body.append(backdrop);
-    const close = () => { backdrop.remove(); document.removeEventListener("keydown", onKey); };
-    const onKey = (event) => { if (event.key === "Escape") close(); };
+    const cleanup = () => { document.removeEventListener("keydown", onKey); if (activeOverlayCleanup === cleanup) activeOverlayCleanup = null; };
+    activeOverlayCleanup = cleanup;
+    const close = () => { if (!backdrop.isConnected) { cleanup(); return; } backdrop.remove(); cleanup(); if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus(); };
+    const onKey = (event) => {
+      if (event.key === "Escape") { close(); return; }
+      if (event.key !== "Tab") return;
+      const focusable = [...backdrop.querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex=\"-1\"])" )].filter((element) => !element.disabled && element.getAttribute("aria-hidden") !== "true");
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
     document.addEventListener("keydown", onKey);
-    backdrop.querySelector(".ui-modal-close").addEventListener("click", close);
+    const closeButton = backdrop.querySelector(".ui-modal-close");
+    closeButton.addEventListener("click", close);
+    closeButton.focus();
     backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
     onOpen?.(backdrop.querySelector(".ui-drawer-body"), close);
     return { close, body: backdrop.querySelector(".ui-drawer-body") };
+  }
+
+  function closeOverlays() {
+    activeOverlayCleanup?.();
+    document.querySelectorAll(".ui-modal-backdrop, .ui-drawer-backdrop").forEach((overlay) => overlay.remove());
+    activeOverlayCleanup = null;
   }
 
   /* Lista chave/valor para detalhes. */
@@ -139,6 +210,19 @@ const ui = (() => {
     return () => { const again = root.querySelector(selector); if (again && document.activeElement !== again) { const pos = el.selectionStart; again.focus(); try { again.setSelectionRange(pos, pos); } catch { /* tipo search em alguns navegadores */ } } };
   }
 
+  async function copyText(value) {
+    const text = String(value ?? "");
+    if (navigator.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(text); return true; } catch { /* tenta o fallback abaixo */ }
+    }
+    const area = document.createElement("textarea"); area.value = text; area.setAttribute("readonly", ""); area.style.position = "fixed"; area.style.opacity = "0";
+    document.body.append(area); area.select();
+    let copied = false;
+    try { copied = typeof document.execCommand === "function" && document.execCommand("copy"); } finally { area.remove(); }
+    if (!copied) throw new Error("Não foi possível copiar automaticamente. Selecione o link e copie manualmente.");
+    return true;
+  }
+
   /* Exporta linhas como CSV (download no navegador). */
   function downloadCsv(filename, headers, rows) {
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -147,5 +231,5 @@ const ui = (() => {
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
   }
 
-  return { esc, money, number, date, dateTime, relative, plural, initials, toLocalInput, toDateInput, badge, avatar, header, button, stats, toolbar, table, empty, rowActions, confirmInline, toast, form, drawer, facts, keepSearchFocus, downloadCsv };
+  return { esc, money, number, date, dateTime, relative, plural, initials, toLocalInput, toDateInput, badge, avatar, header, button, stats, toolbar, table, empty, rowActions, confirmInline, toast, form, drawer, closeOverlays, facts, keepSearchFocus, copyText, downloadCsv };
 })();

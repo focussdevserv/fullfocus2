@@ -1,9 +1,25 @@
 /* Rotas HTTP do domínio inbox. */
 import { sendWhatsappText } from "./whatsapp.js";
+import { sendEmail as defaultSendEmail, renderEmail as defaultRenderEmail } from "../mailer.js";
 export function register(app, ctx) {
-  const { pool, tenant, asText, classifyDbError } = ctx;
+  const { pool, tenant, asText, classifyDbError, sendEmail = defaultSendEmail, renderEmail = defaultRenderEmail } = ctx;
   const fail = (res, error, fallback) => { const out = classifyDbError(error, fallback); res.status(out.status).json({ error: out.error }); };
   const relation = async (id, table, org) => { if (id === null || id === undefined || id === "") return null; const q = await pool.query(`select id from ${table} where id=$1 and organization_id=$2`, [id, org]); return q.rowCount ? id : false; };
+  const emailRecipient = async (conversationId, org) => { const q = await pool.query("select coalesce(co.email,cl.email) recipient from conversations c left join contacts co on co.id=c.contact_id and co.organization_id=c.organization_id left join clients cl on cl.id=c.client_id and cl.organization_id=c.organization_id where c.id=$1 and c.organization_id=$2", [conversationId, org]); return String(q.rows[0]?.recipient || "").trim().toLowerCase(); };
+  const deliverEmail = async (conversationId, org, subject, body) => { const recipient = await emailRecipient(conversationId, org); if (!recipient) { const error = new Error("Vincule um contato ou cliente com e-mail antes de enviar."); error.status = 400; throw error; } const rendered = renderEmail({ title: subject || "Mensagem do FocusDev", intro: body, footer: "Esta mensagem foi enviada pelo workspace FocusDev." }); const delivery = await sendEmail({ to: recipient, subject: subject || "Mensagem do FocusDev", ...rendered }); if (!delivery?.sent) { const error = new Error(delivery?.reason === "unconfigured" ? "O envio de e-mail ainda não está configurado." : delivery?.reason || "O provedor de e-mail recusou o envio."); error.status = delivery?.reason === "unconfigured" ? 503 : 502; throw error; } return { recipient, id: delivery.id || null }; };
+  app.use("/api/conversations/:id/messages", async (req, res, next) => {
+    if (req.method !== "POST") return next();
+    const org = tenant(req, res); if (!org) return;
+    const body = asText(req.body?.body); if (!body) return next();
+    try {
+      const c = await pool.query("select id,channel,subject from conversations where id=$1 and organization_id=$2", [req.params.id, org]);
+      if (!c.rowCount || c.rows[0].channel !== "email") return next();
+      const delivery = await deliverEmail(req.params.id, org, c.rows[0].subject, body);
+      const m = await pool.query("insert into messages (organization_id,conversation_id,author_user_id,direction,body) values ($1,$2,$3,'out',$4) returning *", [org, req.params.id, req.user?.id || null, body]);
+      await pool.query("update conversations set last_message_at=$1,updated_at=now() where id=$2 and organization_id=$3", [m.rows[0].created_at, req.params.id, org]);
+      return res.status(201).json({ message: m.rows[0], delivery });
+    } catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); return next(error); }
+  });
   app.get("/api/conversations", async (req, res) => {
     const org = tenant(req, res); if (!org) return; const status = req.query.status || "open";
     if (!["open", "archived", "all"].includes(status)) return res.status(400).json({ error: "Status inválido." });

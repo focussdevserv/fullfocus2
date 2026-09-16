@@ -25,6 +25,9 @@ import { register as registerEventRoutes } from "./routes/events.js";
 import { startAutomationRunner } from "./automations-runner.js";
 const { Pool } = pg;
 export const app = express();
+// O tráfego de produção passa pelo proxy Cloudflare; isso preserva req.secure
+// e a leitura correta dos cabeçalhos de encaminhamento sem confiar no Host.
+app.set("trust proxy", 1);
 const port = Number(process.env.PORT || 3000);
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined });
 const DEFAULT_ORGANIZATION_ID = process.env.DEFAULT_ORGANIZATION_ID || "00000000-0000-0000-0000-000000000001";
@@ -67,13 +70,20 @@ app.use(async (req, res, next) => {
   const textValue = (keys) => keys.map((key) => responses[key]).find((value) => value !== undefined && String(value).trim() !== "") || null;
   try {
     await db.query("begin");
-    const formQuery = await db.query("select id,organization_id,name,status,automation_config from forms where public_token=$1 and status in ('published','active') for update", [token]);
+    const formQuery = await db.query("select id,organization_id,name,status,schema,automation_config from forms where public_token=$1 and status in ('published','active') for update", [token]);
     if (!formQuery.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Formulário indisponível." }); }
-    const form = formQuery.rows[0], config = form.automation_config && typeof form.automation_config === "object" ? form.automation_config : {}, target = ["lead", "opportunity", "ticket", "task"].includes(config.create) ? config.create : null;
-    const updated = await db.query("update forms set responses=coalesce(responses,'[]'::jsonb) || $1::jsonb,submitted_at=now(),updated_at=now() where id=$2 returning id,name,status,submitted_at", [JSON.stringify([responses]), form.id]);
+    const form = formQuery.rows[0], schema = Array.isArray(form.schema) ? form.schema : Array.isArray(form.schema?.fields) ? form.schema.fields : [];
+    const fields = schema.map((item, index) => typeof item === "string" ? { name: `field_${index}`, required: true } : { ...item, name: item?.name || `field_${index}` });
+    if (!fields.length) { await db.query("rollback"); return res.status(400).json({ error: "Este formulário ainda não possui campos configurados." }); }
+    const allowedNames = new Set(fields.map((field) => String(field.name)).filter(Boolean));
+    const cleanResponses = Object.fromEntries(Object.entries(responses).filter(([key]) => allowedNames.has(key)).slice(0, 100).map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 5000) : value]));
+    const missing = fields.filter((field) => field.required !== false && (cleanResponses[field.name] === undefined || String(cleanResponses[field.name]).trim() === ""));
+    if (missing.length) { await db.query("rollback"); return res.status(400).json({ error: `Preencha os campos obrigatórios: ${missing.map((field) => field.label || field.name).slice(0, 3).join(", ")}.` }); }
+    const config = form.automation_config && typeof form.automation_config === "object" ? form.automation_config : {}, target = ["lead", "opportunity", "ticket", "task"].includes(config.create) ? config.create : null;
+    const updated = await db.query("update forms set responses=coalesce(responses,'[]'::jsonb) || $1::jsonb,submitted_at=now(),updated_at=now() where id=$2 returning id,name,status,submitted_at", [JSON.stringify([cleanResponses]), form.id]);
     let createdRecord = null;
     const name = textValue(["name", "nome", "full_name"]) || `Envio: ${form.name}`;
-    const email = textValue(["email", "e-mail"]), phone = textValue(["phone", "telefone", "whatsapp"]), details = JSON.stringify({ form_id: form.id, responses });
+    const email = textValue(["email", "e-mail"]), phone = textValue(["phone", "telefone", "whatsapp"]), details = JSON.stringify({ form_id: form.id, responses: cleanResponses });
     if (target === "lead") createdRecord = (await db.query("insert into leads (organization_id,name,email,phone,source,status,notes) values ($1,$2,$3,$4,'form','new',$5) returning id,name,status", [form.organization_id, name, email, phone, details])).rows[0];
     if (target === "opportunity") createdRecord = (await db.query("insert into opportunities (organization_id,name,stage,amount,notes) values ($1,$2,'qualification',0,$3) returning id,name,stage", [form.organization_id, name, details])).rows[0];
     if (target === "ticket") createdRecord = (await db.query("insert into tickets (organization_id,title,description,priority,status) values ($1,$2,$3,'medium','open') returning id,title,status", [form.organization_id, name, details])).rows[0];
@@ -111,9 +121,12 @@ const publicFormField = (item, index) => {
   const name = formPublicSafe(field.name || ("field_" + index));
   const required = field.required === false ? "" : " required";
   const type = ["email", "number", "tel", "date"].includes(field.type) ? field.type : "text";
-  if (field.type === "textarea") return "<label>" + label + "<textarea name='" + name + "'" + required + "></textarea></label>";
-  if (field.type === "select" && Array.isArray(field.options)) return "<label>" + label + "<select name='" + name + "'" + required + "><option value=''>Selecione</option>" + field.options.map((option) => { const value = typeof option === "string" ? option : option?.value ?? ""; const text = typeof option === "string" ? option : option?.label ?? value; return "<option value='" + formPublicSafe(value) + "'>" + formPublicSafe(text) + "</option>"; }).join("") + "</select></label>";
-  return "<label>" + label + "<input name='" + name + "' type='" + type + "'" + required + "></label>";
+  const autocomplete = field.autocomplete || (type === "email" ? "email" : /(^|[_-])(full_?name|name|nome)([_-]|$)/i.test(String(field.name || "")) ? "name" : /(^|[_-])(phone|tel|telefone|whatsapp)([_-]|$)/i.test(String(field.name || "")) ? "tel" : "off");
+  const inputmode = type === "number" ? "decimal" : type === "tel" ? "tel" : type === "email" ? "email" : "text";
+  const attrs = " id='" + name + "' name='" + name + "' autocomplete='" + formPublicSafe(autocomplete) + "' inputmode='" + inputmode + "'" + required;
+  if (field.type === "textarea") return "<label for='" + name + "'>" + label + "<textarea" + attrs + "></textarea></label>";
+  if (field.type === "select" && Array.isArray(field.options)) return "<label for='" + name + "'>" + label + "<select" + attrs + "><option value=''>Selecione</option>" + field.options.map((option) => { const value = typeof option === "string" ? option : option?.value ?? ""; const text = typeof option === "string" ? option : option?.label ?? value; return "<option value='" + formPublicSafe(value) + "'>" + formPublicSafe(text) + "</option>"; }).join("") + "</select></label>";
+  return "<label for='" + name + "'>" + label + "<input" + attrs + " type='" + type + "'></label>";
 };
 app.get("/api/public/catalog/:organizationId", async (req, res) => { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(req.params.organizationId)) return res.status(400).json({ error: "Workspace inválido." }); try { const q = await pool.query("select id,name,kind,price,unit,description,short_description,full_description,category,image_url,tags,public_visible,highlighted,term_days,features,limits,recurrence,benefits,delivery_days,included_scope,excluded_scope,deliverables,modules_count,revisions_count,warranty_period,support_included from catalog_items where organization_id=$1 and active=true and public_visible=true and archived_at is null order by highlighted desc, created_at desc", [req.params.organizationId]); res.json({ catalog_items: q.rows }); } catch { res.status(503).json({ error: "Não foi possível carregar o catálogo público." }); } });
 app.get("/catalog/:organizationId", async (req, res) => { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(req.params.organizationId)) return res.status(400).send("Workspace inválido."); try { const q = await pool.query("select name,kind,price,unit,description,short_description,category,delivery_days from catalog_items where organization_id=$1 and active=true and public_visible=true and archived_at is null order by highlighted desc,created_at desc", [req.params.organizationId]); const items = q.rows; const card = (item) => "<article class=\"card\"><h2>" + html(item.name) + "</h2><p class=\"kind\">" + html(item.category || item.kind || "Serviço") + "</p><strong>R$ " + Number(item.price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) + "</strong><p>" + html(item.short_description || item.description || "") + "</p>" + (item.delivery_days ? "<small>Prazo: " + html(item.delivery_days + " dias") + "</small>" : "") + "</article>"; res.type("html").send("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Catálogo FocusDev</title><style>:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#070b14;color:#f8fafc}body{margin:0;padding:32px 18px;background:radial-gradient(circle at 80% 0,#153b77,#070b14 52%)}main{max-width:1050px;margin:auto}.brand{color:#e62429;font-size:24px;font-weight:800}.brand span{color:#f8fafc}.hero{margin:28px 0;padding:28px;border:1px solid #334766;border-radius:18px;background:#111b2e}.hero h1{margin:8px 0;font-size:clamp(28px,5vw,48px)}.muted,.kind,small{color:#94a3b8}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}.card{padding:22px;border:1px solid #334766;border-radius:16px;background:#111b2e;box-shadow:0 12px 32px #0003}.card h2{margin:0 0 6px}.card strong{display:block;margin:14px 0;font-size:24px}@media(max-width:600px){body{padding:20px 12px}} </style><main><div class=\"brand\">Focus<span>Dev</span></div><section class=\"hero\"><div class=\"muted\">Catálogo público</div><h1>Soluções para fazer seu negócio avançar.</h1><p class=\"muted\">Conheça os serviços e produtos publicados pela FocusDev.</p></section><section class=\"grid\">" + (items.length ? items.map(card).join("") : "<p class=\"muted\">Nenhum item publicado no momento.</p>") + "</section></main></html>"); } catch { res.status(503).send("Não foi possível carregar o catálogo."); } });
@@ -192,6 +205,18 @@ const permissionAllows = (permissions, domain, table, action) => {
   }
   return true;
 };
+app.use("/api", (req, res, next) => {
+  const [, table] = req.path.split("/");
+  if (!["POST", "PATCH"].includes(req.method) || table !== "invoices") return next();
+  for (const field of ["pdf_url", "xml_url"]) {
+    const value = String(req.body?.[field] ?? "").trim();
+    if (!value) continue;
+    try {
+      if (!["http:", "https:"].includes(new URL(value).protocol)) return res.status(400).json({ error: `${field} must use http or https.` });
+    } catch { return res.status(400).json({ error: `${field} must be a valid URL.` }); }
+  }
+  return next();
+});
 app.use("/api", async (req, res, next) => {
   const [, table] = req.path.split("/"), domain = permissionDomains[table], action = permissionAction(req.method);
   if (!domain || !action || !req.user || ["owner", "admin"].includes(req.user.role)) return next();
@@ -405,7 +430,7 @@ app.get("/api/payables", async (req, res) => {
 app.get("/api/trash", async (req, res) => {
   const org = tenant(req, res); if (!org) return;
   const values = [org], where = ["t.organization_id=$1"], search = String(req.query?.search || "").trim();
-  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(t.entity_type ilike '%' || ${p} || '%' or cast(t.entity_id as text) ilike '%' || ${p} || '%')`); }
+  if (search) { values.push(search); const p = `$${values.length}`; where.push(`(t.entity_type ilike '%' || ${p} || '%' or cast(t.entity_id as text) ilike '%' || ${p} || '%' or coalesce(t.payload->>'name','') ilike '%' || ${p} || '%' or coalesce(t.payload->>'title','') ilike '%' || ${p} || '%')`); }
   if (req.query?.entity_type) { values.push(String(req.query.entity_type)); where.push(`t.entity_type=$${values.length}`); }
   if (req.query?.active === "true") where.push("(t.restore_until is null or t.restore_until > now())");
   const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); values.push(limit, offset);

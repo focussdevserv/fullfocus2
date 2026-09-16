@@ -5,6 +5,10 @@ import path from "node:path";
 
 const syntax = spawnSync(process.execPath, ["scripts/check.mjs"], { stdio: "inherit" });
 if (syntax.status !== 0) process.exit(syntax.status || 1);
+const routes = spawnSync(process.execPath, ["scripts/check-routes.mjs"], { encoding: "utf8" });
+if (routes.stdout) process.stdout.write(routes.stdout);
+if (routes.stderr) process.stderr.write(routes.stderr);
+if (routes.status !== 0) process.exit(routes.status || 1);
 const html = readFileSync("index.html", "utf8");
 const references = [...html.matchAll(/(?:src|href)="(modules\/[^"?#]+|styles\.css|ui\.js|app\.js|service-worker\.js)\??[^\"]*"/g)].map((match) => match[1]);
 const missing = references.filter((file) => !existsSync(path.resolve(file)));

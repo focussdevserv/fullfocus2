@@ -5,13 +5,13 @@ export function register(app, ctx) {
   const fileUrlIssue = (body) => {
     const url = asText(body?.url);
     if (!url) return "Informe uma URL externa ou envie um arquivo.";
-    if (/^data:[\w.+-]+\/[\w.+-]+;base64,[A-Za-z0-9+/=]+$/.test(url)) {
+    if (/^data:(?:image\/[\w.+-]+|application\/pdf|text\/plain);base64,[A-Za-z0-9+/=]+$/i.test(url)) {
       const encoded = url.slice(url.indexOf(",") + 1), size = Math.floor(encoded.length * 3 / 4) - (encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0);
       return size > 750000 ? "O arquivo deve ter no máximo 750 KB." : null;
     }
     return /^https?:\/\//i.test(url) ? null : "A URL do arquivo deve começar com http:// ou https://.";
   };
-  app.use("/api/files", (req, res, next) => { if (req.method === "POST") { const issue = fileUrlIssue(req.body || {}); if (issue) return res.status(400).json({ error: issue }); } return next(); });
+  app.use("/api/files", (req, res, next) => { if (["POST", "PATCH"].includes(req.method)) { const issue = fileUrlIssue(req.body || {}); if (issue) return res.status(400).json({ error: issue }); } return next(); });
   const run = (table, singular, fields, validate = () => null) => {
     app.get(`/api/${table}`, async (req, res) => { const org = tenant(req, res); if (!org) return; try {
       const joins = fields.includes("client_id") ? ` left join clients c on c.id=${table}.client_id and c.organization_id=${table}.organization_id` : "";
