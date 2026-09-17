@@ -740,12 +740,15 @@ window.addEventListener("load", () => {
 /* Chamada de API autenticada (cookie same-origin) com erro legível em pt-BR. */
 async function api(path, { method = "GET", body, headers } = {}) {
   let response;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
   try {
     response = await fetch(path, {
       method,
       credentials: "same-origin",
       headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
   } catch {
     // fetch() em si falhou (rede caiu, DNS, conexão recusada) — não chegou nem a ter resposta do servidor.
@@ -755,6 +758,8 @@ async function api(path, { method = "GET", body, headers } = {}) {
     error.transient = true;
     if (method === "GET") scheduleTransientRetry();
     throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
   const data = response.status === 204 ? {} : await response.json().catch(() => null);
   if (!response.ok) {
