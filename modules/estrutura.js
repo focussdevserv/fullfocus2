@@ -547,7 +547,7 @@ window.addEventListener("hashchange", () => {
 });
 const estruturaCopyObserver = new MutationObserver(() => {
   const hash = location.hash.replace(/^#/, "");
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("alteracoes", "alterações").replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { const normalized = label.textContent?.replaceAll("alteracoes", "alterações").replaceAll("...", "…"); if (normalized !== label.textContent) label.textContent = normalized; });
   if (hash === "alteracoes") {
     dashboardGrid.querySelector("[data-change-search]")?.setAttribute("placeholder", "Buscar solicitação…");
     const next = dashboardGrid.querySelector("[data-change-next]");

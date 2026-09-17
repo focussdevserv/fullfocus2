@@ -382,7 +382,7 @@ new MutationObserver(() => {
     const label = count === 1 ? "1 registro encontrado" : `${count} registros encontrados`;
     if (status.textContent !== label) status.textContent = label;
   }
-  dashboardGrid.querySelectorAll(".state-loading p, .config-state .state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p, .config-state .state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
 }).observe(dashboardGrid, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["disabled"] });
 
 new MutationObserver(() => {
