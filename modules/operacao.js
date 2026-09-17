@@ -405,7 +405,7 @@ new MutationObserver(() => {
     if (button.disabled) button.setAttribute("aria-busy", "true");
     else button.removeAttribute("aria-busy");
   });
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
   dashboardGrid.querySelectorAll(".state-error").forEach((status) => status.setAttribute("role", "alert"));
   dashboardGrid.querySelectorAll("table").forEach((table) => {
     if (!table.caption) {

@@ -114,7 +114,7 @@ new MutationObserver(() => {
   if (status) { status.name = "status"; status.setAttribute("autocomplete", "off"); }
   dashboardGrid.querySelectorAll("button, input, select").forEach((control) => { control.style.touchAction = "manipulation"; });
   dashboardGrid.querySelectorAll(".automation-list .finance-status").forEach((badge) => { badge.setAttribute("role", "status"); badge.setAttribute("aria-live", "polite"); });
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
 }).observe(dashboardGrid, { childList: true, subtree: true });
 
 new MutationObserver(() => {

@@ -147,7 +147,7 @@ dashboardGrid.addEventListener("click", (event) => {
 dashboardGrid.addEventListener("click", (event) => { if (!event.target.closest(".mg-retry")) return; const key = location.hash.replace(/^#/, ""); if (mgConfig[key]) renderManagement(key); });
 
 new MutationObserver(() => {
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
   dashboardGrid.querySelectorAll("button:disabled, input:disabled, select:disabled").forEach((control) => control.setAttribute("aria-busy", "true"));
   dashboardGrid.querySelectorAll(".finance-table thead th").forEach((header) => header.setAttribute("scope", "col"));
   dashboardGrid.querySelectorAll("[data-mg-row] td:last-child button, .table-pagination button, [data-mg-new], .mg-empty").forEach((control) => { control.style.touchAction = "manipulation"; });

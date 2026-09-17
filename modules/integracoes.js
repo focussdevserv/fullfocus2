@@ -180,5 +180,5 @@ new MutationObserver(() => {
   if (search) { search.name = "search"; search.setAttribute("autocomplete", "off"); }
   const status = dashboardGrid.querySelector('[data-filter="status"]');
   if (status) { status.name = "status"; status.setAttribute("autocomplete", "off"); }
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
 }).observe(dashboardGrid, { childList: true, subtree: true });

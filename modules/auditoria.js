@@ -58,7 +58,7 @@ new MutationObserver(() => {
   });
   dashboardGrid.querySelectorAll(".audit-panel, .finance-status").forEach((region) => region.setAttribute("aria-live", "polite"));
   dashboardGrid.querySelectorAll("button:disabled").forEach((button) => button.setAttribute("aria-busy", "true"));
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
 }).observe(dashboardGrid, { childList: true, subtree: true });
 
 new MutationObserver(() => {

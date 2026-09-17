@@ -78,7 +78,7 @@ new MutationObserver(() => {
   if (search) { search.name = "search"; search.setAttribute("autocomplete", "off"); }
   const status = dashboardGrid.querySelector("[data-payable-filter]");
   if (status) { status.name = "status"; status.setAttribute("autocomplete", "off"); }
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
   const results = dashboardGrid.querySelector("[data-payable-results]");
   if (results) { const count = dashboardGrid.querySelectorAll("tbody tr").length; const label = count === 1 ? "1 conta encontrada" : `${count} contas encontradas`; if (results.textContent !== label) results.textContent = label; }
   dashboardGrid.querySelectorAll("button:disabled, input:disabled, select:disabled").forEach((control) => control.setAttribute("aria-busy", "true"));

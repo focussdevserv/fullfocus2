@@ -99,7 +99,7 @@ new MutationObserver(() => {
   dashboardGrid.querySelectorAll("button:disabled").forEach((button) => button.setAttribute("aria-busy", "true"));
   dashboardGrid.querySelectorAll("th").forEach((cell) => cell.setAttribute("scope", "col"));
   dashboardGrid.querySelectorAll(".finance-status").forEach((status) => { status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); });
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
   dashboardGrid.querySelectorAll(".state-error").forEach((status) => status.setAttribute("role", "alert"));
   dashboardGrid.querySelectorAll("button").forEach((button) => { button.style.touchAction = "manipulation"; });
 }).observe(dashboardGrid, { childList: true, subtree: true });

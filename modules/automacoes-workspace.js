@@ -66,5 +66,5 @@ new MutationObserver(() => {
     if (button.disabled) button.setAttribute("aria-busy", "true");
     else button.removeAttribute("aria-busy");
   });
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
 }).observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });

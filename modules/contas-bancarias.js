@@ -129,7 +129,7 @@ new MutationObserver(() => {
     control.name = control.matches("[data-bank-search]") ? "search" : "status";
     control.setAttribute("autocomplete", "off");
   });
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
   dashboardGrid.querySelectorAll("button:disabled, input:disabled, select:disabled").forEach((control) => control.setAttribute("aria-busy", "true"));
   dashboardGrid.querySelectorAll("[data-bank-toggle]").forEach((button) => { if (button.disabled) button.setAttribute("aria-busy", "true"); else { button.removeAttribute("aria-busy"); if (button.dataset.pendingLabel) { button.textContent = button.dataset.pendingLabel; delete button.dataset.pendingLabel; } } });
   const list = dashboardGrid.querySelector(".finance-list");

@@ -173,7 +173,7 @@ new MutationObserver(() => {
     else button.removeAttribute("aria-busy");
   });
   dashboardGrid.querySelectorAll(".finance-status, .approval-total").forEach((status) => { status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); });
-  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { label.textContent = label.textContent.replaceAll("...", "…"); });
+  dashboardGrid.querySelectorAll(".state-loading p").forEach((label) => { if (label.textContent?.includes("...")) label.textContent = label.textContent.replaceAll("...", "…"); });
 }).observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
 const deliverySearchObserver = new MutationObserver(() => {
   if (!deliverySearchSnapshot) return;
