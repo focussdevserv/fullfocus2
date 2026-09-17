@@ -58,7 +58,8 @@ new MutationObserver(() => {
     let status = list.querySelector("[data-auto-results]");
     if (!status) { status = document.createElement("p"); status.className = "ui-filter-status"; status.dataset.autoResults = "true"; status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); toolbar.insertAdjacentElement("afterend", status); }
     const count = list.querySelectorAll(".template-grid > article").length;
-    status.textContent = `${ui.number(count)} ${count === 1 ? "automação encontrada" : "automações encontradas"}.`;
+    const label = `${ui.number(count)} ${count === 1 ? "automação encontrada" : "automações encontradas"}.`;
+    if (status.textContent !== label) status.textContent = label;
   }
   dashboardGrid.querySelectorAll(".automation-list .finance-status").forEach((status) => { status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); });
   dashboardGrid.querySelectorAll("[data-auto-toggle], [data-auto-history], [data-auto-delete]").forEach((button) => {

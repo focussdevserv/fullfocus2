@@ -104,6 +104,7 @@ const kbResultsObserver = new MutationObserver(() => {
     list.insertBefore(status, grid);
   }
   const visible = [...grid.querySelectorAll("[data-kb-row]")].filter((row) => !row.hidden).length;
-  status.textContent = `${ui.number(visible)} ${visible === 1 ? "artigo encontrado" : "artigos encontrados"}.`;
+  const label = `${ui.number(visible)} ${visible === 1 ? "artigo encontrado" : "artigos encontrados"}.`;
+  if (status.textContent !== label) status.textContent = label;
 });
 kbResultsObserver.observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });

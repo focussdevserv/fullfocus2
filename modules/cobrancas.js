@@ -107,7 +107,8 @@ const chargeUiObserver = new MutationObserver(() => {
   let result = list.querySelector("[data-charge-results]");
   if (!result) { result = document.createElement("p"); result.className = "ui-filter-status"; result.dataset.chargeResults = "true"; result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite"); toolbar.insertAdjacentElement("afterend", result); }
   const count = list.querySelectorAll("tbody tr").length;
-  result.textContent = `${ui.number(count)} ${count === 1 ? "cobrança encontrada" : "cobranças encontradas"}.`;
+  const label = `${ui.number(count)} ${count === 1 ? "cobrança encontrada" : "cobranças encontradas"}.`;
+  if (result.textContent !== label) result.textContent = label;
 });
 chargeUiObserver.observe(dashboardGrid, { childList: true, subtree: true });
 const chargeLoadingObserver = new MutationObserver(() => {

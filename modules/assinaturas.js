@@ -77,7 +77,8 @@ const subscriptionResultsObserver = new MutationObserver(() => {
     toolbar.insertAdjacentElement("afterend", status);
   }
   const count = list.querySelectorAll("tbody tr").length;
-  status.textContent = `${ui.number(count)} ${count === 1 ? "assinatura encontrada" : "assinaturas encontradas"}.`;
+  const label = `${ui.number(count)} ${count === 1 ? "assinatura encontrada" : "assinaturas encontradas"}.`;
+  if (status.textContent !== label) status.textContent = label;
 });
 subscriptionResultsObserver.observe(dashboardGrid, { childList: true, subtree: true });
 

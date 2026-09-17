@@ -166,7 +166,8 @@ const ticketUiObserver = new MutationObserver(() => {
   }
   if (status) {
     const cards = dashboardGrid.querySelectorAll("[data-ticket-row]").length;
-    status.textContent = `${ui.number(cards)} ${cards === 1 ? "ticket encontrado" : "tickets encontrados"}.`;
+    const label = `${ui.number(cards)} ${cards === 1 ? "ticket encontrado" : "tickets encontrados"}.`;
+    if (status.textContent !== label) status.textContent = label;
   }
   dashboardGrid.querySelectorAll("[data-ticket-delete], [data-ticket-edit], [data-ticket-new]").forEach((button) => {
     if (button.disabled) button.setAttribute("aria-busy", "true");

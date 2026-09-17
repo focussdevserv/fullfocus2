@@ -837,7 +837,8 @@ const crmResultsObserver = new MutationObserver(() => {
       toolbar.insertAdjacentElement("afterend", status);
     }
     const count = card.querySelectorAll("tbody tr, .crm-followup-list > .crm-followup").length;
-    status.textContent = `${ui.number(count)} ${count === 1 ? "registro encontrado" : "registros encontrados"}.`;
+    const label = `${ui.number(count)} ${count === 1 ? "registro encontrado" : "registros encontrados"}.`;
+    if (status.textContent !== label) status.textContent = label;
   });
 });
 crmResultsObserver.observe(dashboardGrid, { childList: true, subtree: true });

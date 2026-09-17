@@ -73,7 +73,8 @@ const fileResultsObserver = new MutationObserver(() => {
     toolbar.insertAdjacentElement("afterend", status);
   }
   const count = list.querySelectorAll("tbody tr").length;
-  status.textContent = `${ui.number(count)} ${count === 1 ? "arquivo encontrado" : "arquivos encontrados"}.`;
+  const label = `${ui.number(count)} ${count === 1 ? "arquivo encontrado" : "arquivos encontrados"}.`;
+  if (status.textContent !== label) status.textContent = label;
 });
 fileResultsObserver.observe(dashboardGrid, { childList: true, subtree: true });
 
