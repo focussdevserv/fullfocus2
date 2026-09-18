@@ -325,8 +325,9 @@ const approvalActionsObserver = new MutationObserver(async () => {
   try {
     const rows = (await api("/api/approvals")).approvals || [];
     if (location.hash !== routeAtStart || !list.isConnected) return;
-    list.querySelectorAll("article").forEach((article, index) => {
-      const approval = rows[index];
+    const byId = new Map(rows.map((item) => [String(item.id), item]));
+    list.querySelectorAll("article[data-structured-id]").forEach((article) => {
+      const approval = byId.get(String(article.dataset.structuredId));
       if (!approval || approval.status !== "pending") return;
       const actions = document.createElement("div"); actions.className = "approval-actions";
       [ ["approved", "Aprovar", "success"], ["rejected", "Recusar", "danger"] ].forEach(([status, label, kind]) => { const button = document.createElement("button"); button.type = "button"; button.className = `compact-action ${kind}`; button.textContent = label; button.addEventListener("click", async () => { button.disabled = true; try { await api(`/api/approvals/${approval.id}`, { method: "PATCH", body: { status, decision: status, decided_at: new Date().toISOString() } }); toast(status === "approved" ? "Aprovação registrada." : "Recusa registrada.", status === "approved" ? "success" : "info"); renderEstrutura("aprovacoes"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); actions.append(button); }); article.append(actions);
@@ -341,8 +342,9 @@ const briefingLinkObserver = new MutationObserver(async () => {
   list.dataset.briefingLinks = "1";
   try {
     const rows = (await api("/api/briefings")).briefings || [];
-    list.querySelectorAll("article").forEach((article, index) => {
-      const briefing = rows[index]; if (!briefing || briefing.status === "answered") return;
+    const byId = new Map(rows.map((item) => [String(item.id), item]));
+    list.querySelectorAll("article[data-structured-id]").forEach((article) => {
+      const briefing = byId.get(String(article.dataset.structuredId)); if (!briefing || briefing.status === "answered") return;
       const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = briefing.public_token ? "Copiar link" : "Gerar link";
       button.addEventListener("click", async () => { button.disabled = true; try { const data = briefing.public_token ? { path: `/briefing/${briefing.public_token}` } : await (await fetch(`/api/briefings/${briefing.id}/public-link`, { method: "POST", credentials: "same-origin" })).json(); if (!data.path) throw new Error(data.error || "Não foi possível gerar o link."); await ui.copyText(`${location.origin}${data.path}`); button.textContent = "Link copiado"; toast("Link do briefing copiado.", "success"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); article.append(button);
     });
@@ -356,8 +358,9 @@ const formLinkObserver = new MutationObserver(async () => {
   list.dataset.formLinks = "1";
   try {
     const rows = (await api("/api/forms")).forms || [];
-    list.querySelectorAll("article").forEach((article, index) => {
-      const form = rows[index]; if (!form) return;
+    const byId = new Map(rows.map((item) => [String(item.id), item]));
+    list.querySelectorAll("article[data-structured-id]").forEach((article) => {
+      const form = byId.get(String(article.dataset.structuredId)); if (!form) return;
       const button = document.createElement("button"); button.type = "button"; button.className = "compact-action"; button.textContent = form.public_token ? "Copiar link" : "Gerar link";
       button.addEventListener("click", async () => { button.disabled = true; try { const data = form.public_token ? { path: `/form/${form.public_token}` } : await (await fetch(`/api/forms/${form.id}/public-link`, { method: "POST", credentials: "same-origin" })).json(); if (!data.path) throw new Error(data.error || "Não foi possível gerar o link."); await ui.copyText(`${location.origin}${data.path}`); button.textContent = "Link copiado"; toast("Link do formulário copiado.", "success"); } catch (error) { button.disabled = false; toast(error.message, "error"); } }); article.append(button);
     });
@@ -373,8 +376,9 @@ const operationActionObserver = new MutationObserver(async () => {
   const table = key === "alteracoes" ? "change_requests" : "deliveries";
   try {
     const rows = (await api(`/api/${table}`))[table] || [];
-    list.querySelectorAll("article").forEach((article, index) => {
-      const item = rows[index]; if (!item) return;
+    const byId = new Map(rows.map((item) => [String(item.id), item]));
+    list.querySelectorAll("article[data-structured-id]").forEach((article) => {
+      const item = byId.get(String(article.dataset.structuredId)); if (!item) return;
       const actions = document.createElement("div"); actions.className = "operation-actions";
       const choices = key === "alteracoes" && item.status === "pending" ? [["approved", "Aprovar"], ["rejected", "Recusar"]] : key === "entregas" && !item.client_approved ? [["approved", "Registrar aprovação"]] : [];
       if (key === "entregas") { const share = document.createElement("button"); share.type = "button"; share.className = "compact-action"; share.textContent = "Link para aprovação"; share.addEventListener("click", async () => { share.disabled = true; try { const data = await api(`/api/deliveries/${item.id}/public-link`, { method: "POST", body: {} }); await ui.copyText(`${location.origin}${data.path}`); share.textContent = "Link copiado"; toast("Link da entrega copiado.", "success"); } catch (error) { share.disabled = false; toast(error.message, "error"); } }); actions.append(share); }
