@@ -34,5 +34,15 @@ export async function executeAgentAction({ pool, action, payload, org, userId = 
     const q = await pool.query("insert into proposals (organization_id,lead_id,client_id,title,amount,status,notes) values ($1,$2,$3,$4,$5,'draft',$6) returning id,title,amount,status", [org, data.lead_id || null, data.client_id || null, title, amount, data.notes || data.observacoes || null]);
     return { executed: true, type: "proposal", id: q.rows[0].id, record: q.rows[0] };
   }
+  if (["draft_email", "rascunho_email", "email_draft"].includes(name)) {
+    const to = String(data.to || data.destinatario || "").trim(), subject = String(data.subject || data.assunto || "").trim(), body = String(data.body || data.mensagem || "").trim(); if (!/^\S+@\S+\.\S+$/.test(to) || !subject || !body) return { executed: false, reason: "missing_email_data" };
+    const q = await pool.query("insert into agent_notes (organization_id,author_user_id,entity_type,body) values ($1,$2,'email_draft',$3) returning id,created_at", [org, userId, JSON.stringify({ to, subject, body })]);
+    return { executed: true, type: "email_draft", id: q.rows[0].id, record: q.rows[0] };
+  }
+  if (["prepare_payment", "preparar_cobranca", "receivable_create"].includes(name)) {
+    const clientId = data.client_id || data.cliente_id, description = String(data.description || data.descricao || "").trim(), amount = Number(data.amount || data.valor), dueAt = data.due_at || data.vencimento; if (!clientId || !description || !Number.isFinite(amount) || amount <= 0 || !dueAt) return { executed: false, reason: "missing_payment_data" };
+    const q = await pool.query("insert into receivables (organization_id,client_id,description,amount,due_at,status) values ($1,$2,$3,$4,$5,'pending') returning id,description,amount,due_at,status", [org, clientId, description, amount, dueAt]);
+    return { executed: true, type: "receivable", id: q.rows[0].id, record: q.rows[0] };
+  }
   return { executed: false, reason: "action_not_allowed" };
 }
