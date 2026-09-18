@@ -23,3 +23,21 @@
   .conta-list-filters label { flex: 1 1 100%; }
   .conta-list-filters button { flex: 1 1 auto; }
 }
+
+.conta-drawer-wide{width:min(860px,100%);padding:clamp(1rem,3vw,2rem)}
+.client-sheet-tools{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
+.client-sheet-tools a{text-decoration:none}
+.client-sheet-tabs{display:flex;gap:.35rem;overflow:auto;margin:1.25rem 0;padding-bottom:.45rem;border-bottom:1px solid var(--line);scrollbar-width:thin}
+.client-sheet-tabs button{border:1px solid var(--line);border-radius:999px;background:transparent;color:inherit;padding:.55rem .8rem;white-space:nowrap;cursor:pointer}
+.client-sheet-tabs button.is-active{background:var(--accent,#e62429);border-color:var(--accent,#e62429);color:#fff}
+.client-sheet-tabs button:focus-visible{outline:3px solid rgb(71 136 241 / 72%);outline-offset:2px}
+.client-sheet-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.client-sheet-grid>article,.conta-overview [data-client-panel]>article{padding:1rem;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--paper) 86%,white 14%)}
+.client-sheet-grid h3,.conta-overview [data-client-panel]>article h3{margin-top:0}
+.client-related-row{display:grid;gap:.2rem;padding:.7rem 0;border-top:1px solid var(--line)}
+.client-related-row:first-child{border-top:0}
+.client-related-row span,.client-related-row small{color:var(--muted);font-size:.82rem}
+.client-next-action{display:flex;justify-content:space-between;gap:.75rem;padding:.7rem 0;border-top:1px solid var(--line);color:inherit;text-decoration:none}
+.client-next-action:first-of-type{border-top:0}
+.client-next-action span{color:var(--muted);white-space:nowrap}
+@media(max-width:700px){.client-sheet-grid{grid-template-columns:1fr}.client-sheet-tools .compact-action,.client-sheet-tools a{flex:1 1 auto;text-align:center}.conta-drawer-wide{padding:1rem}}
