@@ -42,7 +42,7 @@ const ui = (() => {
   /* Barra de busca + filtros + botões. */
   function toolbar({ search, filters = [], actions = "", extra = "" }) {
     const searchHtml = search ? `<input class="ui-search" type="search" name="search" autocomplete="off" data-search placeholder="${esc(search.placeholder || "Buscar…")}" value="${esc(search.value || "")}" aria-label="${esc(search.placeholder || "Buscar")}" />` : "";
-    const filtersHtml = filters.map((f) => `<select class="ui-select" name="${esc(f.key)}" autocomplete="off" data-filter="${esc(f.key)}" aria-label="${esc(f.label || f.key)}">${f.options.map(([value, label]) => `<option value="${esc(value)}" ${String(f.value ?? "") === String(value) ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>`).join("");
+    const filtersHtml = filters.filter(Boolean).map((f) => `<select class="ui-select" name="${esc(f.key)}" autocomplete="off" data-filter="${esc(f.key)}" aria-label="${esc(f.label || f.key)}">${(f.options || []).map(([value, label]) => `<option value="${esc(value)}" ${String(f.value ?? "") === String(value) ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>`).join("");
     return `<div class="ui-toolbar">${searchHtml}${filtersHtml}${extra}<div class="ui-toolbar-actions">${actions}</div></div>`;
   }
 
@@ -88,7 +88,7 @@ const ui = (() => {
   }
 
   /* Formulário em modal. fields: [{ name, label, type, options, required, value, placeholder, rows, min, max, step, help, half }] */
-  function form({ title, subtitle = "", fields, submitLabel = "Salvar", values = {}, onSubmit, danger = null }) {
+ function form({ title, subtitle = "", fields = [], submitLabel = "Salvar", values = {}, onSubmit, danger = null }) {
     activeOverlayCleanup?.();
     document.querySelectorAll(".ui-modal-backdrop, .ui-drawer-backdrop").forEach((overlay) => overlay.remove());
     const previouslyFocused = document.activeElement;

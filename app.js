@@ -750,6 +750,14 @@ window.addEventListener("focusdev:module-error", (event) => {
   if (event.detail?.key !== (window.location.hash || "#inicio").replace(/^#/, "")) return;
   if (dashboardGrid) dashboardGrid.innerHTML = stateBlock.error("Não foi possível carregar esta área. Tente novamente.");
 });
+window.addEventListener("focusdev:route-needed", (event) => {
+  const key = event.detail?.key, waitingHash = window.location.hash;
+  window.setTimeout(() => {
+    if (window.location.hash !== waitingHash || routeRenderers[key] || !dashboardGrid?.querySelector(".state-loading")) return;
+    dashboardGrid.innerHTML = stateBlock.error("O módulo demorou mais que o esperado para carregar.", "module-retry");
+    dashboardGrid.querySelector(".module-retry")?.addEventListener("click", () => { window.FocusModuleLoader?.load(key).catch(() => {}); renderHashRoute(waitingHash); });
+  }, 8000);
+});
 window.addEventListener("load", () => {
   modulesLoading = false;
   if (!appShell.hidden) renderHashRoute(window.location.hash || "#inicio");
