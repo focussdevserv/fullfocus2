@@ -34,7 +34,8 @@ const DEFAULT_ORGANIZATION_ID = process.env.DEFAULT_ORGANIZATION_ID || "00000000
 const SESSION_SECRET = process.env.SESSION_SECRET || "development-only-change-me";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 if (process.env.NODE_ENV === "production" && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) throw new Error("SESSION_SECRET must be set to at least 32 characters in production.");
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Aceita UUIDs RFC 4122 e o UUID nulo usado pelo workspace padrão legado.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const organizationId = (req) => { const value = req.user?.organization_id || req.get("x-organization-id") || req.query.organizationId || DEFAULT_ORGANIZATION_ID; return UUID.test(String(value)) ? String(value) : null; };
 const tenant = (req, res) => { const id = organizationId(req); if (!id) res.status(400).json({ error: "organization_id inválido." }); return id; };
 const asText = (v) => typeof v === "string" ? v.trim() : "";
