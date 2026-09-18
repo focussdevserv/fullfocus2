@@ -551,13 +551,13 @@ const estruturaCopyObserver = new MutationObserver(() => {
   if (hash === "alteracoes") {
     dashboardGrid.querySelector("[data-change-search]")?.setAttribute("placeholder", "Buscar solicitação…");
     const next = dashboardGrid.querySelector("[data-change-next]");
-    if (next) next.textContent = "Próxima";
+    if (next && next.textContent !== "Próxima") next.textContent = "Próxima";
     dashboardGrid.querySelectorAll(".change-row .finance-status").forEach((status) => { status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); });
   }
   if (hash === "entregas") {
     dashboardGrid.querySelector("[data-delivery-search]")?.setAttribute("placeholder", "Buscar versão ou ambiente…");
     const next = dashboardGrid.querySelector("[data-delivery-next]");
-    if (next) next.textContent = "Próxima";
+    if (next && next.textContent !== "Próxima") next.textContent = "Próxima";
     dashboardGrid.querySelectorAll(".delivery-row a[href]").forEach((link) => { const safeUrl = estruturaSafeExternalUrl(link.getAttribute("href")); if (!safeUrl) { link.removeAttribute("href"); link.setAttribute("aria-disabled", "true"); link.classList.add("is-disabled"); } else { link.setAttribute("href", safeUrl); link.setAttribute("rel", "noopener noreferrer"); } });
   }
 });
