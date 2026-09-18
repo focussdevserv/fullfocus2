@@ -14,6 +14,10 @@ const catalogArt = [
   "/assets/catalog/catalog-design.png",
   "/assets/catalog/catalog-digital.png",
 ];
+const catalogPromoArt = Object.fromEntries([
+  ...Array.from({ length: 12 }, (_, index) => [`FOC-IND-${String(index + 1).padStart(3, "0")}`, `/assets/catalog/promos/FOC-IND-${String(index + 1).padStart(3, "0")}.png`]),
+  ...Array.from({ length: 6 }, (_, index) => [`FOC-PAC-${String(index + 1).padStart(3, "0")}`, `/assets/catalog/promos/FOC-PAC-${String(index + 1).padStart(3, "0")}.png`]),
+]);
 
 const fields = [
   { name: "name", label: "Nome", required: true, placeholder: "Ex.: Site institucional" },
@@ -37,6 +41,7 @@ const fields = [
 const queryString = () => { const params = new URLSearchParams(); if (catalogFilter.search) params.set("search", catalogFilter.search); if (catalogFilter.kind) params.set("kind", catalogFilter.kind); if (catalogFilter.active) params.set("active", catalogFilter.active); return params.toString(); };
 const statusTone = (item) => item.active ? "positive" : "neutral";
 const catalogImage = (item, index = 0) => {
+  if (catalogPromoArt[item.sku]) return catalogPromoArt[item.sku];
   if (item.image_url) return item.image_url;
   const text = `${item.category || ""} ${item.tags || ""} ${item.name || ""}`.toLowerCase();
   if (/ia|chatbot|autom|bot/.test(text)) return catalogArt[2];
@@ -148,7 +153,7 @@ new MutationObserver(() => {
     const item = catalogRows.find((entry) => String(entry.id) === String(id));
     if (!item) return;
     card.dataset.catalogDecorated = "1";
-    card.insertAdjacentHTML("afterbegin", `<div class="catalog-card-art"><img src="${esc(catalogImage(item, index))}" alt="Arte de ${esc(item.name || "produto")}" loading="lazy"><img class="catalog-card-logo" src="/assets/focussdev-logo.png" alt="Focussdev"></div>`);
+    card.insertAdjacentHTML("afterbegin", `<div class="catalog-card-art"><img src="${esc(catalogImage(item, index))}" alt="Arte de ${esc(item.name || "produto")}" loading="lazy"><img class="catalog-card-logo" src="/assets/focussdev-logo.png" alt="Focussdev"><div class="catalog-card-art-copy"><span>FOCUS SDEV · SOLUÇÃO DIGITAL</span><strong>${esc(item.name || "Produto")}</strong><small>${esc(item.short_description || "Mais presença, organização e resultados para o seu negócio.")}</small><b>${money(item.price)}${item.unit ? ` / ${esc(item.unit)}` : ""}</b></div></div>`);
     const actions = card.querySelector(".card-actions");
     actions?.insertAdjacentHTML("afterbegin", `<button class="compact-action" data-catalog-share="${esc(item.id)}" type="button">Compartilhar</button>`);
   });
