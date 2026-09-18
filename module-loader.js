@@ -20,13 +20,13 @@
     if (!name || styles.has(name)) return;
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = `modules/${name}.css?v=3`;
+    link.href = `modules/${name}.css?v=4`;
     document.head.append(link);
     styles.set(name, link);
   };
   const load = (key) => Promise.all((groups[key] || []).map((file) => {
     loadStyle(file);
-    if (!loaded.has(file)) loaded.set(file, import(`./modules/${file}?v=3`));
+    if (!loaded.has(file)) loaded.set(file, import(`./modules/${file}?v=4`));
     return loaded.get(file);
   }));
   window.FocusModuleLoader = { load };
