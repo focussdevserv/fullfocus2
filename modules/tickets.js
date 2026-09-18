@@ -108,6 +108,25 @@ dashboardGrid.addEventListener("click", (event) => {
 
 registerRoutes({ tickets: renderTicketsScreen });
 
+/* Um ticket pode virar tarefa interna sem copiar manualmente o atendimento. */
+const ticketTaskObserver = new MutationObserver(() => {
+  if (location.hash !== "#tickets") return;
+  dashboardGrid.querySelectorAll("[data-ticket-row]").forEach((card) => {
+    const actions = card.querySelector("div");
+    const id = card.querySelector("[data-ticket-edit]")?.dataset.ticketEdit;
+    if (!actions || !id || actions.querySelector("[data-ticket-task]")) return;
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "compact-action"; button.dataset.ticketTask = id; button.textContent = "Criar tarefa";
+    button.addEventListener("click", async () => {
+      button.disabled = true; button.textContent = "Criando…";
+      try { const result = await api(`/api/tickets/${id}/create-task`, { method: "POST", body: {} }); toast(result.created === false ? "A tarefa deste ticket já existe." : "Tarefa interna criada.", "success"); button.textContent = "Tarefa criada"; }
+      catch (error) { button.disabled = false; button.textContent = "Criar tarefa"; toast(error.message, "error"); }
+    });
+    actions.append(button);
+  });
+});
+ticketTaskObserver.observe(dashboardGrid, { childList: true, subtree: true });
+
 dashboardGrid.addEventListener("dragstart", (event) => {
   const card = event.target.closest?.("[data-ticket-row]");
   if (!card) return;

@@ -123,5 +123,17 @@ export function register(app, ctx) {
   });
   app.get("/api/projects/:id/overview", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const project = await pool.query("select p.*, c.name client_name from projects p left join clients c on c.id=p.client_id and c.organization_id=p.organization_id where p.id=$1 and p.organization_id=$2", [req.params.id, org]); if (!project.rowCount) return res.status(404).json({ error: "Projeto não encontrado." }); const [tasks, files, receivables] = await Promise.all([pool.query("select * from tasks where project_id=$1 and organization_id=$2 order by due_at asc nulls last", [req.params.id, org]), pool.query("select * from files where project_id=$1 and organization_id=$2 order by created_at desc", [req.params.id, org]), pool.query("select coalesce(sum(amount),0) total from receivables where project_id=$1 and organization_id=$2 and paid_at is null", [req.params.id, org]).catch(() => ({ rows: [{ total: 0 }] }))]); res.json({ project: project.rows[0], tasks: tasks.rows, files: files.rows, balance_receivable: receivables.rows[0]?.total || 0, overdue_tasks: tasks.rows.filter((task) => task.status !== "done" && task.due_at && new Date(task.due_at) < new Date()).length }); } catch (e) { fail(res, e, "Não foi possível carregar o resumo do projeto."); } });
   run("files", "file", ["name", "url", "kind", "size_bytes", "project_id", "client_id"], (b, p) => !p && (!asText(b.name) || !asText(b.url) ? "Informe nome e URL válidos." : null));
-  run("tickets", "ticket", ["title", "description", "client_id", "priority", "status", "due_at"], (b, p) => { const a = oneOf("priority", ["low", "medium", "high", "urgent"])(b) || oneOf("status", ["new", "open", "in_analysis", "in_progress", "waiting_client", "waiting_third_party", "resolved", "closed", "reopened", "cancelled"])(b); return a || (!p && !asText(b.title) ? "Informe o título do ticket." : null); });
+  run("tickets", "ticket", ["title", "description", "client_id", "project_id", "priority", "status", "due_at"], (b, p) => { const a = oneOf("priority", ["low", "medium", "high", "urgent"])(b) || oneOf("status", ["new", "open", "in_analysis", "in_progress", "waiting_client", "waiting_third_party", "resolved", "closed", "reopened", "cancelled"])(b); return a || (!p && !asText(b.title) ? "Informe o título do ticket." : null); });
+  app.post("/api/tickets/:id/create-task", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    try {
+      const ticket = await pool.query("select id,title,description,client_id,project_id,priority from tickets where id=$1 and organization_id=$2", [req.params.id, org]);
+      if (!ticket.rowCount) return res.status(404).json({ error: "Ticket não encontrado." });
+      const source = ticket.rows[0];
+      const existing = await pool.query("select id,title,status from tasks where organization_id=$1 and internal_notes like $2 order by created_at desc limit 1", [org, `%ticket_id:${source.id}%`]);
+      if (existing.rowCount) return res.json({ task: existing.rows[0], created: false });
+      const task = await pool.query("insert into tasks (organization_id,title,description,client_id,project_id,priority,status,internal_notes) values ($1,$2,$3,$4,$5,$6,'todo',$7) returning id,title,status,client_id,project_id", [org, `Atendimento: ${source.title}`, source.description || null, source.client_id, source.project_id, source.priority || "medium", `ticket_id:${source.id}`]);
+      res.status(201).json({ task: task.rows[0], created: true });
+    } catch (error) { fail(res, error, "Não foi possível transformar o ticket em tarefa."); }
+  });
 }

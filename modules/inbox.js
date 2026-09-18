@@ -415,3 +415,13 @@ new MutationObserver(() => {
   const label = count === 1 ? "1 conversa encontrada" : `${count} conversas encontradas`;
   if (status.textContent !== label) status.textContent = label;
 }).observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
+
+const conversationLeadObserver = new MutationObserver(() => {
+  if (location.hash !== "#caixa-de-entrada" && location.hash !== "#conversas") return;
+  const actions = dashboardGrid.querySelector("[data-thread] .inbox-thread-actions");
+  if (!actions || actions.querySelector("[data-conversation-lead]")) return;
+  const button = document.createElement("button"); button.type = "button"; button.className = "text-action"; button.dataset.conversationLead = box.selected; button.textContent = "Criar lead";
+  button.addEventListener("click", async () => { button.disabled = true; button.textContent = "Criando…"; try { const result = await api(`/api/conversations/${box.selected}/create-lead`, { method: "POST", body: {} }); button.textContent = result.created === false ? "Lead já existe" : "Lead criado"; ui.toast(result.created === false ? "Este contato já possui um lead." : "Lead criado a partir da conversa.", "success"); } catch (error) { button.disabled = false; button.textContent = "Criar lead"; ui.toast(error.message, "error"); } });
+  actions.append(button);
+});
+conversationLeadObserver.observe(dashboardGrid, { childList: true, subtree: true });

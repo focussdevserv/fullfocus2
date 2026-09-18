@@ -96,8 +96,10 @@ app.use(async (req, res, next) => {
     let createdRecord = null;
     const name = textValue(["name", "nome", "full_name"]) || `Envio: ${form.name}`;
     const email = textValue(["email", "e-mail"]), phone = textValue(["phone", "telefone", "whatsapp"]), details = JSON.stringify({ form_id: form.id, responses: cleanResponses });
-    if (target === "lead") createdRecord = (await db.query("insert into leads (organization_id,name,email,phone,source,status,notes) values ($1,$2,$3,$4,'form','new',$5) returning id,name,status", [form.organization_id, name, email, phone, details])).rows[0];
-    if (target === "opportunity") createdRecord = (await db.query("insert into opportunities (organization_id,name,stage,amount,notes) values ($1,$2,'qualification',0,$3) returning id,name,stage", [form.organization_id, name, details])).rows[0];
+    let contactId = null;
+    if (email || phone) contactId = (await db.query("insert into contacts (organization_id,name,email,phone,is_primary) values ($1,$2,$3,$4,true) returning id", [form.organization_id, name, email, phone])).rows[0]?.id || null;
+    if (target === "lead") createdRecord = (await db.query("insert into leads (organization_id,name,contact_id,email,phone,source,status,notes) values ($1,$2,$3,$4,$5,'form','new',$6) returning id,name,status,contact_id", [form.organization_id, name, contactId, email, phone, details])).rows[0];
+    if (target === "opportunity") createdRecord = (await db.query("insert into opportunities (organization_id,name,contact_id,stage,amount,notes) values ($1,$2,$3,'qualification',0,$4) returning id,name,stage,contact_id", [form.organization_id, name, contactId, details])).rows[0];
     if (target === "ticket") createdRecord = (await db.query("insert into tickets (organization_id,title,description,priority,status) values ($1,$2,$3,'medium','open') returning id,title,status", [form.organization_id, name, details])).rows[0];
     if (target === "task") createdRecord = (await db.query("insert into tasks (organization_id,title,description,priority,status) values ($1,$2,$3,'medium','todo') returning id,title,status", [form.organization_id, name, details])).rows[0];
     await db.query("commit");

@@ -1034,6 +1034,32 @@ openCreateDialog = function openCreateDialogWithFocus(kind) {
   createDialogReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   baseCreateDialogOpen(kind);
 };
+
+/* Ações encadeadas: abre qualquer cadastro já ligado ao contexto atual. */
+window.FocusWorkflow = {
+  async openLinked(kind, values = {}) {
+    const config = createConfig[kind];
+    if (!config) return;
+    const relationFields = config.fields.filter((field) => ["client_id", "project_id", "contract_id"].includes(field.name));
+    if (relationFields.length) {
+      const [clientsResult, projectsResult, contractsResult] = await Promise.all([
+        relationFields.some((field) => field.name === "client_id") ? api("/api/clients?limit=250") : Promise.resolve({ clients: [] }),
+        relationFields.some((field) => field.name === "project_id") ? api("/api/projects?limit=250") : Promise.resolve({ projects: [] }),
+        relationFields.some((field) => field.name === "contract_id") ? api("/api/contracts") : Promise.resolve({ contracts: [] }),
+      ]);
+      config.fields.forEach((field) => {
+        if (field.name === "client_id") field.options = [["", "Sem cliente"], ...(clientsResult.clients || []).map((item) => [item.id, item.name])];
+        if (field.name === "project_id") field.options = [["", "Sem projeto"], ...(projectsResult.projects || []).map((item) => [item.id, item.name])];
+        if (field.name === "contract_id") field.options = [["", "Sem contrato"], ...(contractsResult.contracts || []).map((item) => [item.id, item.name])];
+      });
+    }
+    openCreateDialog(kind);
+    Object.entries(values).forEach(([name, value]) => {
+      const field = dialogFields.querySelector(`[name="${name}"]`);
+      if (field && value !== undefined && value !== null) field.value = value;
+    });
+  },
+};
 const baseCreateDialogClose = closeCreateDialog;
 closeCreateDialog = function closeCreateDialogWithFocus() {
   baseCreateDialogClose();
