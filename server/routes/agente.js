@@ -29,6 +29,16 @@ export function register(app, ctx) {
       const q = await pool.query("insert into agent_notes (organization_id,author_user_id,entity_type,entity_id,body) values ($1,$2,$3,$4,$5) returning id,body,created_at", [org, userId || null, data.entity_type || data.tipo || null, data.entity_id || data.id || null, body]);
       return { executed: true, type: "note", id: q.rows[0].id, record: q.rows[0] };
     }
+    if (["create_followup", "criar_followup", "followup_create"].includes(name)) {
+      const dueAt = data.due_at || data.data || data.date, leadId = data.lead_id || null, clientId = data.client_id || null; if ((!leadId && !clientId) || !dueAt || Number.isNaN(Date.parse(dueAt))) return { executed: false, reason: "missing_followup_data" };
+      const q = await pool.query("insert into followups (organization_id,lead_id,client_id,title,due_at,channel,note,priority,next_action) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id,title,due_at", [org, leadId, clientId, data.title || data.titulo || "Retorno comercial", dueAt, data.channel || "whatsapp", data.note || data.nota || null, ["low", "medium", "high", "urgent"].includes(data.priority) ? data.priority : "medium", data.next_action || null]);
+      return { executed: true, type: "followup", id: q.rows[0].id, record: q.rows[0] };
+    }
+    if (["create_proposal", "criar_proposta", "proposal_create"].includes(name)) {
+      const title = String(data.title || data.titulo || "").trim(), amount = Number(data.amount || data.valor); if (!title || !Number.isFinite(amount) || amount < 0) return { executed: false, reason: "missing_proposal_data" };
+      const q = await pool.query("insert into proposals (organization_id,lead_id,client_id,title,amount,status,notes) values ($1,$2,$3,$4,$5,'draft',$6) returning id,title,amount,status", [org, data.lead_id || null, data.client_id || null, title, amount, data.notes || data.observacoes || null]);
+      return { executed: true, type: "proposal", id: q.rows[0].id, record: q.rows[0] };
+    }
     return { executed: false, reason: "action_not_allowed" };
   };
   const ensure = async (org) => {
