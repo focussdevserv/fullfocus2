@@ -49,8 +49,32 @@ const structuredRowMarkup = (key, row) => {
   const primary = labels[key]?.[2];
   const title = row[primary] || row.name || row.title || `#${row.id}`;
   const detail = key === "metas" ? `Meta: ${row.target ?? "—"} · Até ${row.period_end ? estruturaDate(row.period_end) : "sem prazo"}` : key === "ausencias" ? `${row.starts_on ? estruturaDate(row.starts_on) : "Sem início"} → ${row.ends_on ? estruturaDate(row.ends_on) : "Sem fim"}` : key === "horas" ? `${row.minutes ?? 0} minuto(s)${row.billable ? " · Faturável" : ""}` : key === "contas-a-pagar" ? `${estruturaMoney(row.amount)} · Vencimento ${row.due_at ? estruturaDate(row.due_at) : "sem data"}` : key === "notas-fiscais" ? estruturaMoney(row.amount) : key === "comissoes" ? estruturaMoney(row.amount) : row.entity_type || row.kind || "Registro";
-  return `<article class="structured-row"><div class="structured-row-main"><strong>${esc(title)}</strong><span>${esc(detail)}</span></div><small>${esc(row.status || (row.created_at ? estruturaDateTime(row.created_at) : "Registro"))}</small></article>`;
+  return `<article class="structured-row" data-structured-id="${esc(row.id)}"><div class="structured-row-main"><strong>${esc(title)}</strong><span>${esc(detail)}</span></div><small>${esc(row.status || (row.created_at ? estruturaDateTime(row.created_at) : "Registro"))}</small></article>`;
 };
+function bindStructuredMaintenanceActions(key, rows) {
+  const list = dashboardGrid.querySelector(".automation-list[data-structured-list]");
+  if (!list || !recordCreateKind[key] || ["auditoria", "lixeira"].includes(key)) return;
+  list.dataset.maintenanceActions = "1";
+  const table = labels[key][1], kind = recordCreateKind[key];
+  const hidden = new Set(["id", "organization_id", "password", "password_hash", "api_key", "secret", "secret_ciphertext", "secret_iv", "secret_tag", "token", "public_token"]);
+  const value = (entry) => entry === null || entry === undefined || entry === "" ? "—" : typeof entry === "object" ? JSON.stringify(entry) : /^\d{4}-\d{2}-\d{2}T/.test(String(entry)) ? estruturaDateTime(entry) : String(entry);
+  list.querySelectorAll("article[data-structured-id]").forEach((article) => {
+    const row = rows.find((item) => String(item.id) === String(article.dataset.structuredId));
+    if (!row || article.querySelector(".structured-actions")) return;
+    const actions = document.createElement("span"); actions.className = "structured-actions";
+    const details = document.createElement("button"); details.type = "button"; details.className = "compact-action"; details.textContent = "Detalhes";
+    details.addEventListener("click", () => { const html = Object.entries(row).filter(([field]) => !hidden.has(field)).map(([field, entry]) => `<dt>${escapeHtml(field.replaceAll("_", " "))}</dt><dd>${escapeHtml(value(entry))}</dd>`).join(""); ui.drawer({ title: row[labels[key][2]] || row.name || row.title || `#${row.id}`, subtitle: labels[key][0], html: `<dl>${html || "<dd>Sem detalhes disponíveis.</dd>"}</dl>` }); });
+    const edit = document.createElement("button"); edit.type = "button"; edit.className = "compact-action"; edit.textContent = "Editar"; edit.addEventListener("click", () => openEditDialog(kind, row, `/api/${table}/${row.id}`));
+    const remove = document.createElement("button"); remove.type = "button"; remove.className = "compact-action"; remove.textContent = "Excluir";
+    remove.addEventListener("click", async () => { if (remove.dataset.confirm !== "1") { remove.dataset.confirm = "1"; remove.textContent = "Confirmar"; return; } remove.disabled = true; remove.setAttribute("aria-busy", "true"); try { await api(`/api/${table}/${row.id}`, { method: "DELETE" }); renderEstrutura(key); } catch (error) { remove.disabled = false; remove.removeAttribute("aria-busy"); remove.textContent = error.message; } });
+    actions.append(details, edit, remove);
+    if (key === "cofre") { const reveal = document.createElement("button"); reveal.type = "button"; reveal.className = "compact-action"; reveal.textContent = "Revelar com senha"; reveal.addEventListener("click", () => revealVaultAccess(row)); actions.append(reveal); }
+    if (key === "contas-a-pagar" && !["paid", "cancelled"].includes(row.status)) { const pay = document.createElement("button"); pay.type = "button"; pay.className = "compact-action"; pay.textContent = "Registrar pagamento"; pay.addEventListener("click", async () => { pay.disabled = true; pay.setAttribute("aria-busy", "true"); try { await api(`/api/payables/${row.id}/record-payment`, { method: "POST", body: {} }); ui.toast("Pagamento registrado como despesa.", "success"); renderEstrutura(key); } catch (error) { pay.disabled = false; pay.removeAttribute("aria-busy"); ui.toast(error.message, "error"); } }); actions.append(pay); }
+    if (key === "contas-bancarias") { const movement = document.createElement("button"); movement.type = "button"; movement.className = "compact-action"; movement.textContent = "Movimentar"; movement.addEventListener("click", () => ui.form({ title: `Movimentar · ${row.name}`, subtitle: "Conta bancária", fields: [{ name: "kind", label: "Tipo", type: "select", options: [["credit", "Entrada"], ["debit", "Saída"]] }, { name: "amount", label: "Valor", type: "number", min: 0.01, step: 0.01 }, { name: "description", label: "Descrição" }], onSubmit: async (values) => { await api(`/api/bank_accounts/${row.id}/transactions`, { method: "POST", body: values }); ui.toast("Movimentação registrada.", "success"); renderEstrutura(key); } })); actions.append(movement); }
+    if (key === "horas" && row.started_at && !row.ended_at) { const stop = document.createElement("button"); stop.type = "button"; stop.className = "compact-action"; stop.textContent = "Finalizar cronômetro"; stop.addEventListener("click", async () => { stop.disabled = true; stop.setAttribute("aria-busy", "true"); try { await api(`/api/time-entry-timer/${row.id}/stop`, { method: "POST", body: {} }); toast("Cronômetro finalizado.", "success"); renderEstrutura(key); } catch (error) { stop.disabled = false; stop.removeAttribute("aria-busy"); toast(error.message, "error"); } }); actions.append(stop); }
+    article.append(actions);
+  });
+}
 async function prepareStructuredCreate(kind) {
   const config = createConfig[kind];
   if (!config) return;
@@ -95,6 +119,7 @@ async function renderEstrutura(key) {
     dashboardGrid.querySelector("[data-structured-search]")?.addEventListener("input", reload); dashboardGrid.querySelector("[data-structured-status]")?.addEventListener("input", reload); dashboardGrid.querySelector("[data-structured-prev]")?.addEventListener("click", () => { filterState.offset = Math.max(0, filterState.offset - 100); renderEstrutura(key); }); dashboardGrid.querySelector("[data-structured-next]")?.addEventListener("click", () => { filterState.offset += 100; renderEstrutura(key); });
     dashboardGrid.querySelector("[data-new]")?.addEventListener("click", () => prepareStructuredCreate(recordCreateKind[key]));
     dashboardGrid.querySelector(".structured-empty-action")?.addEventListener("click", () => prepareStructuredCreate(recordCreateKind[key]));
+    bindStructuredMaintenanceActions(key, rows);
     dashboardGrid.querySelector("[data-start-timer]")?.addEventListener("click", async (event) => { const button = event.currentTarget, routeAtStart = location.hash; button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Iniciando…"; try { await api("/api/time-entry-timer/start", { method: "POST", body: {} }); if (location.hash !== routeAtStart || !button.isConnected) return; toast("Cronômetro iniciado.", "success"); renderEstrutura(key); } catch (error) { if (location.hash === routeAtStart && button.isConnected) toast(error.message, "error"); } finally { if (button.isConnected && location.hash === routeAtStart) { button.disabled = false; button.removeAttribute("aria-busy"); button.textContent = "Iniciar cronômetro"; } } });
   } catch (error) { if (request !== filterState.request || location.hash.replace(/^#/, "") !== key) return; dashboardGrid.removeAttribute("aria-busy"); dashboardGrid.innerHTML = stateBlock.error(error.message, "estrutura-retry"); dashboardGrid.querySelector(".estrutura-retry")?.addEventListener("click", () => renderEstrutura(key)); }
 }
