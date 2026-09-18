@@ -468,6 +468,28 @@ app.get("/api/:table", async (req, res, next) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 250), offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select * from ${table} where ${where.join(" and ")} order by created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ [table]: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar os registros." }); }
 });
+app.post("/api/clients/quick", async (req, res) => {
+  const org = tenant(req, res); if (!org) return;
+  const text = (key) => asText(req.body?.[key]) || null;
+  const name = asText(req.body?.name), document = normalizeIdentity("document", req.body?.document);
+  if (!name) return res.status(400).json({ error: "name is required." });
+  if (document && ![11, 14].includes(document.length)) return res.status(400).json({ error: "document is invalid." });
+  const db = await pool.connect().catch(() => null);
+  if (!db) return res.status(503).json({ error: "Não foi possível iniciar o cadastro." });
+  try {
+    await db.query("begin");
+    const companyName = asText(req.body?.company_name), companyDocument = normalizeIdentity("document", req.body?.company_document);
+    let companyId = null;
+    if (companyName) companyId = (await db.query("insert into companies (organization_id,name,document) values ($1,$2,$3) returning id", [org, companyName, companyDocument])).rows[0].id;
+    const contact = await db.query("insert into contacts (organization_id,name,email,phone,document,company_id,is_primary) values ($1,$2,$3,$4,$5,$6,true) returning id", [org, name, text("email"), text("phone"), document, companyId]);
+    const fields = { name, company_id: companyId, contact_id: contact.rows[0].id, email: text("email"), phone: text("phone"), whatsapp: text("whatsapp") || text("phone"), document, status: text("status") || "active", person_type: companyDocument ? "company" : "person", street: text("street") || text("address"), street_number: text("street_number"), complement: text("complement"), neighborhood: text("neighborhood"), city: text("city"), state: text("state"), zip_code: text("zip_code"), country: text("country") || "Brasil" };
+    const keys = Object.keys(fields).filter((key) => fields[key] !== null && fields[key] !== undefined), values = [org, ...keys.map((key) => fields[key])], columns = ["organization_id", ...keys], marks = columns.map((_, index) => `$${index + 1}`);
+    const client = await db.query(`insert into clients (${columns.join(",")}) values (${marks.join(",")}) returning *`, values);
+    await db.query("commit");
+    res.status(201).json({ client: client.rows[0], company_id: companyId, contact_id: contact.rows[0].id });
+  } catch (error) { await db.query("rollback").catch(() => {}); const out = classifyDbError(error, "Não foi possível criar o cadastro do cliente."); res.status(out.status).json({ error: out.error }); }
+  finally { db.release(); }
+});
 Object.keys(entities).forEach(createCrud);
 
 app.post("/api/trash/:id/restore", async (req, res) => {

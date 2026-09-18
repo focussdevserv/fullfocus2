@@ -278,6 +278,12 @@ document.addEventListener("keydown", (event) => {
 }, true);
 window.addEventListener("hashchange", () => { document.querySelectorAll(".conta-drawer .conta-close").forEach((button) => button.click()); });
 
+// Cadastro rÃ¡pido: detalhes comerciais continuam disponÃ­veis na ficha do cliente.
+createConfig.contato = { title: "Novo contato", endpoint: "/api/contacts", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone"), field("city", "Cidade"), field("state", "UF")] };
+createConfig.empresa = { title: "Nova empresa", endpoint: "/api/companies", fields: [field("name", "Nome", "text", { required: true }), field("document", "CNPJ")] };
+createConfig.cliente = { title: "Novo cliente", endpoint: "/api/clients/quick", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone"), field("whatsapp", "WhatsApp"), field("company_name", "Empresa (opcional)"), field("company_document", "CNPJ da empresa"), field("street", "EndereÃ§o"), field("street_number", "NÃºmero"), field("city", "Cidade"), field("state", "UF"), field("zip_code", "CEP")] };
+prepareCreate = async function prepareQuickCreate(kind, shouldOpen = true) { if (shouldOpen && location.hash !== "#portal-do-cliente") openCreateDialog(kind); };
+
 dashboardGrid.addEventListener("click", async (event) => {
   const button = event.target.closest?.("[data-remove]");
   if (!button || button.dataset.busy === "1") return;
