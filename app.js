@@ -746,6 +746,10 @@ window.addEventListener("focusdev:routes-ready", (event) => {
   const currentKey = (window.location.hash || "#inicio").replace(/^#/, "");
   if (!appShell.hidden && event.detail?.keys?.includes(currentKey)) renderHashRoute(window.location.hash || "#inicio");
 });
+window.addEventListener("focusdev:module-error", (event) => {
+  if (event.detail?.key !== (window.location.hash || "#inicio").replace(/^#/, "")) return;
+  if (dashboardGrid) dashboardGrid.innerHTML = stateBlock.error("Não foi possível carregar esta área. Tente novamente.");
+});
 window.addEventListener("load", () => {
   modulesLoading = false;
   if (!appShell.hidden) renderHashRoute(window.location.hash || "#inicio");
@@ -843,7 +847,8 @@ function renderWorkspaceView(hash, label) {
   }
   const render = routeRenderers[key];
   if (!render) {
-    dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Workspace</p><h2>${escapeHtml(label || "Módulo")}</h2><p>Este módulo ainda não está conectado ao banco nesta versão.</p></div></section>${stateBlock.empty("Nenhum dado disponível", "A tela será habilitada quando o fluxo persistente estiver implementado.")}`;
+    window.dispatchEvent(new CustomEvent("focusdev:route-needed", { detail: { key } }));
+    dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Workspace</p><h2>${escapeHtml(label || "Módulo")}</h2><p>Preparando esta área…</p></div></section>${stateBlock.loading("Carregando módulo…")}`;
     return;
   }
   {

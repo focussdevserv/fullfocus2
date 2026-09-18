@@ -19,59 +19,12 @@
     />
     <link rel="stylesheet" href="styles.css?v=18" />
     <link rel="stylesheet" href="ui.css?v=9" />
-    <link rel="stylesheet" href="modules/inicio.css?v=10" />
-    <link rel="stylesheet" href="modules/tarefas.css?v=10" />
-    <link rel="stylesheet" href="modules/agenda.css?v=10" />
-    <link rel="stylesheet" href="modules/inbox.css?v=10" />
-    <link rel="stylesheet" href="modules/crm.css?v=11" />
-    <link rel="stylesheet" href="modules/contas.css?v=12" />
-    <link rel="stylesheet" href="modules/operacao.css?v=12" />
-    <link rel="stylesheet" href="modules/financeiro.css?v=12" />
-    <link rel="stylesheet" href="modules/catalogo.css?v=10" />
-    <link rel="stylesheet" href="modules/automacoes.css?v=12" />
-    <link rel="stylesheet" href="modules/configuracoes.css?v=10" />
-    <link rel="stylesheet" href="modules/whatsapp.css?v=10" />
-    <link rel="stylesheet" href="modules/agente.css?v=1" />
-    <link rel="stylesheet" href="modules/estrutura.css?v=3" />
     <link rel="stylesheet" href="design.css?v=4" />
     <!-- Núcleo primeiro (defer); os módulos (um por área do menu) são type="module": escopo próprio, executam em ordem depois do núcleo e enxergam os helpers globais. -->
     <script src="app.js?v=20" defer></script>
     <script src="ui.js?v=11" defer></script>
-    <script type="module" src="modules/inicio.js?v=12"></script>
-    <script type="module" src="modules/tarefas.js?v=13"></script>
-    <script type="module" src="modules/agenda.js?v=13"></script>
-    <script type="module" src="modules/agenda-enhanced.js?v=11"></script>
-    <script type="module" src="modules/inbox.js?v=13"></script>
-    <script type="module" src="modules/crm.js?v=15"></script>
-    <script type="module" src="modules/contas.js?v=15"></script>
-    <script type="module" src="modules/operacao.js?v=18"></script>
-    <script type="module" src="modules/financeiro.js?v=15"></script>
-    <script type="module" src="modules/cobrancas.js?v=5"></script>
-    <script type="module" src="modules/assinaturas.js?v=16"></script>
-    <script type="module" src="modules/catalogo.js?v=13"></script>
-    <script type="module" src="modules/automacoes.js?v=13"></script>
-    <script type="module" src="modules/templates.js?v=14"></script>
-    <script type="module" src="modules/base-conhecimento.js?v=15"></script>
-    <script type="module" src="modules/formularios.js?v=14"></script>
-    <script type="module" src="modules/integracoes.js?v=15"></script>
-    <script type="module" src="modules/tickets.js?v=17"></script>
-    <script type="module" src="modules/arquivos.js?v=16"></script>
-    <script type="module" src="modules/automacoes-workspace.js?v=15"></script>
-    <script type="module" src="modules/lixeira.js?v=13"></script>
-    <script type="module" src="modules/configuracoes.js?v=12"></script>
-    <script type="module" src="modules/whatsapp.js?v=11"></script>
-    <script type="module" src="modules/agente.js?v=1"></script>
-    <script type="module" src="modules/estrutura.js?v=18"></script>
-    <script type="module" src="modules/briefings.js?v=14"></script>
-    <script type="module" src="modules/contas-pagar.js?v=14"></script>
-    <script type="module" src="modules/notas-fiscais.js?v=14"></script>
-    <script type="module" src="modules/contas-bancarias.js?v=15"></script>
-    <script type="module" src="modules/relatorios-financeiros.js?v=13"></script>
-    <script type="module" src="modules/team-access.js?v=14"></script>
-    <script type="module" src="modules/auditoria.js?v=15"></script>
-    <script type="module" src="modules/infraestrutura.js?v=13"></script>
-    <script type="module" src="modules/gestao.js?v=15"></script>
-    <script type="module" src="modules/configuracoes-enhanced.js?v=12"></script>
+    <!-- As telas são carregadas sob demanda pelo módulo ativo. Isso reduz o custo da abertura inicial. -->
+    <script src="module-loader.js?v=1" defer></script>
     <script>
       /* PWA: sem isso, uma aba já aberta continua rodando o JS antigo depois de um deploy,
          mesmo com o service worker atualizado nos bastidores — só um F5 manual resolvia. */

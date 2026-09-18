@@ -27,6 +27,12 @@ const SOURCE_TABLES = {
   absence_started: "absences",
   sale_won: "opportunities",
   user_deactivated: "team_access_events",
+  client_created: "clients",
+  delivery_published: "deliveries",
+  payment_received: "payments",
+  project_inactive: "projects",
+  form_submitted: "forms",
+  subscription_due: "subscriptions",
 };
 
 const sourceWhere = {
@@ -53,6 +59,12 @@ const sourceWhere = {
   absence_started: "s.starts_on = $2::date and lower(s.kind) in ('vacation','ferias','férias')",
   sale_won: "s.stage in ('won','closed_won','sale_won')",
   user_deactivated: "s.created_at <= $2",
+  client_created: "s.created_at <= $2",
+  delivery_published: "s.status in ('published','done','completed') and coalesce(s.published_at,s.updated_at) <= $2",
+  payment_received: "s.paid_at is not null and s.paid_at <= $2",
+  project_inactive: "s.status not in ('done','cancelled') and s.updated_at <= ($2 - interval '7 days')",
+  form_submitted: "s.submitted_at is not null and s.submitted_at <= $2 and s.status in ('published','active')",
+  subscription_due: "s.status = 'active' and s.next_billing_on between $2::date and ($2::date + 7)",
 };
 
 const sourceMessage = (trigger, row) => {
@@ -202,6 +214,28 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
       [automation.organization_id, source.id || null, source.client_id || null, token],
     );
     return { action: "request_satisfaction", request_id: request.rows[0].id, token: request.rows[0].token, project_id: source.id || null };
+  }
+  if (automation.action === "request_approval") {
+    const projectId = config.project_id || source.project_id || null;
+    const clientId = config.client_id || source.client_id || null;
+    await assertOrganizationRelation(client, "projects", projectId, automation.organization_id, "O projeto");
+    await assertOrganizationRelation(client, "clients", clientId, automation.organization_id, "O cliente");
+    const targetType = String(config.target_type || "delivery").slice(0, 80);
+    const existing = await client.query("select id from approvals where organization_id=$1 and target_type=$2 and target_id=$3 and status='pending' order by id desc limit 1", [automation.organization_id, targetType, source.id]);
+    if (existing.rowCount) return { action: "request_approval", approval_id: existing.rows[0].id, reused: true };
+    const approval = await client.query("insert into approvals (organization_id,target_type,target_id,title,client_id,project_id,status) values ($1,$2,$3,$4,$5,$6,'pending') returning id", [automation.organization_id, targetType, source.id, String(config.title || message).slice(0, 240), clientId, projectId]);
+    return { action: "request_approval", approval_id: approval.rows[0].id, target_id: source.id };
+  }
+  if (automation.action === "create_opportunity") {
+    const latest = Array.isArray(source.responses) ? source.responses.at(-1) : source.responses;
+    const data = latest?.responses && typeof latest.responses === "object" ? latest.responses : (latest && typeof latest === "object" ? latest : {});
+    const value = Number(config.amount ?? data.amount ?? data.orcamento ?? 0) || 0;
+    const name = String(config.name || data.name || data.nome || source.name || "Nova oportunidade").slice(0, 240);
+    const email = data.email || data["e-mail"] || null;
+    const phone = data.phone || data.telefone || data.whatsapp || null;
+    const lead = await client.query("select id from leads where organization_id=$1 and ((email is not null and email=$2) or (phone is not null and phone=$3)) order by id desc limit 1", [automation.organization_id, email, phone]);
+    const opportunity = await client.query("insert into opportunities (organization_id,name,lead_id,stage,amount,notes) values ($1,$2,$3,'new',$4,$5) returning id", [automation.organization_id, name, lead.rows[0]?.id || null, value, JSON.stringify({ form_id: source.id, responses: data })]);
+    return { action: "create_opportunity", opportunity_id: opportunity.rows[0].id, lead_id: lead.rows[0]?.id || null };
   }
   if (automation.action === "create_calendar_event") {
     if (automation.trigger === "meeting_scheduled" && SOURCE_TABLES[automation.trigger] === "events") return { action: "create_calendar_event", event_id: source.id, reused: true };

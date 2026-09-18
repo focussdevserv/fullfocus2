@@ -153,7 +153,7 @@ new MutationObserver(() => {
     const item = catalogRows.find((entry) => String(entry.id) === String(id));
     if (!item) return;
     card.dataset.catalogDecorated = "1";
-    card.insertAdjacentHTML("afterbegin", `<div class="catalog-card-art"><img src="${esc(catalogImage(item, index))}" alt="Arte de ${esc(item.name || "produto")}" loading="lazy"><img class="catalog-card-logo" src="/assets/focussdev-logo.png" alt="Focussdev"><div class="catalog-card-art-copy"><span>FOCUS SDEV · SOLUÇÃO DIGITAL</span><strong>${esc(item.name || "Produto")}</strong><small>${esc(item.short_description || "Mais presença, organização e resultados para o seu negócio.")}</small><b>${money(item.price)}${item.unit ? ` / ${esc(item.unit)}` : ""}</b></div></div>`);
+    card.insertAdjacentHTML("afterbegin", `<div class="catalog-card-art"><img src="${esc(catalogImage(item, index))}" alt="Arte de ${esc(item.name || "produto")}" loading="lazy" decoding="async"><img class="catalog-card-logo" src="/assets/focussdev-logo.png" alt="Focussdev" loading="lazy" decoding="async"><div class="catalog-card-art-copy"><span>FOCUS SDEV · SOLUÇÃO DIGITAL</span><strong>${esc(item.name || "Produto")}</strong><small>${esc(item.short_description || "Mais presença, organização e resultados para o seu negócio.")}</small><b>${money(item.price)}${item.unit ? ` / ${esc(item.unit)}` : ""}</b></div></div>`);
     const actions = card.querySelector(".card-actions");
     actions?.insertAdjacentHTML("afterbegin", `<button class="compact-action" data-catalog-share="${esc(item.id)}" type="button">Compartilhar</button>`);
   });
