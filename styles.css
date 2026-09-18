@@ -2130,3 +2130,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .quick-actions button:nth-child(3) { background-image: linear-gradient(135deg, rgb(19 35 61 / 72%), rgb(8 19 38 / 82%)), url("assets/spider-upload-back.png"); background-position: center, 70% center; background-size: cover; }
 .quick-actions button:nth-child(4) { background-image: linear-gradient(135deg, rgb(19 35 61 / 72%), rgb(8 19 38 / 82%)), url("assets/spider-upload-sitting.png"); background-position: center, 68% center; background-size: cover; }
 .quick-actions .quick-icon { background-image: none !important; background-color: rgb(63 118 214 / 36%); font-size: 19px; }
+.quick-actions button:nth-child(1) .quick-icon { background-image: url("assets/quick-spider-icon-1.png") !important; background-size: 22px; font-size: 0; }
+.quick-actions button:nth-child(2) .quick-icon { background-image: url("assets/quick-spider-icon-2.png") !important; background-size: 22px; font-size: 0; }
+.quick-actions button:nth-child(3) .quick-icon { background-image: url("assets/quick-spider-icon-3.png") !important; background-size: 22px; font-size: 0; }
+.quick-actions button:nth-child(4) .quick-icon { background-image: url("assets/icons8-spiderman-head.png") !important; background-size: 22px; font-size: 0; }
