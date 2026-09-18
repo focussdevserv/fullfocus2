@@ -4,6 +4,16 @@ const esc = (value) => escapeHtml(value ?? "");
 const moneyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const money = (value) => moneyFormatter.format(Number(value || 0));
 const catalogFilter = { search: "", kind: "", active: "", request: 0 };
+let catalogOrganizationId = "";
+let catalogRows = [];
+const catalogArt = [
+  "/assets/catalog/catalog-sites.png",
+  "/assets/catalog/catalog-systems.png",
+  "/assets/catalog/catalog-ai.png",
+  "/assets/catalog/catalog-growth.png",
+  "/assets/catalog/catalog-design.png",
+  "/assets/catalog/catalog-digital.png",
+];
 
 const fields = [
   { name: "name", label: "Nome", required: true, placeholder: "Ex.: Site institucional" },
@@ -26,6 +36,35 @@ const fields = [
 
 const queryString = () => { const params = new URLSearchParams(); if (catalogFilter.search) params.set("search", catalogFilter.search); if (catalogFilter.kind) params.set("kind", catalogFilter.kind); if (catalogFilter.active) params.set("active", catalogFilter.active); return params.toString(); };
 const statusTone = (item) => item.active ? "positive" : "neutral";
+const catalogImage = (item, index = 0) => {
+  if (item.image_url) return item.image_url;
+  const text = `${item.category || ""} ${item.tags || ""} ${item.name || ""}`.toLowerCase();
+  if (/ia|chatbot|autom|bot/.test(text)) return catalogArt[2];
+  if (/tr[aá]fego|google|redes|posicion|marketing|vendas|performance/.test(text)) return catalogArt[3];
+  if (/design|identidade|criativ/.test(text)) return catalogArt[4];
+  if (/sistema|aplicativo|app|web/.test(text)) return catalogArt[1];
+  if (/site|landing|p[aá]gina/.test(text)) return catalogArt[0];
+  return catalogArt[index % catalogArt.length];
+};
+const catalogLink = () => `${location.origin}/catalog/${catalogOrganizationId}`;
+const catalogShareText = (item) => `${item.name || "Solução Focussdev"} — ${money(item.price)}\n${item.short_description || item.description || "Conheça esta solução da Focussdev."}\n${catalogLink()}`;
+async function shareCatalogItem(item, channel = "native") {
+  const link = catalogLink();
+  const text = catalogShareText(item);
+  if (channel === "copy") { await ui.copyText(link); toast("Link do catálogo copiado.", "success"); return; }
+  if (channel === "whatsapp") { window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer"); return; }
+  if (channel === "email") { window.location.href = `mailto:?subject=${encodeURIComponent(`${item.name || "Produto"} · Focussdev`)}&body=${encodeURIComponent(text)}`; return; }
+  if (navigator.share) { try { await navigator.share({ title: item.name || "Catálogo Focussdev", text, url: link }); } catch { /* cancelado */ } return; }
+  await ui.copyText(link); toast("Link copiado. Compartilhe pelo canal que preferir.", "success");
+}
+
+function catalogShareDrawer(item) {
+  ui.drawer({ title: `Compartilhar · ${item.name || "Produto"}`, subtitle: "Envie esta solução por qualquer canal", html: `<img class="catalog-drawer-image" src="${esc(catalogImage(item))}" alt="Arte de ${esc(item.name || "produto")}" /><p class="catalog-drawer-description">${esc(catalogShareText(item))}</p><div class="catalog-share-actions"><span>Escolha um canal</span><div><button class="compact-action" type="button" data-share-copy>Copiar link</button><button class="compact-action" type="button" data-share-whatsapp>WhatsApp</button><button class="compact-action" type="button" data-share-email>E-mail</button><button class="compact-action" type="button" data-share-native>Outros canais</button></div></div>` });
+  document.querySelector("[data-share-copy]")?.addEventListener("click", () => shareCatalogItem(item, "copy"));
+  document.querySelector("[data-share-whatsapp]")?.addEventListener("click", () => shareCatalogItem(item, "whatsapp"));
+  document.querySelector("[data-share-email]")?.addEventListener("click", () => shareCatalogItem(item, "email"));
+  document.querySelector("[data-share-native]")?.addEventListener("click", () => shareCatalogItem(item, "native"));
+}
 
 function catalogDetails(item) {
   const description = item.full_description || item.description || item.short_description || "Sem descrição cadastrada.";
@@ -53,8 +92,10 @@ async function renderCatalog() {
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Catálogo</p><h2>Produtos e serviços</h2><p>Itens reutilizáveis para propostas, projetos e cobranças.</p></div><button class="button button-primary compact-action" data-new type="button">+ Novo item</button></section>${stateBlock.loading("Carregando catálogo…")}`;
   try {
     const [data, me] = await Promise.all([api(`/api/catalog-items?${queryString()}`), api("/api/auth/me")]);
+    catalogOrganizationId = me.user.organization_id;
     if (request !== catalogFilter.request || location.hash !== "#catalogo") return;
     const rows = data.catalog_items || [];
+    catalogRows = rows;
     const active = rows.filter((item) => item.active).length;
     const publicItems = rows.filter((item) => item.public_visible).length;
     dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Catálogo</p><h2>Produtos e serviços</h2><p>Itens reutilizáveis para propostas, projetos e cobranças.</p></div><div class="page-actions"><button class="button button-secondary compact-action" data-public-catalog type="button">Abrir catálogo público</button><button class="button button-primary compact-action" data-new type="button">+ Novo item</button></div></section>${ui.stats([{ label: "Itens encontrados", value: ui.number(rows.length) }, { label: "Ativos", value: ui.number(active), tone: "green" }, { label: "Visíveis no público", value: ui.number(publicItems) }, { label: "Tipos cadastrados", value: ui.number(new Set(rows.map((item) => item.kind).filter(Boolean)).size) }])}<section class="catalog-toolbar"><label class="catalog-search"><span class="sr-only">Buscar no catálogo</span><input type="search" data-search value="${esc(catalogFilter.search)}" placeholder="Buscar por nome, categoria ou descrição…" aria-label="Buscar no catálogo"></label><select data-kind aria-label="Filtrar por tipo"><option value="">Todos os tipos</option>${Object.entries(types).map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}</select><select data-active aria-label="Filtrar por status"><option value="">Todos os status</option><option value="true">Ativos</option><option value="false">Inativos</option></select></section><section class="catalog-grid">${rows.map(catalogCard).join("") || ui.empty({ title: "Seu catálogo está vazio", text: "Cadastre produtos e serviços para reutilizar em propostas e cobranças.", cta: "Criar primeiro item", attr: "data-empty" })}</section>`;
@@ -99,3 +140,23 @@ new MutationObserver(() => {
     status.setAttribute("aria-live", "polite");
   });
 }).observe(dashboardGrid, { childList: true, subtree: true });
+
+new MutationObserver(() => {
+  dashboardGrid.querySelectorAll(".catalog-card").forEach((card, index) => {
+    if (card.dataset.catalogDecorated === "1") return;
+    const id = card.querySelector("[data-details]")?.dataset.details;
+    const item = catalogRows.find((entry) => String(entry.id) === String(id));
+    if (!item) return;
+    card.dataset.catalogDecorated = "1";
+    card.insertAdjacentHTML("afterbegin", `<div class="catalog-card-art"><img src="${esc(catalogImage(item, index))}" alt="Arte de ${esc(item.name || "produto")}" loading="lazy"><img class="catalog-card-logo" src="/assets/focussdev-logo.png" alt="Focussdev"></div>`);
+    const actions = card.querySelector(".card-actions");
+    actions?.insertAdjacentHTML("afterbegin", `<button class="compact-action" data-catalog-share="${esc(item.id)}" type="button">Compartilhar</button>`);
+  });
+}).observe(dashboardGrid, { childList: true, subtree: true });
+
+dashboardGrid.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-catalog-share]");
+  if (!button) return;
+  const item = catalogRows.find((entry) => String(entry.id) === String(button.dataset.catalogShare));
+  if (item) catalogShareDrawer(item);
+});
