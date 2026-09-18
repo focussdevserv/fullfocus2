@@ -8,13 +8,14 @@ const AUTOMATION_TRIGGERS = [
   "project_overdue", "receivable_due_soon", "receivable_overdue", "payment_confirmed",
   "payment_overdue", "ticket_created", "ticket_no_response", "customer_message",
   "scheduled_datetime", "webhook_received", "freelancer_project_finished", "sale_won", "team_member_invited", "member_added_to_project", "project_member_added", "task_assigned", "member_overloaded", "absence_started", "user_deactivated",
+  "client_created", "delivery_published", "payment_received", "project_inactive", "form_submitted", "subscription_due",
 ];
 const AUTOMATION_ACTIONS = [
   "notify", "notify_responsible", "create_task", "send_message", "send_email", "send_onboarding", "create_followup",
   "create_charge", "generate_contract", "create_project", "update_status",
   "move_pipeline", "assign_owner", "add_tag", "webhook", "n8n_flow", "wait",
   "end", "calculate_commission", "reassign_support", "create_calendar_event",
-  "request_satisfaction", "generate_document", "grant_project_access", "revoke_access",
+  "request_satisfaction", "request_approval", "create_opportunity", "generate_document", "grant_project_access", "revoke_access",
 ];
 const TEMPLATE_KINDS = [
   "proposal", "contract", "project", "task", "checklist", "charge", "followup",
