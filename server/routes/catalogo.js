@@ -1,5 +1,6 @@
 const FIELDS = ["name", "kind", "price", "unit", "description", "active", "sku", "short_description", "full_description", "category", "image_url", "tags", "public_visible", "highlighted", "term_days", "features", "limits", "recurrence", "benefits", "delivery_days", "included_scope", "excluded_scope", "deliverables", "modules_count", "revisions_count", "warranty_period", "support_included", "client_responsibilities", "technical_requirements", "internal_notes", "min_price", "promotional_price", "internal_cost", "billing_type", "entry_price", "max_installments", "max_discount", "sales_commission", "estimated_taxes"];
 const KINDS = ["product", "service", "package", "plan", "subscription", "addon"];
+import { ensureStarterLibrary } from "../starter-library.js";
 const text = (value) => String(value ?? "").trim();
 const validate = (body, partial = false) => {
   if (!partial && !text(body.name)) return "Informe o nome do item.";
@@ -20,6 +21,7 @@ export function register(app, ctx) {
   const fail = (res, error, message) => { const out = classifyDbError(error, message); res.status(out.status).json({ error: out.error }); };
   app.get("/api/catalog-items", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
+    try { await ensureStarterLibrary(pool, org); } catch (error) { return fail(res, error, "Não foi possível preparar a biblioteca inicial."); }
     const search = text(req.query?.search || req.query?.q), kind = text(req.query?.kind), active = text(req.query?.active); const params = [org], where = ["organization_id=$1"];
     const add = (sql, value) => { params.push(value); where.push(sql.replace("$VALUE", `$${params.length}`)); };
     if (search) add("(name ilike '%' || $VALUE || '%' or coalesce(description,'') ilike '%' || $VALUE || '%')", search);

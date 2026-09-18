@@ -1,4 +1,5 @@
 import { assertSafeOutboundUrl, parseOutboundUrl } from "../outbound-url.js";
+import { ensureStarterLibrary } from "../starter-library.js";
 
 const AUTOMATION_TRIGGERS = [
   "lead_created", "lead_stage_changed", "lead_no_response", "meeting_scheduled",
@@ -62,6 +63,7 @@ export function register(app, ctx) {
   app.use("/api/templates", async (req, res, next) => {
     if (req.method !== "GET") return next();
     const org = tenant(req, res); if (!org) return;
+    try { await ensureStarterLibrary(pool, org); } catch (error) { return fail(res, error, "Nao foi possivel preparar a biblioteca inicial."); }
     const search = text(req.query?.search || req.query?.q), kind = text(req.query?.kind); const params = [org], where = ["organization_id=$1"];
     if (search) { params.push(search); where.push(`(name ilike '%' || $${params.length} || '%' or coalesce(category,'') ilike '%' || $${params.length} || '%' or coalesce(body,'') ilike '%' || $${params.length} || '%')`); }
     if (TEMPLATE_KINDS.includes(kind)) { params.push(kind); where.push(`kind=$${params.length}`); }
