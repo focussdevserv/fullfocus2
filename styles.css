@@ -2110,3 +2110,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .quick-actions button:nth-child(2) .quick-icon { background-image: url("assets/card-web.png"); }
 .quick-actions button:nth-child(3) .quick-icon { background-image: url("assets/spiderman-hanging.png"); }
 .quick-actions button:nth-child(4) .quick-icon { background-image: url("assets/login-spiderman-peek.png"); }
+.metrics .metric-pink { background-image: linear-gradient(135deg, rgb(70 12 31 / 70%), rgb(4 8 20 / 55%)), url("assets/spider-upload-speed.png"); background-position: center, 64% center; background-size: cover; }
+.metrics .metric-purple { background-image: linear-gradient(135deg, rgb(34 20 64 / 72%), rgb(3 6 18 / 58%)), url("assets/spider-upload-black-suit.png"); background-position: center, 72% center; background-size: cover; }
+.metrics .metric-blue { background-image: linear-gradient(135deg, rgb(12 51 86 / 70%), rgb(2 8 18 / 56%)), url("assets/spider-upload-hanging.png"); background-position: center, 50% center; background-size: cover; }
+.metrics .metric-orange { background-image: linear-gradient(135deg, rgb(94 44 14 / 72%), rgb(3 6 16 / 55%)), url("assets/spider-upload-black-gold.png"); background-position: center, 72% center; background-size: cover; }
+.metrics .metric-green { background-image: linear-gradient(135deg, rgb(16 34 46 / 70%), rgb(3 10 24 / 58%)), url("assets/spider-upload-peeking.png"); background-position: center, 78% center; background-size: cover; }
+.metrics .metric-red { background-image: linear-gradient(135deg, rgb(79 13 23 / 68%), rgb(3 10 24 / 58%)), url("assets/spider-upload-prayer.png"); background-position: center, 72% center; background-size: cover; }
+.metrics .metric-cyan { background-image: linear-gradient(135deg, rgb(19 45 70 / 70%), rgb(3 10 24 / 58%)), url("assets/spider-upload-swing.png"); background-position: center, 54% center; background-size: cover; }
+.metrics .metric-gold { background-image: linear-gradient(135deg, rgb(81 28 24 / 72%), rgb(3 10 24 / 58%)), url("assets/spider-upload-wall.png"); background-position: center, 66% center; background-size: cover; }
+.dashboard-pulse .pulse-card:nth-child(1) { background-image: linear-gradient(135deg, rgb(20 43 76 / 84%), rgb(8 19 38 / 72%)), url("assets/spider-upload-red-action.png"); background-position: center, 56% center; background-size: cover; }
+.dashboard-pulse .pulse-card:nth-child(2) { background-image: linear-gradient(135deg, rgb(20 43 76 / 84%), rgb(8 19 38 / 72%)), url("assets/spider-upload-red-duo.png"); background-position: center, 64% center; background-size: cover; }
+.dashboard-pulse .pulse-card:nth-child(3) { background-image: linear-gradient(135deg, rgb(20 43 76 / 84%), rgb(8 19 38 / 72%)), url("assets/spider-upload-back.png"); background-position: center, 68% center; background-size: cover; }
+.quick-actions button:nth-child(1) .quick-icon { background-image: url("assets/spider-upload-sitting.png"); }
