@@ -726,11 +726,12 @@ function registerRoutes(map, meta = {}) {
     routeRenderers[key] = render;
     if (meta.parent || meta.titles?.[key]) routeMeta[key] = { parent: meta.parent || routeMeta[key]?.parent, title: meta.titles?.[key] || routeMeta[key]?.title };
   }
-  window.dispatchEvent(new CustomEvent("focusdev:routes-ready"));
+  window.dispatchEvent(new CustomEvent("focusdev:routes-ready", { detail: { keys: Object.keys(map) } }));
 }
 
-window.addEventListener("focusdev:routes-ready", () => {
-  if (!appShell.hidden) renderHashRoute(window.location.hash || "#inicio");
+window.addEventListener("focusdev:routes-ready", (event) => {
+  const currentKey = (window.location.hash || "#inicio").replace(/^#/, "");
+  if (!appShell.hidden && event.detail?.keys?.includes(currentKey)) renderHashRoute(window.location.hash || "#inicio");
 });
 window.addEventListener("load", () => {
   modulesLoading = false;
