@@ -285,7 +285,8 @@ dashboardGrid.addEventListener("change", async (event) => {
   }
 }, true);
 
-new MutationObserver(() => {
+const taskUiObserver = new MutationObserver(() => {
+  taskUiObserver.disconnect();
   dashboardGrid.querySelectorAll(".tasks-icon").forEach((button) => {
     if (button.getAttribute("aria-label")) return;
     button.setAttribute("aria-label", button.dataset.edit ? "Editar tarefa" : button.dataset.delete ? "Excluir tarefa" : button.dataset.subtask ? "Adicionar subtarefa" : button.dataset.newStatus ? `Nova tarefa em ${button.dataset.newStatus}` : "Ação da tarefa");
@@ -305,7 +306,11 @@ new MutationObserver(() => {
   }
   const result = card.querySelector("[data-tasks-results]");
   if (result) { const count = visibleTasks().length; const label = count === 1 ? "1 tarefa encontrada" : `${count} tarefas encontradas`; if (result.textContent !== label) result.textContent = label; }
-}).observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
+  queueMicrotask(() => taskUiObserver.observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] }));
+});
+// Evita que as alterações de acessibilidade feitas pelo próprio observer
+// disparem uma nova execução recursiva durante a montagem da tela.
+taskUiObserver.observe(dashboardGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
 
 registerRoutes({ tarefas: renderTasks });
 createConfig.tarefa.fields.find((field) => field.name === "priority").options = [["low", "Baixa"], ["medium", "Média"], ["high", "Alta"], ["urgent", "Urgente"]];
