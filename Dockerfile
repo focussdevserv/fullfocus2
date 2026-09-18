@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY server ./server
-COPY index.html app.js ui.js styles.css ui.css design.css portal-actions.js manifest.webmanifest service-worker.js ./
+COPY index.html module-loader.js app.js ui.js styles.css ui.css design.css portal-actions.js manifest.webmanifest service-worker.js ./
 COPY assets ./assets
 COPY modules ./modules
 COPY scripts ./scripts
