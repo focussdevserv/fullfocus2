@@ -91,6 +91,7 @@ function draw() {
         </aside>
       </div>
     </section>`;
+  dashboardGrid.querySelector(".agenda-layout")?.insertAdjacentHTML("beforebegin", ui.stats([{ label: "Hoje", value: ui.number(eventsOn(today).length), tone: eventsOn(today).length ? "blue" : "green" }, { label: "Nesta semana", value: ui.number(thisWeek) }, { label: "Proximos", value: ui.number(upcoming.length), tone: upcoming.length ? "orange" : "green" }, { label: "Recorrentes", value: ui.number(view.events.filter((event) => isRecurring(event)).length) }]));
   dashboardGrid.querySelectorAll(".agenda-cell-day").forEach((button) => {
     const day = button.closest(".agenda-cell")?.dataset.day;
     if (!day) return;
