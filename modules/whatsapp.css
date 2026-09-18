@@ -7,6 +7,13 @@
   align-items: start;
 }
 
+.wa-instances-card { margin: 18px 0; }
+.wa-instance-list { display: grid; gap: 10px; }
+.wa-instance-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border: 1px solid rgba(105, 143, 190, .28); border-radius: 10px; background: rgba(7, 18, 35, .42); }
+.wa-instance-row > div { display: grid; gap: 4px; }
+.wa-instance-row small, .wa-empty-instances { color: var(--muted, #8fa1bb); }
+.wa-empty-instances { margin: 0; }
+
 .wa-config-card { grid-column: 1 / -1; }
 
 .wa-badge {

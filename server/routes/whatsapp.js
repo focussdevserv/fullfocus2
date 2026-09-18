@@ -102,6 +102,20 @@ export function register(app, ctx) {
     } catch { return null; }
   }
 
+  async function listInstances(cfg) {
+    if (!cfg.apiKey) return [];
+    try {
+      const list = await evo(cfg, "GET", "/instance/fetchInstances");
+      const rows = Array.isArray(list) ? list : Array.isArray(list?.instances) ? list.instances : [];
+      return rows.map((entry) => {
+        const raw = entry?.instance || entry || {};
+        const name = raw.instanceName || raw.name || entry?.name || "";
+        const state = raw.connectionStatus || raw.state || entry?.connectionStatus || entry?.state || "close";
+        return { name, state, number: raw.number || (raw.ownerJid ? String(raw.ownerJid).split("@")[0] : null), profileName: raw.profileName || raw.profile || null };
+      }).filter((entry) => entry.name);
+    } catch { return []; }
+  }
+
   // URL pública do app vem de configuração, nunca do cabeçalho Host (evita redirecionar webhooks para terceiros).
     const PUBLIC_APP_URL = (process.env.APP_URL || "https://focussdev.space").replace(/\/+$/, "");
   function publicWebhookUrl(_req, org) {
@@ -120,6 +134,7 @@ export function register(app, ctx) {
         if (cfg.apiKey && item.state !== "absent") Object.assign(item, await instanceInfo(cfg, name) || {});
         out.channels[channel] = item;
       }
+      out.instances = await listInstances(cfg);
       Object.assign(out, out.channels.support);
       res.json(out);
     } catch (error) { fail(res, error.status || 502, error.message || "Não foi possível consultar a Evolution API."); }

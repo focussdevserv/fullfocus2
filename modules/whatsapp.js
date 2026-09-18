@@ -57,6 +57,7 @@ function draw(allStatus, qr = null) {
   const pending = status.state === "connecting";
   dashboardGrid.innerHTML = `
     <section class="page-intro"><div><p class="card-kicker">Automações</p><h2>WhatsApp</h2><p>Conecte o número da sua operação para enviar e receber mensagens direto do workspace.</p></div>${status.configured ? (connected ? `<button class="button button-secondary compact-action" data-wa-disconnect type="button">Desconectar</button>` : `<button class="button button-primary compact-action" data-wa-connect type="button">${pending ? "Gerar novo QR code" : "Conectar WhatsApp"}</button>`) : ""}</section>
+    ${status.configured ? `<section class="data-card wa-instances-card"><div class="section-heading"><div><p class="card-kicker">Evolution API</p><h2>Instâncias do aplicativo</h2></div><span class="wa-badge blue">${(allStatus.instances || []).length} encontrada(s)</span></div><div class="wa-instance-list">${(allStatus.instances || []).length ? allStatus.instances.map((item) => `<div class="wa-instance-row"><div><strong>${escapeHtml(item.name)}</strong><small>${item.number ? `+${escapeHtml(item.number)}` : "Número ainda não pareado"}${item.profileName ? ` · ${escapeHtml(item.profileName)}` : ""}</small></div>${statusBadge(item.state)}</div>`).join("") : `<p class="wa-empty-instances">Nenhuma instância foi criada ainda. Clique em “Conectar WhatsApp” para criar uma e gerar o QR code.</p>`}</div></section>` : ""}
     <section class="wa-grid">
       <article class="data-card wa-status-card">
         <div class="section-heading"><div><p class="card-kicker">Conexão</p><h2>Status da instância</h2></div>${statusBadge(status.state)}</div>
@@ -153,11 +154,8 @@ function bind(status) {
     submit.disabled = true; submit.setAttribute("aria-busy", "true"); say(out, "Salvando…");
     try {
       await api("/api/whatsapp/config", { method: "POST", body: { baseUrl: form.baseUrl.value, apiKey: form.apiKey.value } });
-      const next = await api("/api/whatsapp/status");
-      const connection = await api("/api/whatsapp/connect", { method: "POST", body: { channel: activeChannel } });
       if (location.hash !== "#whatsapp" || request !== whatsappRenderRequest || !form.isConnected) return;
-      if (connection.state === "open") renderWhatsapp();
-      else draw({ ...next, state: connection.state || "connecting" }, connection.qr);
+      renderWhatsapp();
     } catch (error) { if (location.hash === "#whatsapp" && request === whatsappRenderRequest && form.isConnected) { say(out, error.message, true); submit.disabled = false; submit.removeAttribute("aria-busy"); } }
   });
 }

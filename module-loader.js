@@ -9,7 +9,7 @@
     "visao-financeira": ["financeiro.js"], receitas: ["financeiro.js"], despesas: ["financeiro.js"], "contas-a-receber": ["financeiro.js"],
     cobrancas: ["cobrancas.js"], assinaturas: ["assinaturas.js"], catalogo: ["catalogo.js"],
     automacoes: ["automacoes.js", "automacoes-workspace.js"], templates: ["templates.js"], "base-de-conhecimento": ["base-conhecimento.js"], formularios: ["formularios.js"], integracoes: ["integracoes.js", "integracoes-enhanced.js"], tickets: ["tickets.js"], arquivos: ["arquivos.js"], lixeira: ["lixeira.js"],
-    whatsapp: ["whatsapp.js"], agente: ["agente.js"], briefings: ["briefings.js"], "contas-a-pagar": ["contas-pagar.js"], "notas-fiscais": ["notas-fiscais.js"], "contas-bancarias": ["contas-bancarias.js"], relatorios: ["relatorios-financeiros.js"],
+    configuracoes: ["configuracoes.js", "configuracoes-enhanced.js"], whatsapp: ["whatsapp.js"], agente: ["agente.js"], briefings: ["briefings.js"], "contas-a-pagar": ["contas-pagar.js"], "notas-fiscais": ["notas-fiscais.js"], "contas-bancarias": ["contas-bancarias.js"], relatorios: ["relatorios-financeiros.js"],
     equipe: ["team-access.js"], auditoria: ["auditoria.js"], infraestrutura: ["infraestrutura.js"], metas: ["gestao.js"], comissoes: ["gestao.js"], ausencias: ["gestao.js"], horas: ["gestao.js"], aprovacoes: ["estrutura.js"], cofre: ["estrutura.js"], alteracoes: ["estrutura.js"], entregas: ["estrutura.js"]
   };
   const loaded = new Map();
