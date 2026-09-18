@@ -37,10 +37,13 @@ async function prepareBriefingCreate() {
   try {
     const [clientsData, projectsData] = await Promise.all([api("/api/clients"), api("/api/projects")]);
     if (location.hash !== routeAtStart || routeAtStart !== "#briefings") return;
-    briefingConfig.fields.find((field) => field.name === "client_id").type = "select";
-    briefingConfig.fields.find((field) => field.name === "client_id").options = [["", "Sem cliente"], ...(clientsData.clients || []).map((item) => [item.id, item.name])];
-    briefingConfig.fields.find((field) => field.name === "project_id").type = "select";
-    briefingConfig.fields.find((field) => field.name === "project_id").options = [["", "Sem projeto"], ...(projectsData.projects || []).map((item) => [item.id, item.name])];
+    const clientField = briefingConfig.fields.find((field) => field.name === "client_id");
+    const projectField = briefingConfig.fields.find((field) => field.name === "project_id");
+    if (!clientField || !projectField) throw new Error("O formulário de briefing está incompleto. Atualize a tela e tente novamente.");
+    clientField.type = "select";
+    clientField.options = [["", "Sem cliente"], ...(clientsData.clients || []).map((item) => [item.id, item.name])];
+    projectField.type = "select";
+    projectField.options = [["", "Sem projeto"], ...(projectsData.projects || []).map((item) => [item.id, item.name])];
     openCreateDialog("briefing");
   } catch (error) { if (location.hash === routeAtStart && routeAtStart === "#briefings") toast(error.message || "Não foi possível carregar clientes e projetos. Tente novamente.", "error"); }
 }

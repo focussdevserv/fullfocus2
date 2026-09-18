@@ -734,6 +734,7 @@ const routeMeta = {
 };
 function registerRoutes(map, meta = {}) {
   for (const [key, render] of Object.entries(map)) {
+    if (routeRenderers[key]) { console.warn(`[FocusDev] Rota duplicada "${key}" ignorada durante o recarregamento.`); continue; }
     if (routeRenderers[key]) throw new Error(`Rota "${key}" já registrada por outro módulo.`);
     if (typeof render !== "function") throw new Error(`Rota "${key}" precisa de uma função de render.`);
     routeRenderers[key] = render;
