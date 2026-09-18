@@ -44,7 +44,7 @@ async function renderEnhancedSettings() {
 
 registerRoutes({ configuracoes: renderEnhancedSettings });
 if (!document.querySelector('link[data-settings-hub-style]')) { const style = document.createElement("link"); style.rel = "stylesheet"; style.href = "modules/configuracoes-hub.css?v=1"; style.dataset.settingsHubStyle = "true"; document.head.append(style); }
-setTimeout(() => import("./configuracoes-hub.js?v=1"), 0);
+setTimeout(() => import("./configuracoes-hub.js?v=2"), 0);
 window.addEventListener("hashchange", () => { if (location.hash !== "#configuracoes") settingsRenderRequest += 1; });
 dashboardGrid.addEventListener("click", (event) => { const link = event.target.closest?.(".config-category-nav a, .settings-link-list a"); if (!link || !link.getAttribute("href")?.startsWith("#settings-")) return; const target = document.querySelector(link.getAttribute("href")); if (!target) return; event.preventDefault(); target.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth", block: "start" }); });
 dashboardGrid.addEventListener("submit", (event) => { const form = event.target.closest?.("[data-setting-calendar]"); if (!form) return; const start = form.elements.workday_start?.value, end = form.elements.workday_end?.value; if (start && end && end <= start) { event.preventDefault(); event.stopImmediatePropagation(); settingsToast("O horário de encerramento deve ser posterior ao horário de início.", "error"); form.elements.workday_end?.focus(); } }, true);
