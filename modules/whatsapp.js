@@ -96,6 +96,13 @@ function draw(allStatus, qr = null) {
         </form>
       </article>` : ""}
     </section>`;
+  const instances = Array.isArray(allStatus.instances) ? allStatus.instances : [];
+  dashboardGrid.querySelector(".page-intro")?.insertAdjacentHTML("afterend", ui.stats([
+    { label: "Instâncias", value: ui.number(instances.length) },
+    { label: "Conectadas", value: ui.number(instances.filter((item) => item.state === "open").length), tone: instances.some((item) => item.state === "open") ? "green" : undefined },
+    { label: "Aguardando QR", value: ui.number(instances.filter((item) => ["connecting", "absent"].includes(item.state)).length), tone: instances.some((item) => ["connecting", "absent"].includes(item.state)) ? "orange" : undefined },
+    { label: "Canal ativo", value: activeChannel === "assistant" ? "Auxiliar" : "Atendimento" }
+  ]));
   bind(status);
   dashboardGrid.querySelector(".page-intro")?.insertAdjacentHTML("beforeend", `<label class="wa-channel-picker">Canal<select data-wa-channel><option value="support" ${activeChannel === "support" ? "selected" : ""}>Atendimento</option><option value="assistant" ${activeChannel === "assistant" ? "selected" : ""}>Auxiliar</option></select></label>`);
   dashboardGrid.querySelector("[data-wa-channel]")?.addEventListener("change", (event) => { activeChannel = event.currentTarget.value; draw(allStatus); });
