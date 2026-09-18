@@ -4,6 +4,33 @@ export function register(app, ctx) {
   const { pool, tenant, classifyDbError } = ctx;
   const fail = (res, error, fallback) => { const out = classifyDbError(error, fallback); res.status(out.status).json({ error: out.error }); };
   const roleOf = async (req, org) => (await pool.query("select role from users where id=$1 and organization_id=$2", [req.user?.id, org])).rows[0]?.role || "member";
+  const parseActionPayload = (value) => { try { const parsed = typeof value === "string" ? JSON.parse(value || "{}") : value || {}; return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; } };
+  const executeAction = async ({ action, payload, org, userId, authorized }) => {
+    if (!authorized || !action || action === "none" || action === "NO_ACTION") return { executed: false, reason: authorized ? "none" : "unauthorized" };
+    const data = parseActionPayload(payload), name = String(action).toLowerCase();
+    if (["create_task", "criar_tarefa", "task_create"].includes(name)) {
+      const title = String(data.title || data.titulo || "").trim(); if (!title) return { executed: false, reason: "missing_title" };
+      const q = await pool.query("insert into tasks (organization_id,title,description,due_at,priority,status,internal_notes) values ($1,$2,$3,$4,$5,'todo',$6) returning id,title,status,due_at", [org, title, data.description || data.descricao || null, data.due_at || data.data || null, ["low", "medium", "high"].includes(data.priority) ? data.priority : "medium", "created_by:focuss_agent"]);
+      return { executed: true, type: "task", id: q.rows[0].id, record: q.rows[0] };
+    }
+    if (["create_event", "criar_compromisso", "agendar_reuniao", "calendar_create"].includes(name)) {
+      const title = String(data.title || data.titulo || "").trim(), startsAt = data.starts_at || data.startsAt || data.data_hora; if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return { executed: false, reason: "missing_event_data" };
+      const q = await pool.query("insert into events (organization_id,title,starts_at,description,reminder_minutes) values ($1,$2,$3,$4,$5) returning id,title,starts_at", [org, title, startsAt, data.description || data.descricao || null, Number.isFinite(Number(data.reminder_minutes)) ? Math.max(0, Number(data.reminder_minutes)) : 30]);
+      return { executed: true, type: "event", id: q.rows[0].id, record: q.rows[0] };
+    }
+    if (["update_lead", "atualizar_lead", "crm_update"].includes(name)) {
+      const leadId = data.lead_id || data.id; if (!leadId) return { executed: false, reason: "missing_lead_id" };
+      const allowed = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"]; if (data.status && !allowed.includes(String(data.status))) return { executed: false, reason: "invalid_stage" };
+      const q = await pool.query("update leads set status=coalesce($1,status),notes=coalesce($2,notes),updated_at=now() where id=$3 and organization_id=$4 returning id,name,status", [data.status || null, data.notes || data.observacoes || null, leadId, org]);
+      return q.rowCount ? { executed: true, type: "lead", id: q.rows[0].id, record: q.rows[0] } : { executed: false, reason: "lead_not_found" };
+    }
+    if (["create_note", "criar_nota", "note_create"].includes(name)) {
+      const body = String(data.body || data.note || data.nota || "").trim(); if (!body) return { executed: false, reason: "missing_note" };
+      const q = await pool.query("insert into agent_notes (organization_id,author_user_id,entity_type,entity_id,body) values ($1,$2,$3,$4,$5) returning id,body,created_at", [org, userId || null, data.entity_type || data.tipo || null, data.entity_id || data.id || null, body]);
+      return { executed: true, type: "note", id: q.rows[0].id, record: q.rows[0] };
+    }
+    return { executed: false, reason: "action_not_allowed" };
+  };
   const ensure = async (org) => {
     const current = await pool.query("select * from agent_configs where organization_id=$1", [org]);
     if (current.rowCount) return current.rows[0];
@@ -23,9 +50,11 @@ export function register(app, ctx) {
       const history = (await pool.query("select direction,body from messages where conversation_id=$1 and organization_id=$2 order by created_at desc limit 20", [conversationId, org])).rows.reverse();
       const catalog = (await pool.query("select id,name,kind,price,unit,category,short_description,recurrence,billing_type from catalog_items where organization_id=$1 and active=true and public_visible=true order by highlighted desc,created_at desc limit 100", [org])).rows;
       const result = await callFocussAgent({ model: config.model, prompt: config.system_prompt || DEFAULT_AGENT_PROMPT, messages: history.slice(0, -1), currentMessage: message, context: { company: "Focussdev", catalog } });
+      const actionResult = await executeAction({ action: result.action, payload: result.action_payload, org, userId: req.user?.id, authorized: ["owner", "admin"].includes(await roleOf(req, org)) });
+      if (result.action && result.action !== "none" && !actionResult.executed) result.reply = "Não consegui executar essa ação automaticamente agora. A solicitação foi preservada para acompanhamento.";
       const saved = await pool.query("insert into messages (organization_id,conversation_id,direction,body,read_at) values ($1,$2,'out',$3,now()) returning id,created_at", [org, conversationId, result.reply]);
       await pool.query("update conversations set last_message_at=$1,updated_at=now(),unread_count=0 where id=$2 and organization_id=$3", [saved.rows[0].created_at, conversationId, org]);
-      res.json({ conversation_id: conversationId, response: result, action_executed: false });
+      res.json({ conversation_id: conversationId, response: result, action_executed: actionResult.executed, action_result: actionResult });
     } catch (error) { if (error.code === "AI_NOT_CONFIGURED") return res.status(503).json({ error: error.message, code: error.code }); fail(res, error, "Não foi possível responder com o agente."); }
   });
 }
