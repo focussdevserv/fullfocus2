@@ -344,6 +344,20 @@ async function openProjectWorkspace(id) {
     const list = (items, render) => items?.length ? items.map(render).join("") : '<p class="operations-muted">Nenhum registro nesta área.</p>';
     panel.querySelector("h2").textContent = project.name || "Projeto";
     panel.querySelector(".conta-related").innerHTML = `<section><h3>Visão geral</h3><p>${esc(labels[project.status] || project.status || "—")} · ${Number(project.progress || 0)}% · Cliente: ${esc(project.client_name || "Sem cliente")}</p><div class="operations-progress"><span style="width:${Math.max(0, Math.min(100, Number(project.progress) || 0))}%"></span></div></section><section><h3>Tarefas</h3>${list(data.tasks, (item) => `<p>${esc(item.title)} · ${esc(labels[item.status] || item.status || "Pendente")}</p>`)}</section><section><h3>Entregas e aprovações</h3>${list(data.deliveries, (item) => `<p>Versão ${esc(item.version)} · ${esc(item.status)}${item.client_approved ? " · Aprovada" : ""}</p>`)}${list(data.approvals, (item) => `<p>${esc(item.title)} · ${esc(item.status)}</p>`)}</section><section><h3>Alterações e suporte</h3>${list(data.changes, (item) => `<p>${esc(item.title)} · ${esc(item.status)}${item.additional_cost ? ` · ${money(item.additional_cost)}` : ""}</p>`)}${list(data.tickets, (item) => `<p>${esc(item.title)} · ${esc(labels[item.status] || item.status)}</p>`)}</section><section><h3>Infraestrutura e horas</h3>${list(data.infrastructure, (item) => `<p>${esc(item.name)} · ${esc(item.provider || item.kind || "Recurso")}${item.expires_on ? ` · vence ${esc(item.expires_on)}` : ""}</p>`)}<p>Total registrado: ${Math.round((data.time_entries || []).reduce((sum, item) => sum + Number(item.minutes || 0), 0) / 60 * 10) / 10}h</p></section><section><h3>Arquivos</h3>${list(data.files, (item) => `<p>${esc(item.name)} · ${esc(item.kind || "Arquivo")}</p>`)}</section>`;
+    const visibilityLabels = [["show_overview", "Resumo do projeto"], ["show_tasks", "Tarefas"], ["show_files", "Arquivos"], ["show_deliveries", "Entregas"], ["show_approvals", "Aprovações"], ["show_changes", "Alterações de escopo"], ["show_infrastructure", "Infraestrutura"], ["show_repository", "Repositório"], ["show_hosting", "Hospedagem e domínio"], ["show_finance", "Financeiro"], ["show_support", "Suporte"]];
+    const visibility = data.portal_settings || {};
+    panel.querySelector(".conta-related").insertAdjacentHTML("beforeend", `<section class="portal-visibility-editor"><h3>Visibilidade no portal do cliente</h3><p class="operations-muted">Escolha o que o cliente poderá acompanhar. Senhas e dados do cofre nunca são publicados.</p><div class="portal-visibility-grid">${visibilityLabels.map(([key, label]) => `<label><input type="checkbox" data-portal-visibility="${key}" ${visibility[key] ? "checked" : ""}> ${label}</label>`).join("")}</div><button type="button" class="button button-primary compact-action" data-save-portal-visibility>Salvar visibilidade</button><p class="operations-muted" data-portal-visibility-status role="status"></p></section>`);
+    panel.querySelector("[data-save-portal-visibility]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget, status = panel.querySelector("[data-portal-visibility-status]");
+      button.disabled = true; button.textContent = "Salvando…";
+      try {
+        const payload = Object.fromEntries([...panel.querySelectorAll("[data-portal-visibility]")].map((input) => [input.dataset.portalVisibility, input.checked]));
+        await api(`/api/projects/${id}/portal-settings`, { method: "PATCH", body: payload });
+        if (status) status.textContent = "Visibilidade salva com segurança.";
+        ui.toast("Portal atualizado.", "success");
+      } catch (error) { if (status) status.textContent = error.message; }
+      finally { if (button.isConnected) { button.disabled = false; button.textContent = "Salvar visibilidade"; } }
+    });
   } catch (error) { if (panel.isConnected && location.hash === "#projetos") panel.querySelector(".conta-related").textContent = error.message; else if (panel.isConnected) close(); }
   if (panel.isConnected) panel.removeAttribute("aria-busy");
 }

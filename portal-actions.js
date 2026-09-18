@@ -42,5 +42,17 @@
     const deliveries = (data.deliveries || []).filter((item) => !item.client_approved && ["ready", "published"].includes(item.status));
     [...proposals.map((item) => createApproval("proposal", item)), ...deliveries.map((item) => createApproval("delivery", item))].forEach((item) => list.append(item));
     card.hidden = !list.children.length;
+    const projectDetails = document.createElement("section");
+    projectDetails.className = "card portal-project-details";
+    const projects = data.projects || [];
+    const details = await Promise.all(projects.map(async (project) => {
+      try { const response = await fetch(`${apiPath}/projects/${encodeURIComponent(project.id)}/workspace`, { headers: { accept: "application/json" } }); return response.ok ? response.json() : null; } catch { return null; }
+    }));
+    const rows = details.filter(Boolean).map(({ project, settings, tasks, files, deliveries, changes, infrastructure }) => {
+      const section = (title, items, render) => settings[`show_${title}`] && items?.length ? `<h3>${title}</h3>${items.slice(0, 8).map(render).join("")}` : "";
+      const link = (label, url) => url ? `<p><a href="${String(url).replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer">${label}</a></p>` : "";
+      return `<article class="portal-project-detail"><h2>${project.name || "Projeto"}</h2>${settings.show_overview ? `<p class="muted">${project.current_stage || project.status || "Em andamento"} · ${Number(project.progress || 0)}%</p><p>${project.description || ""}</p>` : ""}${settings.show_repository ? link("Abrir repositório", project.repository_url) : ""}${settings.show_hosting ? `${link("Ambiente de desenvolvimento", project.development_url)}${link("Homologação", project.staging_url)}${link("Produção", project.production_url)}` : ""}${section("tasks", tasks, (item) => `<p>${item.title} · ${item.status || "Pendente"}</p>`)}${section("files", files, (item) => `<p>${item.name} · ${item.kind || "Arquivo"}</p>`)}${section("deliveries", deliveries, (item) => `<p>Versão ${item.version} · ${item.status || "Entrega"}</p>`)}${section("changes", changes, (item) => `<p>${item.title} · ${item.status || "Pendente"}</p>`)}${section("infrastructure", infrastructure, (item) => `<p>${item.name} · ${item.provider || item.kind || "Recurso"}</p>`)}</article>`;
+    }).join("");
+    if (rows) { projectDetails.innerHTML = `<h2>Acompanhamento dos projetos</h2>${rows}`; document.querySelector("main")?.append(projectDetails); }
   }).catch(() => { card.hidden = true; });
 })();
