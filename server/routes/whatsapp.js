@@ -246,7 +246,7 @@ export function register(app, ctx) {
       await pool.query("update conversations set last_message_at=now(), unread_count=unread_count+1, status='open', updated_at=now() where id=$1", [conv.id]);
       if (channel === "assistant") {
         const allowed = String(process.env.ASSISTANT_WHATSAPP_NUMBER || "").replace(/\D/g, "");
-        if (allowed && allowed !== number) return res.status(204).end();
+        if (!allowed || allowed !== number) return res.status(204).end();
         const agent = (await pool.query("select enabled,model,system_prompt from agent_configs where organization_id=$1", [org])).rows[0];
         if (agent?.enabled && process.env.OPENAI_API_KEY) {
           const history = (await pool.query("select direction,body from messages where conversation_id=$1 and organization_id=$2 order by created_at desc limit 20", [conv.id, org])).rows.reverse();
