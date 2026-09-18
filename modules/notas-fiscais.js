@@ -9,10 +9,17 @@ const invoiceDate = (value) => { if (!value) return "—"; const date = new Date
 const invoiceStatus = { draft: "Rascunho", issued: "Emitida", cancelled: "Cancelada", error: "Com erro", pending: "Pendente" };
 const invoiceFilter = { search: "", status: "", request: 0 };
 function invoiceDetails(item) { ui.drawer({ title: item.number || "Nota fiscal", subtitle: invoiceStatus[item.status] || "Financeiro", html: ui.facts([["Número", item.number], ["Cliente", item.client_name || item.client_id], ["Projeto", item.project_id], ["Valor", invoiceMoney(item.amount)], ["Emissão", invoiceDate(item.issued_on)], ["Status", invoiceStatus[item.status] || item.status], ["PDF", item.pdf_url], ["XML", item.xml_url], ["Erro", item.error]]) }); }
-function invoiceForm(item = null) { const routeAtStart = location.hash; if (routeAtStart !== "#notas-fiscais") return; ui.form({ title: item ? "Editar nota fiscal" : "Nova nota fiscal", subtitle: "Financeiro", values: item || {}, fields: [{ name: "number", label: "Número", required: false }, { name: "client_id", label: "Cliente (ID)", required: false }, { name: "project_id", label: "Projeto (ID)", required: false }, { name: "amount", label: "Valor", type: "number", min: 0.01, step: 0.01 }, { name: "issued_on", label: "Data de emissão", type: "date", required: false }, { name: "status", label: "Status", type: "select", options: Object.entries(invoiceStatus) }, { name: "pdf_url", label: "URL do PDF", type: "url", required: false }, { name: "xml_url", label: "URL do XML", type: "url", required: false }, { name: "error", label: "Observação/erro", required: false }], onSubmit: async (values) => { await api(item ? `/api/invoices/${item.id}` : "/api/invoices", { method: item ? "PATCH" : "POST", body: values }); if (location.hash !== routeAtStart || location.hash !== "#notas-fiscais") return; toast(item ? "Nota fiscal atualizada." : "Nota fiscal criada.", "success"); renderInvoicesScreen(); } }); }
-
-const invoiceFormBase = invoiceForm;
-invoiceForm = (...args) => { invoiceFormBase(...args); return Promise.resolve(); };
+async function invoiceForm(item = null) {
+  const routeAtStart = location.hash;
+  if (routeAtStart !== "#notas-fiscais") return;
+  const [clientsData, projectsData] = await Promise.all([
+    api("/api/clients?limit=250").catch(() => ({ clients: [] })),
+    api("/api/projects?limit=250").catch(() => ({ projects: [] })),
+  ]);
+  if (location.hash !== routeAtStart || location.hash !== "#notas-fiscais") return;
+  const clients = clientsData.clients || [], projects = projectsData.projects || [];
+  ui.form({ title: item ? "Editar nota fiscal" : "Nova nota fiscal", subtitle: "Financeiro", values: item || {}, fields: [{ name: "number", label: "Número", required: false }, { name: "client_id", label: "Cliente", type: "select", required: false, options: [["", "Sem cliente"], ...clients.map((client) => [client.id, client.name])] }, { name: "project_id", label: "Projeto", type: "select", required: false, options: [["", "Sem projeto"], ...projects.map((project) => [project.id, project.name])] }, { name: "amount", label: "Valor", type: "number", min: 0.01, step: 0.01 }, { name: "issued_on", label: "Data de emissão", type: "date", required: false }, { name: "status", label: "Status", type: "select", options: Object.entries(invoiceStatus) }, { name: "pdf_url", label: "URL do PDF", type: "url", required: false }, { name: "xml_url", label: "URL do XML", type: "url", required: false }, { name: "error", label: "Observação/erro", required: false }], onSubmit: async (values) => { await api(item ? `/api/invoices/${item.id}` : "/api/invoices", { method: item ? "PATCH" : "POST", body: values }); if (location.hash !== routeAtStart || location.hash !== "#notas-fiscais") return; toast(item ? "Nota fiscal atualizada." : "Nota fiscal criada.", "success"); renderInvoicesScreen(); } });
+}
 
 async function renderInvoicesScreen() {
   if (location.hash !== "#notas-fiscais") return;
