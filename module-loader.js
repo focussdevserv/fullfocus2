@@ -37,4 +37,5 @@
       window.dispatchEvent(new CustomEvent("focusdev:module-error", { detail: { key, error } }));
     });
   });
+  window.dispatchEvent(new CustomEvent("focusdev:module-loader-ready"));
 })();
