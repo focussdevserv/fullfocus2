@@ -135,6 +135,15 @@ svg {
   text-decoration: none;
 }
 
+.brand-logo {
+  display: block;
+  width: 154px;
+  height: auto;
+  max-height: 58px;
+  object-fit: contain;
+  object-position: left center;
+}
+
 .brand-dev {
   color: var(--red);
 }
@@ -146,6 +155,8 @@ svg {
 .brand-small {
   font-size: 26px;
 }
+
+.brand-small .brand-logo { width: 132px; max-height: 46px; }
 
 /* ==========================================================================
    Login — shell

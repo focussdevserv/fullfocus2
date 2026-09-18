@@ -56,6 +56,16 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(frontendRoot));
+// Identidade oficial usada nos documentos públicos sem duplicar o logo em cada template HTML.
+app.use((req, res, next) => {
+  const send = res.send.bind(res);
+  res.send = (body) => {
+    if (typeof body !== "string" || !body.includes("Focus<span>Dev</span>")) return send(body);
+    const logo = '<div class="brand"><img src="/assets/focussdev-logo.png" alt="Focussdev" style="display:block;width:180px;max-height:72px;object-fit:contain;object-position:left center"></div>';
+    return send(body.replaceAll('<div class="brand">Focus<span>Dev</span></div>', logo).replaceAll('<div class="brand" aria-label="FocusDev">Focus<span>Dev</span></div>', logo));
+  };
+  next();
+});
 app.use(async (req, res, next) => { const isBriefing = req.path.startsWith("/api/briefings/public/") || req.path.startsWith("/briefing/"); if (!isBriefing) return next(); const token = req.path.split("/").filter(Boolean).pop(); if (!token) return next(); try { const q = await pool.query("select status from briefings where public_token=$1", [token]); if (!q.rowCount || !["published", "sent"].includes(q.rows[0].status)) return res.status(404).json({ error: "Briefing indisponível." }); return next(); } catch { return res.status(503).json({ error: "Não foi possível validar o briefing." }); } });
 
 /* Formulários públicos podem disparar somente registros explicitamente
