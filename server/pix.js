@@ -1,0 +1,7 @@
+import QRCode from "qrcode";
+
+const clean = (value, max) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9 $%*+\-./:]/g, "").slice(0, max);
+const field = (id, value) => { const text = String(value || ""); return `${id}${String(text.length).padStart(2, "0")}${text}`; };
+const crc16 = (value) => { let crc = 0xffff; for (const char of value) { crc ^= char.charCodeAt(0) << 8; for (let bit = 0; bit < 8; bit += 1) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff; } return crc.toString(16).toUpperCase().padStart(4, "0"); };
+export function pixPayload({ key, amount, merchantName = "Focussdev", merchantCity = "SAO PAULO", txid = "***", description = "" }) { const value = Number(amount); if (!key || !Number.isFinite(value) || value <= 0) throw new Error("Chave Pix e valor são obrigatórios."); const merchant = field("00", "br.gov.bcb.pix") + field("01", String(key).trim()) + (description ? field("02", clean(description, 72)) : ""); const additional = field("05", clean(txid, 25) || "***"); const base = field("00", "01") + field("26", merchant) + field("52", "0000") + field("53", "986") + field("54", value.toFixed(2)) + field("58", "BR") + field("59", clean(merchantName, 25) || "FOCUSSDEV") + field("60", clean(merchantCity, 15) || "SAO PAULO") + field("62", additional); return `${base}6304${crc16(`${base}6304`)}`; }
+export async function pixQrDataUrl(payload) { return QRCode.toDataURL(payload, { errorCorrectionLevel: "M", margin: 1, width: 360 }); }

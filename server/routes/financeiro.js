@@ -1,4 +1,6 @@
 /* Rotas específicas do domínio financeiro. */
+import { pixPayload, pixQrDataUrl } from "../pix.js";
+
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
   const error = (res, e, fallback) => { const out = classifyDbError(e, fallback); res.status(out.status).json({ error: out.error }); };
@@ -77,7 +79,21 @@ export function register(app, ctx) {
       const source = receivable.rows[0];
       if (["paid", "cancelled"].includes(source.status)) return res.status(400).json({ error: "Esta conta não aceita novas cobranças." });
       const existing = await pool.query("select * from charges where receivable_id=$1 and organization_id=$2 and status in ('draft','generated','sent','pending') order by created_at desc limit 1", [source.id, org]);
-      if (existing.rowCount) return res.json({ charge: existing.rows[0], created: false, provider_connected: false });
+      if (existing.rowCount) return res.json({ charge: existing.rows[0], created: false, provider_connected: false, pix: existing.rows[0].pix_payload ? { payload: existing.rows[0].pix_payload, qr_data_url: existing.rows[0].pix_qr_data_url, document_kind: existing.rows[0].document_kind } : null });
+      const amount = Number(source.updated_amount ?? source.amount);
+      let pix = null;
+      if (["pix", "boleto"].includes(channel)) {
+        const organization = await pool.query("select name,settings from organizations where id=$1", [org]);
+        const settings = organization.rows[0]?.settings || {};
+        const key = asText(settings.pix_key);
+        if (!key) return res.status(400).json({ error: "Configure a chave Pix em Configurações → Financeiro antes de gerar esta cobrança." });
+        const payload = pixPayload({ key, amount, merchantName: organization.rows[0]?.name || "Focussdev", description: asText(req.body?.message) || source.description });
+        pix = { payload, qr_data_url: await pixQrDataUrl(payload), document_kind: channel === "boleto" ? "pix_boleto" : "pix" };
+      }
+      if (pix) {
+        const charge = await pool.query("insert into charges (organization_id,receivable_id,client_id,project_id,channel,status,amount,due_at,message,pix_payload,pix_qr_data_url,document_kind) values ($1,$2,$3,$4,$5,'generated',$6,$7,$8,$9,$10,$11) returning *", [org, source.id, source.client_id, source.project_id, channel, amount, source.due_at, asText(req.body?.message) || `Cobranca Pix: ${source.description}`, pix.payload, pix.qr_data_url, pix.document_kind]);
+        return res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: false, pix, notice: "Documento de cobranca Pix gerado. Nao possui codigo de barras; o pagamento deve ser feito pelo QR Code ou Pix copia e cola." });
+      }
       const charge = await pool.query("insert into charges (organization_id,receivable_id,client_id,project_id,channel,status,amount,due_at,message) values ($1,$2,$3,$4,$5,'generated',$6,$7,$8) returning *", [org, source.id, source.client_id, source.project_id, channel, source.updated_amount ?? source.amount, source.due_at, asText(req.body?.message) || `Cobrança: ${source.description}`]);
       res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: false, notice: "Cobrança registrada. Conecte um gateway para gerar Pix, boleto ou link de pagamento." });
     } catch (e) { error(res, e, "Não foi possível gerar a cobrança."); }
