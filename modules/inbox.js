@@ -79,6 +79,7 @@ async function renderInternalInbox() {
     dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Caixa de entrada</h2><p>${unread ? `<strong>${unread}</strong> ${unread === 1 ? "notificação não lida" : "notificações não lidas"}` : "Tudo lido"} · alertas internos do workspace</p></div><button class="button button-secondary compact-action" type="button" data-notification-read-all>Marcar todas como lidas</button></section><section class="data-card notification-inbox"><div class="inbox-filters"><button class="filter-button ${filter === "all" ? "is-active" : ""}" data-notification-filter="all" type="button">Todas</button><button class="filter-button ${filter === "unread" ? "is-active" : ""}" data-notification-filter="unread" type="button">Não lidas</button><button class="filter-button ${filter === "archived" ? "is-active" : ""}" data-notification-filter="archived" type="button">Arquivadas</button></div><div class="notification-inbox-list">${rows}</div></section>`;
     dashboardGrid.querySelectorAll("[data-notification-filter]").forEach((button) => button.addEventListener("click", () => { filter = button.dataset.notificationFilter; loadInternal(); }));
     dashboardGrid.querySelector("[data-notification-retry]")?.addEventListener("click", loadInternal);
+    dashboardGrid.querySelector(".notification-inbox")?.insertAdjacentHTML("beforebegin", ui.stats([{ label: "NotificaÃ§Ãµes na lista", value: ui.number(items.length) }, { label: "NÃ£o lidas", value: ui.number(unread), tone: unread ? "orange" : "green" }, { label: "Filtro atual", value: filter === "all" ? "Todas" : filter === "unread" ? "NÃ£o lidas" : "Arquivadas" }]));
     const runNotificationAction = async (button, work) => {
       if (button.disabled) return;
       button.disabled = true;
@@ -119,6 +120,7 @@ function draw() {
       </aside>
       <section class="data-card inbox-thread" data-thread>${box.composing ? composerMarkup() : box.selected ? "" : `<div class="inbox-placeholder"><span class="inbox-placeholder-icon">✉</span><h3>Selecione uma conversa</h3><p>Mensagens do WhatsApp conectado, e-mails registrados e notas internas ficam aqui, com resposta direto pelo canal certo.</p></div>`}</section>
     </section>`;
+  dashboardGrid.querySelector(".inbox-layout")?.insertAdjacentHTML("beforebegin", ui.stats([{ label: "Conversas", value: ui.number(box.conversations.length) }, { label: "NÃ£o lidas", value: ui.number(unread), tone: unread ? "orange" : "green" }, { label: "WhatsApp", value: ui.number(box.conversations.filter((item) => item.channel === "whatsapp").length) }, { label: "E-mail", value: ui.number(box.conversations.filter((item) => item.channel === "email").length) }]));
   bind();
 }
 
