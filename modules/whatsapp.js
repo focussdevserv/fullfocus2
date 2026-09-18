@@ -19,6 +19,7 @@ let qrTimer = null;
 let whatsappRenderRequest = 0;
 let pollInFlight = false;
 let qrInFlight = false;
+let activeChannel = "support";
 
 function stopTimers() {
   window.clearInterval(pollTimer); window.clearInterval(qrTimer);
@@ -49,7 +50,8 @@ async function renderWhatsapp() {
   draw(status);
 }
 
-function draw(status, qr = null) {
+function draw(allStatus, qr = null) {
+  const status = { ...allStatus, ...(allStatus.channels?.[activeChannel] || {}) };
   dashboardGrid.removeAttribute("aria-busy");
   const connected = status.state === "open";
   const pending = status.state === "connecting";
@@ -94,6 +96,8 @@ function draw(status, qr = null) {
       </article>` : ""}
     </section>`;
   bind(status);
+  dashboardGrid.querySelector(".page-intro")?.insertAdjacentHTML("beforeend", `<label class="wa-channel-picker">Canal<select data-wa-channel><option value="support" ${activeChannel === "support" ? "selected" : ""}>Atendimento</option><option value="assistant" ${activeChannel === "assistant" ? "selected" : ""}>Auxiliar</option></select></label>`);
+  dashboardGrid.querySelector("[data-wa-channel]")?.addEventListener("change", (event) => { activeChannel = event.currentTarget.value; draw(allStatus); });
   const qrImage = dashboardGrid.querySelector("[data-wa-qr] img");
   if (qrImage) { qrImage.width = 256; qrImage.height = 256; }
   if (pending) startPolling();
@@ -108,7 +112,7 @@ function bind(status) {
   dashboardGrid.querySelector("[data-wa-connect]")?.addEventListener("click", async (event) => {
     const button = event.currentTarget; if (button.disabled) return; const request = whatsappRenderRequest, originalLabel = button.textContent; button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Gerando QR code…"; say(feedback, "Gerando QR code…");
     try {
-      const result = await api("/api/whatsapp/connect", { method: "POST", body: {} });
+      const result = await api("/api/whatsapp/connect", { method: "POST", body: { channel: status.channel } });
       if (location.hash !== "#whatsapp" || request !== whatsappRenderRequest || !button.isConnected) return;
       if (result.state === "open") { renderWhatsapp(); return; }
       draw({ ...status, state: result.state || "connecting" }, result.qr || null);
@@ -122,7 +126,7 @@ function bind(status) {
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
     button.textContent = "Desconectando…";
-    try { await api("/api/whatsapp/disconnect", { method: "POST", body: {} }); if (location.hash === "#whatsapp" && request === whatsappRenderRequest) renderWhatsapp(); }
+    try { await api("/api/whatsapp/disconnect", { method: "POST", body: { channel: status.channel } }); if (location.hash === "#whatsapp" && request === whatsappRenderRequest) renderWhatsapp(); }
     catch (error) { if (location.hash === "#whatsapp" && request === whatsappRenderRequest && button.isConnected) { say(feedback, error.message, true); button.disabled = false; button.removeAttribute("aria-busy"); button.textContent = "Confirmar desconexão"; } }
   });
 
@@ -134,7 +138,7 @@ function bind(status) {
     if (!text) { say(out, "Digite uma mensagem antes de enviar.", true); form.text.focus(); return; }
     submit.disabled = true; submit.setAttribute("aria-busy", "true"); say(out, "Enviando…");
     try {
-      await api("/api/whatsapp/send", { method: "POST", body: { number, text } });
+      await api("/api/whatsapp/send", { method: "POST", body: { number, text, channel: status.channel } });
       if (location.hash !== "#whatsapp" || !form.isConnected) return;
       say(out, "Mensagem enviada."); form.text.value = "";
       document.dispatchEvent(new Event("focus-inbox-changed"));
@@ -150,7 +154,7 @@ function bind(status) {
     try {
       await api("/api/whatsapp/config", { method: "POST", body: { baseUrl: form.baseUrl.value, apiKey: form.apiKey.value } });
       const next = await api("/api/whatsapp/status");
-      const connection = await api("/api/whatsapp/connect", { method: "POST", body: {} });
+      const connection = await api("/api/whatsapp/connect", { method: "POST", body: { channel: activeChannel } });
       if (location.hash !== "#whatsapp" || request !== whatsappRenderRequest || !form.isConnected) return;
       if (connection.state === "open") renderWhatsapp();
       else draw({ ...next, state: connection.state || "connecting" }, connection.qr);
@@ -179,7 +183,7 @@ function startPolling() {
     if (!holder) { stopTimers(); return; }
     qrInFlight = true;
     try {
-      const result = await api("/api/whatsapp/connect", { method: "POST", body: {} });
+      const result = await api("/api/whatsapp/connect", { method: "POST", body: { channel: activeChannel } });
       if (location.hash !== "#whatsapp" || pollingRequest !== whatsappRenderRequest || !holder.isConnected) return;
       const img = holder.querySelector("img");
       const nextQr = qrSource(result.qr?.base64);

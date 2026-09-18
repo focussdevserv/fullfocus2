@@ -95,3 +95,5 @@
   box-shadow: var(--focus-ring);
 }
 .wa-form button { touch-action: manipulation; }
+.wa-channel-picker { display: inline-grid; gap: 5px; color: var(--muted, #8fa1bb); font-size: .82rem; }
+.wa-channel-picker select { min-width: 150px; border: 1px solid #385579; border-radius: 9px; background: #0c172a; color: #eff5ff; padding: 8px 10px; }

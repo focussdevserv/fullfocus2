@@ -9,24 +9,30 @@
 
 import crypto from "node:crypto";
 import { assertSafeOutboundUrl, parseOutboundUrl } from "../outbound-url.js";
+import { callFocussAgent, DEFAULT_AGENT_PROMPT } from "../focuss-agent.js";
 
 const DEFAULT_BASE_URL = process.env.EVOLUTION_API_URL || "https://evolutions-evolution-api.fcoipz.easypanel.host";
 const TIMEOUT_MS = 15000;
 
-export const instanceNameFor = (organizationId) => `focus-${String(organizationId).replace(/-/g, "").slice(0, 8)}`;
+export const CHANNELS = { support: "Atendimento", assistant: "Auxiliar" };
+export const normalizeChannel = (value) => String(value || "support").toLowerCase() === "assistant" ? "assistant" : "support";
+export const instanceNameFor = (organizationId, channel = "support") => {
+  const base = `focus-${String(organizationId).replace(/-/g, "").slice(0, 8)}`;
+  return normalizeChannel(channel) === "assistant" ? `${base}-aux` : base;
+};
 export const maskKey = (key) => (key ? `••••${String(key).slice(-4)}` : "");
 export const normalizeNumber = (value) => String(value || "").replace(/\D/g, "");
 export const webhookTokenFor = (organizationId, secret = process.env.SESSION_SECRET || "development-only-change-me") =>
   crypto.createHmac("sha256", secret).update(`whatsapp-webhook:${organizationId}`).digest("base64url").slice(0, 32);
 
 /* Envia texto pelo WhatsApp da organização (usado pela caixa de entrada e automações). */
-export async function sendWhatsappText(pool, org, number, text) {
+export async function sendWhatsappText(pool, org, number, text, channel = "support") {
   const q = await pool.query("select id, status, config from integrations where organization_id=$1 and provider='whatsapp' limit 1", [org]);
   const config = q.rows[0]?.config || {};
   const cfg = { baseUrl: String(config.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, ""), apiKey: config.apiKey || process.env.EVOLUTION_API_KEY || "" };
   if (!cfg.apiKey) throw Object.assign(new Error("WhatsApp não configurado nesta organização."), { status: 400 });
   await assertSafeOutboundUrl(cfg.baseUrl);
-  const response = await fetch(`${cfg.baseUrl}/message/sendText/${encodeURIComponent(instanceNameFor(org))}`, { method: "POST", headers: { apikey: cfg.apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: normalizeNumber(number), text }), redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
+  const response = await fetch(`${cfg.baseUrl}/message/sendText/${encodeURIComponent(instanceNameFor(org, channel))}`, { method: "POST", headers: { apikey: cfg.apiKey, "Content-Type": "application/json" }, body: JSON.stringify({ number: normalizeNumber(number), text }), redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(new Error(data?.response?.message?.[0] || data?.message || `WhatsApp respondeu ${response.status}`), { status: 502 });
   return { id: data?.key?.id || null };
@@ -106,12 +112,14 @@ export function register(app, ctx) {
     const org = tenant(req, res); if (!org) return;
     try {
       const cfg = await loadConfig(org);
-      const name = instanceNameFor(org);
-      const out = { configured: Boolean(cfg.apiKey), source: cfg.source, baseUrl: cfg.baseUrl, apiKeyMasked: maskKey(cfg.apiKey), instance: name, state: "unconfigured", number: null, profileName: null, canManage: ["owner", "admin"].includes(await roleOf(req, org)) };
-      if (cfg.apiKey) {
-        out.state = await instanceState(cfg, name);
-        if (out.state !== "absent") Object.assign(out, await instanceInfo(cfg, name) || {});
+      const out = { configured: Boolean(cfg.apiKey), source: cfg.source, baseUrl: cfg.baseUrl, apiKeyMasked: maskKey(cfg.apiKey), canManage: ["owner", "admin"].includes(await roleOf(req, org)), channels: {} };
+      for (const channel of Object.keys(CHANNELS)) {
+        const name = instanceNameFor(org, channel);
+        const item = { channel, label: CHANNELS[channel], instance: name, state: cfg.apiKey ? await instanceState(cfg, name) : "unconfigured", number: null, profileName: null };
+        if (cfg.apiKey && item.state !== "absent") Object.assign(item, await instanceInfo(cfg, name) || {});
+        out.channels[channel] = item;
       }
+      Object.assign(out, out.channels.support);
       res.json(out);
     } catch (error) { fail(res, error.status || 502, error.message || "Não foi possível consultar a Evolution API."); }
   });
@@ -144,7 +152,8 @@ export function register(app, ctx) {
     if (!["owner", "admin"].includes(await roleOf(req, org))) return fail(res, 403, "Apenas proprietários e administradores gerenciam a conexão do WhatsApp.");
     try {
       const cfg = await loadConfig(org);
-      const name = instanceNameFor(org);
+      const channel = normalizeChannel(req.body?.channel || req.query?.channel);
+      const name = instanceNameFor(org, channel);
       let state = await instanceState(cfg, name);
       let qr = null;
       if (state === "absent") {
@@ -161,7 +170,7 @@ export function register(app, ctx) {
         state = await instanceState(cfg, name);
       }
       await pool.query("update integrations set status=$1, updated_at=now() where organization_id=$2 and provider='whatsapp'", [state === "open" ? "connected" : "disconnected", org]).catch(() => {});
-      res.json({ instance: name, state, qr });
+      res.json({ channel, label: CHANNELS[channel], instance: name, state, qr });
     } catch (error) { fail(res, error.status || 502, error.message || "Não foi possível iniciar a conexão."); }
   });
 
@@ -170,7 +179,8 @@ export function register(app, ctx) {
     if (!["owner", "admin"].includes(await roleOf(req, org))) return fail(res, 403, "Apenas proprietários e administradores gerenciam a conexão do WhatsApp.");
     try {
       const cfg = await loadConfig(org);
-      const name = instanceNameFor(org);
+      const channel = normalizeChannel(req.body?.channel || req.query?.channel);
+      const name = instanceNameFor(org, channel);
       await evo(cfg, "DELETE", `/instance/logout/${encodeURIComponent(name)}`).catch((error) => { if (error.evolutionStatus !== 404) throw error; });
       await pool.query("update integrations set status='disconnected', updated_at=now() where organization_id=$1 and provider='whatsapp'", [org]).catch(() => {});
       res.json({ ok: true, state: "close" });
@@ -185,7 +195,8 @@ export function register(app, ctx) {
     if (!text) return fail(res, 400, "Escreva a mensagem.");
     try {
       const cfg = await loadConfig(org);
-      const name = instanceNameFor(org);
+    const channel = normalizeChannel(req.body?.channel || req.query?.channel);
+    const name = instanceNameFor(org, channel);
       const data = await evo(cfg, "POST", `/message/sendText/${encodeURIComponent(name)}`, { number, text });
       // Registra na caixa de entrada como mensagem enviada.
       try {
@@ -193,17 +204,18 @@ export function register(app, ctx) {
         await pool.query("insert into messages (organization_id, conversation_id, author_user_id, direction, body, read_at) values ($1,$2,$3,'out',$4,now())", [org, conv.id, req.user?.id || null, text]);
         await pool.query("update conversations set last_message_at=now(), updated_at=now() where id=$1", [conv.id]);
       } catch { /* inbox é complementar */ }
-      res.json({ ok: true, id: data?.key?.id || null, status: data?.status || "sent" });
+      res.json({ ok: true, channel, id: data?.key?.id || null, status: data?.status || "sent" });
     } catch (error) { fail(res, error.status || 502, error.message || "Não foi possível enviar a mensagem."); }
   });
 
-  async function upsertConversation(org, number, pushName) {
-    const subject = `WhatsApp · ${pushName ? `${pushName} (${number})` : number}`;
-    const existing = await pool.query("select id from conversations where organization_id=$1 and channel='whatsapp' and (remote_number=$2 or subject like $3) order by created_at desc limit 1", [org, number, `%${number}%`]);
+  async function upsertConversation(org, number, pushName, channel = "support") {
+    channel = normalizeChannel(channel);
+    const subject = `${CHANNELS[channel]} · ${pushName ? `${pushName} (${number})` : number}`;
+    const existing = await pool.query("select id from conversations where organization_id=$1 and channel='whatsapp' and whatsapp_channel=$2 and (remote_number=$3 or subject like $4) order by created_at desc limit 1", [org, channel, number, `%${number}%`]);
     if (existing.rows[0]) { await pool.query("update conversations set remote_number=coalesce(remote_number,$2) where id=$1", [existing.rows[0].id, number]).catch(() => {}); return existing.rows[0]; }
     // Vincula automaticamente a um contato com este telefone, se existir.
     const contact = await pool.query("select id from contacts where organization_id=$1 and regexp_replace(coalesce(phone,''), '\\D', '', 'g') like '%' || $2 limit 1", [org, number.slice(-8)]).catch(() => ({ rows: [] }));
-    const created = await pool.query("insert into conversations (organization_id, subject, channel, status, last_message_at, remote_number, contact_id) values ($1,$2,'whatsapp','open',now(),$3,$4) returning id", [org, subject, number, contact.rows[0]?.id || null]);
+    const created = await pool.query("insert into conversations (organization_id, subject, channel, whatsapp_channel, status, last_message_at, remote_number, contact_id) values ($1,$2,'whatsapp',$3,'open',now(),$4,$5) returning id", [org, subject, channel, number, contact.rows[0]?.id || null]);
     return created.rows[0];
   }
 
@@ -213,8 +225,9 @@ export function register(app, ctx) {
     const token = String(req.params.token || "");
     const instance = String(req.body?.instance || "");
     const orgQ = await pool.query("select organization_id from integrations where provider='whatsapp'").catch(() => ({ rows: [] }));
-    const org = orgQ.rows.map((row) => row.organization_id).find((id) => webhookTokenFor(id) === token && instanceNameFor(id) === instance);
+    const org = orgQ.rows.map((row) => row.organization_id).find((id) => webhookTokenFor(id) === token && Object.keys(CHANNELS).some((channel) => instanceNameFor(id, channel) === instance));
     if (!org) return res.status(404).end();
+    const channel = Object.keys(CHANNELS).find((item) => instanceNameFor(org, item) === instance) || "support";
     try {
       const event = String(req.body?.event || "").toLowerCase().replace(/_/g, ".");
       if (event === "connection.update") {
@@ -228,9 +241,24 @@ export function register(app, ctx) {
       const number = normalizeNumber(String(data?.key?.remoteJid || "").split("@")[0]);
       const body = data?.message?.conversation || data?.message?.extendedTextMessage?.text || data?.message?.imageMessage?.caption || "[mídia recebida]";
       if (!number) return res.status(204).end();
-      const conv = await upsertConversation(org, number, data?.pushName);
+      const conv = await upsertConversation(org, number, data?.pushName, channel);
       await pool.query("insert into messages (organization_id, conversation_id, direction, body) values ($1,$2,'in',$3)", [org, conv.id, String(body).slice(0, 4000)]);
       await pool.query("update conversations set last_message_at=now(), unread_count=unread_count+1, status='open', updated_at=now() where id=$1", [conv.id]);
+      if (channel === "assistant") {
+        const allowed = String(process.env.ASSISTANT_WHATSAPP_NUMBER || "").replace(/\D/g, "");
+        if (allowed && allowed !== number) return res.status(204).end();
+        const agent = (await pool.query("select enabled,model,system_prompt from agent_configs where organization_id=$1", [org])).rows[0];
+        if (agent?.enabled && process.env.OPENAI_API_KEY) {
+          const history = (await pool.query("select direction,body from messages where conversation_id=$1 and organization_id=$2 order by created_at desc limit 20", [conv.id, org])).rows.reverse();
+          const catalog = (await pool.query("select id,name,kind,price,unit,category,short_description,recurrence,billing_type from catalog_items where organization_id=$1 and active=true and public_visible=true order by highlighted desc,created_at desc limit 100", [org])).rows;
+          const result = await callFocussAgent({ model: agent.model, prompt: agent.system_prompt || DEFAULT_AGENT_PROMPT, messages: history.slice(0, -1), currentMessage: String(body).slice(0, 4000), context: { company: "Focussdev", channel: "assistant", user_role: "admin", catalog } });
+          const cfg = await loadConfig(org);
+          const sent = await evo(cfg, "POST", `/message/sendText/${encodeURIComponent(instanceNameFor(org, channel))}`, { number, text: result.reply });
+          await pool.query("insert into messages (organization_id, conversation_id, direction, body, read_at) values ($1,$2,'out',$3,now())", [org, conv.id, result.reply]);
+          await pool.query("update conversations set last_message_at=now(), updated_at=now(), unread_count=0 where id=$1 and organization_id=$2", [conv.id, org]);
+          void sent;
+        }
+      }
       res.status(204).end();
     } catch { res.status(204).end(); }
   });
