@@ -10,6 +10,7 @@
 import crypto from "node:crypto";
 import { assertSafeOutboundUrl, parseOutboundUrl } from "../outbound-url.js";
 import { callFocussAgent, DEFAULT_AGENT_PROMPT } from "../focuss-agent.js";
+import { executeAgentAction } from "../agent-actions.js";
 
 const DEFAULT_BASE_URL = process.env.EVOLUTION_API_URL || "https://evolutions-evolution-api.fcoipz.easypanel.host";
 const TIMEOUT_MS = 15000;
@@ -252,6 +253,8 @@ export function register(app, ctx) {
           const history = (await pool.query("select direction,body from messages where conversation_id=$1 and organization_id=$2 order by created_at desc limit 20", [conv.id, org])).rows.reverse();
           const catalog = (await pool.query("select id,name,kind,price,unit,category,short_description,recurrence,billing_type from catalog_items where organization_id=$1 and active=true and public_visible=true order by highlighted desc,created_at desc limit 100", [org])).rows;
           const result = await callFocussAgent({ model: agent.model, prompt: agent.system_prompt || DEFAULT_AGENT_PROMPT, messages: history.slice(0, -1), currentMessage: String(body).slice(0, 4000), context: { company: "Focussdev", channel: "assistant", user_role: "admin", catalog } });
+          const actionResult = await executeAgentAction({ pool, action: result.action, payload: result.action_payload, org, userId: null, authorized: true });
+          if (result.action && result.action !== "none" && !actionResult.executed) result.reply = "Não consegui executar essa ação automaticamente agora. A solicitação foi preservada para acompanhamento.";
           const cfg = await loadConfig(org);
           const sent = await evo(cfg, "POST", `/message/sendText/${encodeURIComponent(instanceNameFor(org, channel))}`, { number, text: result.reply });
           await pool.query("insert into messages (organization_id, conversation_id, direction, body, read_at) values ($1,$2,'out',$3,now())", [org, conv.id, result.reply]);
