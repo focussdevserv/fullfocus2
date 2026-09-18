@@ -17,7 +17,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=17" />
+    <link rel="stylesheet" href="styles.css?v=18" />
     <link rel="stylesheet" href="ui.css?v=9" />
     <link rel="stylesheet" href="modules/inicio.css?v=10" />
     <link rel="stylesheet" href="modules/tarefas.css?v=10" />
@@ -34,7 +34,7 @@
     <link rel="stylesheet" href="modules/estrutura.css?v=3" />
     <link rel="stylesheet" href="design.css?v=4" />
     <!-- Núcleo primeiro (defer); os módulos (um por área do menu) são type="module": escopo próprio, executam em ordem depois do núcleo e enxergam os helpers globais. -->
-    <script src="app.js?v=19" defer></script>
+    <script src="app.js?v=20" defer></script>
     <script src="ui.js?v=11" defer></script>
     <script type="module" src="modules/inicio.js?v=12"></script>
     <script type="module" src="modules/tarefas.js?v=13"></script>
@@ -42,7 +42,7 @@
     <script type="module" src="modules/agenda-enhanced.js?v=11"></script>
     <script type="module" src="modules/inbox.js?v=13"></script>
     <script type="module" src="modules/crm.js?v=15"></script>
-    <script type="module" src="modules/contas.js?v=14"></script>
+    <script type="module" src="modules/contas.js?v=15"></script>
     <script type="module" src="modules/operacao.js?v=18"></script>
     <script type="module" src="modules/financeiro.js?v=15"></script>
     <script type="module" src="modules/cobrancas.js?v=5"></script>
@@ -386,10 +386,10 @@
             <label class="global-search">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
               <input id="global-search" type="search" placeholder="Buscar no workspace…" aria-label="Buscar no workspace" autocomplete="off" />
-              <kbd>⌘ K</kbd>
+              <kbd>Ctrl K</kbd>
             </label>
             <button class="notification-button" type="button" aria-label="Ver notificações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span aria-hidden="true"></span></button>
-            <div class="create-menu-wrap"><button class="button button-primary topbar-create" id="create-menu-trigger" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="create-menu">+ Criar <span aria-hidden="true">⌄</span></button><div class="create-menu" id="create-menu" hidden><a href="#tarefas">＋ Nova tarefa</a><a href="#crm">＋ Novo lead</a><a href="#visao-financeira">＋ Nova receita</a><a href="#projetos">＋ Novo projeto</a></div></div>
+            <div class="create-menu-wrap"><button class="button button-primary topbar-create" id="create-menu-trigger" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="create-menu">+ Criar <span aria-hidden="true">⌄</span></button><div class="create-menu" id="create-menu" hidden><a href="#contatos" data-create-kind="contato">＋ Novo contato</a><a href="#clientes" data-create-kind="cliente">＋ Novo cliente</a><a href="#tarefas" data-create-kind="tarefa">＋ Nova tarefa</a><a href="#crm" data-create-kind="lead">＋ Novo lead</a><a href="#propostas" data-create-kind="proposta">＋ Nova proposta</a><a href="#contratos" data-create-kind="contrato">＋ Novo contrato</a><a href="#visao-financeira" data-create-kind="receita">＋ Nova receita</a><a href="#projetos" data-create-kind="projeto">＋ Novo projeto</a><a href="#tickets" data-create-kind="ticket">＋ Novo ticket</a></div></div>
           </div>
           <div class="account-menu topbar-profile">
             <button class="account-trigger" id="top-account-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="top-account-dropdown">
