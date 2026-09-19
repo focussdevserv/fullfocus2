@@ -24,6 +24,7 @@ import { registerAutomationRunRoutes } from "./routes/automation-runs.js";
 import { register as registerEventRoutes } from "./routes/events.js";
 import { startAutomationRunner } from "./automations-runner.js";
 import { ensureStarterLibrary } from "./starter-library.js";
+import { permissionAllows as permissionAllowsFromModule } from "./permissions.js";
 const { Pool } = pg;
 export const app = express();
 // O tráfego de produção passa pelo proxy Cloudflare; isso preserva req.secure
@@ -210,15 +211,6 @@ permissionDomains.vault = "operation";
 const permissionAction = (method) => ({ GET: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" }[method]);
 permissionDomains.events = "operation";
 permissionDomains.commissions = "finance";
-const permissionAllows = (permissions, domain, table, action) => {
-  if (!permissions || typeof permissions !== "object") return true;
-  for (const value of [permissions[table], permissions[domain], permissions[`${domain}.${action}`], permissions[`${table}.${action}`]]) {
-    if (Array.isArray(value)) return value.includes(action) || value.includes("admin") || value.includes("administrate");
-    if (typeof value === "boolean") return value;
-    if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, action)) return Boolean(value[action]);
-  }
-  return true;
-};
 app.use("/api", (req, res, next) => {
   const [, table] = req.path.split("/");
   if (!["POST", "PATCH"].includes(req.method) || table !== "invoices") return next();
@@ -237,7 +229,7 @@ app.use("/api", async (req, res, next) => {
   if (["team_roles", "audit_events", "trash"].includes(table)) return res.status(403).json({ error: "Apenas proprietários e administradores acessam este módulo." });
   try {
     const q = await pool.query("select tr.permissions from users u left join team_roles tr on tr.id=u.team_role_id and tr.organization_id=u.organization_id where u.id=$1 and u.organization_id=$2", [req.user.id, req.user.organization_id]);
-    if (!permissionAllows(q.rows[0]?.permissions, domain, table, action)) return res.status(403).json({ error: "Seu cargo não permite esta ação." });
+    if (!permissionAllowsFromModule(q.rows[0]?.permissions, domain, table, action)) return res.status(403).json({ error: "Seu cargo não permite esta ação." });
     return next();
   } catch { return res.status(503).json({ error: "Não foi possível validar as permissões." }); }
 });
