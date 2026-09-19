@@ -24,7 +24,7 @@
     document.head.append(link);
     styles.set(name, link);
   };
-  const importWithTimeout = (file, timeoutMs = 10000) => {
+  const importWithTimeout = (file, timeoutMs = 12000) => {
     const importPromise = import(`./modules/${file}?v=4`);
     const timeout = new Promise((_, reject) => {
       window.setTimeout(() => reject(new Error(`O módulo ${file} demorou mais que o esperado para carregar.`)), timeoutMs);
@@ -32,7 +32,9 @@
     return Promise.race([importPromise, timeout]);
   };
   const load = async (key) => {
-    for (const file of groups[key] || []) {
+    const files = groups[key] || [];
+    if (!files.length) throw new Error(`Rota sem mÃ³dulo configurado: ${key}.`);
+    for (const file of files) {
       loadStyle(file);
       if (!loaded.has(file)) {
         const request = importWithTimeout(file).catch((error) => {
@@ -45,6 +47,7 @@
       }
       await loaded.get(file);
     }
+    return { key, files };
   };
   window.FocusModuleLoader = { load };
   window.addEventListener("focusdev:route-needed", (event) => {
