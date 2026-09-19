@@ -21,6 +21,24 @@ async function renderSettingsHub() {
     dashboardGrid.querySelector("[data-hub-password]")?.addEventListener("submit", (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); if (values.newPassword !== values.confirm) return ui.toast("As senhas não coincidem.", "error"); hubSave(event.currentTarget, "Senha alterada.", () => api("/api/profile/password", { method: "POST", body: values })); });
     dashboardGrid.querySelector("[data-hub-save-all]")?.addEventListener("click", () => dashboardGrid.querySelectorAll("form[data-hub-company], form[data-hub-finance], form[data-hub-appearance]").forEach((form) => form.requestSubmit()));
     dashboardGrid.querySelector("[data-hub-search]")?.addEventListener("input", (event) => { const term = event.currentTarget.value.toLocaleLowerCase(); dashboardGrid.querySelectorAll(".settings-hub-panel, .settings-hub-link").forEach((node) => { node.hidden = Boolean(term && !node.textContent.toLocaleLowerCase().includes(term)); }); });
+    let activeHubSection = "hub-company";
+    const localHubPanels = [...dashboardGrid.querySelectorAll(".settings-hub-content > .settings-hub-panel[id]")];
+    const activateHubSection = (sectionId) => {
+      const panel = localHubPanels.find((item) => item.id === sectionId);
+      if (!panel) return false;
+      activeHubSection = sectionId;
+      localHubPanels.forEach((item) => { item.hidden = item !== panel; });
+      dashboardGrid.querySelectorAll("[data-hub-section]").forEach((button) => {
+        const active = button.dataset.hubSection === sectionId;
+        button.classList.toggle("is-active", active);
+        if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
+      });
+      panel.querySelector("input, select, textarea, button")?.focus({ preventScroll: true });
+      return true;
+    };
+    activateHubSection(activeHubSection);
+    dashboardGrid.querySelectorAll("[data-hub-section]").forEach((button) => button.addEventListener("click", () => activateHubSection(button.dataset.hubSection)));
+    dashboardGrid.querySelector("[data-hub-search]")?.addEventListener("input", (event) => { if (!event.currentTarget.value.trim()) activateHubSection(activeHubSection); });
   } catch (error) { dashboardGrid.removeAttribute("aria-busy"); dashboardGrid.innerHTML = stateBlock.error(error.message, "settings-hub-retry"); dashboardGrid.querySelector(".settings-hub-retry")?.addEventListener("click", renderSettingsHub); }
 }
 registerRoutes({ configuracoes: renderSettingsHub });
