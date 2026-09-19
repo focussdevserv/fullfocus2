@@ -6,6 +6,10 @@
 .workspace-availability[data-tone="ok"] .availability-mark { background: rgb(18 118 76 / 18%); color: #55e0a6; }
 .workspace-availability[data-tone="ok"] p { color: #9ed9bd; }
 .workspace-availability[data-tone="loading"] .availability-mark { opacity: 0.6; }
+.workspace-availability[data-tone="warning"] .availability-mark,
+.workspace-availability[data-tone="error"] .availability-mark { background: rgb(239 68 68 / 16%); color: #ff9aa5; }
+.workspace-availability[data-tone="warning"] p,
+.workspace-availability[data-tone="error"] p { color: #ffb7be; }
 
 /* Painel "Como funciona" */
 .inicio-help-panel { grid-column: 1 / -1; }

@@ -106,6 +106,7 @@ function renderHome() {
   }).catch((error) => {
     if (request !== homeRequest || (location.hash && location.hash !== "#inicio")) return;
     dashboardGrid.removeAttribute("aria-busy");
+    setAvailability(error.message || "Não foi possível sincronizar o workspace.", "error");
     const message = dashboardGrid.querySelector(".workspace-data-status");
     if (message) { message.setAttribute("role", "alert"); message.textContent = error.message || "Não foi possível carregar o workspace. Tente novamente."; }
     dashboardGrid.querySelectorAll(".inicio-empty").forEach((region) => { region.textContent = "Não foi possível carregar este bloco. Tente atualizar os dados."; });
@@ -193,8 +194,6 @@ function setAvailability(text, tone) {
 
 // O status técnico de sincronização não aparece no dashboard; os próprios
 // cards exibem carregamento, vazio e erro quando necessário.
-setAvailability = function hideTechnicalAvailability() {};
-
 function setMetric(key, value, note) {
   const strong = dashboardGrid.querySelector(`[data-metric="${key}"]`);
   if (!strong) return;

@@ -10,7 +10,7 @@ const checks = [
 let failed = 0;
 for (const [label, path] of checks) {
   try {
-    const response = await fetch(`${baseUrl}${path}`, { redirect: "follow" });
+    const response = await fetch(`${baseUrl}${path}`, { redirect: "follow", signal: AbortSignal.timeout(8000) });
     const body = path === "/api/health" ? await response.text() : "";
     const healthOk = path !== "/api/health" || response.ok && body.includes('"ok":true');
     if (!response.ok || !healthOk) throw new Error(`HTTP ${response.status}`);
