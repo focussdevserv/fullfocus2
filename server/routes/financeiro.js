@@ -81,24 +81,31 @@ export function register(app, ctx) {
   const recordReceivablePayment = async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const amount = Number(req.body?.amount), method = asText(req.body?.method) || "manual";
+    const idempotencyKey = asText(req.get("idempotency-key") || req.body?.idempotency_key);
     if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Informe um valor de pagamento válido." });
+    if (idempotencyKey && (idempotencyKey.length < 8 || idempotencyKey.length > 120)) return res.status(400).json({ error: "A chave de idempotência deve ter entre 8 e 120 caracteres." });
     const db = pool.connect ? await pool.connect() : pool;
     try {
       await db.query("begin");
       const receivable = await db.query("select * from receivables where id=$1 and organization_id=$2 for update", [req.params.id, org]);
       if (!receivable.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Conta a receber não encontrada." }); }
       const source = receivable.rows[0];
+      const externalId = idempotencyKey ? `manual:${org}:${source.id}:${idempotencyKey}` : null;
+      if (externalId) {
+        const duplicate = await db.query("select * from payments where organization_id=$1 and receivable_id=$2 and external_id=$3 limit 1", [org, source.id, externalId]);
+        if (duplicate.rowCount) { const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [source.id, org]); await db.query("commit"); return res.json({ payment: duplicate.rows[0], receivable: source, revenue: null, remaining: Math.max(0, Number(source.amount || 0) - Number(prior.rows[0]?.total || 0)), replayed: true }); }
+      }
       if (["paid", "cancelled"].includes(source.status)) { await db.query("rollback"); return res.status(400).json({ error: "Esta conta não aceita novos pagamentos." }); }
       const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [source.id, org]);
       const remaining = Math.max(0, Number(source.amount || 0) - Number(prior.rows[0]?.total || 0));
       if (amount > remaining + 0.005) { await db.query("rollback"); return res.status(400).json({ error: "O pagamento não pode exceder o saldo restante." }); }
-      const payment = await db.query("insert into payments (organization_id,receivable_id,amount,paid_at,method) values ($1,$2,$3,now(),$4) returning *", [org, source.id, amount, method]);
+      const payment = await db.query("insert into payments (organization_id,receivable_id,amount,paid_at,method,external_id) values ($1,$2,$3,now(),$4,$5) returning *", [org, source.id, amount, method, externalId]);
       const totalPaid = Number(prior.rows[0]?.total || 0) + amount;
       const paid = totalPaid >= Number(source.amount || 0) - 0.005;
       const updated = await db.query("update receivables set status=$1,paid_at=case when $1='paid' then now() else paid_at end,updated_at=now() where id=$2 and organization_id=$3 returning *", [paid ? "paid" : "partially_paid", source.id, org]);
       const revenue = await db.query("insert into revenues (organization_id,description,client_id,project_id,contract_id,amount,net_amount,payment_method,paid_at,status) values ($1,$2,$3,$4,$5,$6,$6,$7,now(),'confirmed') returning *", [org, source.description, source.client_id, source.project_id, source.contract_id, amount, method]);
       await db.query("commit");
-      res.status(201).json({ payment: payment.rows[0], receivable: updated.rows[0], revenue: revenue.rows[0], remaining: Math.max(0, Number(source.amount || 0) - totalPaid) });
+      res.status(201).json({ payment: payment.rows[0], receivable: updated.rows[0], revenue: revenue.rows[0], remaining: Math.max(0, Number(source.amount || 0) - totalPaid), replayed: false });
     } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível registrar o pagamento."); }
     finally { db.release?.(); }
   };
@@ -217,12 +224,13 @@ export function register(app, ctx) {
       if (existing.rowCount) { await db.query("commit"); return res.json({ receivables: existing.rows, created: false }); }
       const total = Number(source.total_value ?? source.value ?? 0), entry = Number(source.down_payment || 0), installments = Math.max(1, Number.parseInt(source.installments, 10) || 1);
       if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(entry) || entry < 0 || entry > total) { await db.query("rollback"); return res.status(400).json({ error: "Valores do contrato inválidos para gerar parcelas." }); }
-      const balance = total - entry, installmentValue = Number(source.installment_value) > 0 ? Number(source.installment_value) : balance / installments;
+      const totalCents = Math.round(total * 100), entryCents = Math.round(entry * 100), balanceCents = totalCents - entryCents;
       const suppliedDates = String(source.payment_due_dates || "").split(",").map((value) => value.trim()).filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
       const dueDate = (index) => suppliedDates[index] || new Date(Date.now() + (index + 1) * 30 * 864e5).toISOString().slice(0, 10);
       const created = [];
-      if (entry > 0) { const q = await db.query("insert into receivables (organization_id,client_id,project_id,contract_id,proposal_id,description,amount,original_amount,updated_amount,due_at,status,installment_number,payment_method) values ($1,$2,$3,$4,$5,$6,$7,$7,$7,current_date,'pending',0,$8) returning *", [org, source.client_id, source.project_id || null, source.id, source.proposal_id || null, `${source.name} · Entrada`, entry, source.payment_method || null]); created.push(q.rows[0]); }
-      for (let index = 0; index < installments && balance > 0; index += 1) { const amount = index === installments - 1 ? Math.max(0, balance - installmentValue * (installments - 1)) : installmentValue; if (amount <= 0) continue; const q = await db.query("insert into receivables (organization_id,client_id,project_id,contract_id,proposal_id,description,amount,original_amount,updated_amount,due_at,status,installment_number,payment_method) values ($1,$2,$3,$4,$5,$6,$7,$7,$7,$8,'pending',$9,$10) returning *", [org, source.client_id, source.project_id || null, source.id, source.proposal_id || null, `${source.name} · Parcela ${index + 1}/${installments}`, amount, dueDate(index), index + 1, source.payment_method || null]); created.push(q.rows[0]); }
+      if (entryCents > 0) { const entryAmount = entryCents / 100; const q = await db.query("insert into receivables (organization_id,client_id,project_id,contract_id,proposal_id,description,amount,original_amount,updated_amount,due_at,status,installment_number,payment_method) values ($1,$2,$3,$4,$5,$6,$7,$7,$7,current_date,'pending',0,$8) returning *", [org, source.client_id, source.project_id || null, source.id, source.proposal_id || null, `${source.name} · Entrada`, entryAmount, source.payment_method || null]); created.push(q.rows[0]); }
+      const installmentBase = Math.floor(balanceCents / installments), installmentRemainder = balanceCents % installments;
+      for (let index = 0; index < installments && balanceCents > 0; index += 1) { const amountCents = installmentBase + (index < installmentRemainder ? 1 : 0); if (amountCents <= 0) continue; const amount = amountCents / 100; const q = await db.query("insert into receivables (organization_id,client_id,project_id,contract_id,proposal_id,description,amount,original_amount,updated_amount,due_at,status,installment_number,payment_method) values ($1,$2,$3,$4,$5,$6,$7,$7,$7,$8,'pending',$9,$10) returning *", [org, source.client_id, source.project_id || null, source.id, source.proposal_id || null, `${source.name} · Parcela ${index + 1}/${installments}`, amount, dueDate(index), index + 1, source.payment_method || null]); created.push(q.rows[0]); }
       await db.query("commit");
       res.status(201).json({ receivables: created, created: true });
     } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível gerar as parcelas do contrato."); }

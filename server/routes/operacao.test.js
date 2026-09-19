@@ -6,7 +6,7 @@ import { register } from "./operacao.js";
 
 function harness() {
   const calls = [];
-  const query = async (sql, params) => { calls.push({ sql, params }); if (sql.includes("from contracts")) return { rows: [{ id: 9, organization_id: "org-a", status: "signed", name: "Contrato", client_id: 4, value: 2700 }], rowCount: 1 }; if (sql.startsWith("select")) return { rows: [{ id: 1, organization_id: "org-a", title: "T" }], rowCount: 1 }; return { rows: [{ id: 2, organization_id: "org-a" }], rowCount: 1 }; };
+  const query = async (sql, params) => { calls.push({ sql, params }); if (sql.includes("from contracts")) return { rows: [{ id: 9, organization_id: "org-a", status: "signed", name: "Contrato", client_id: 4, value: 2700 }], rowCount: 1 }; if (sql.startsWith("select * from projects where contract_id")) return { rows: [], rowCount: 0 }; if (sql.startsWith("select")) return { rows: [{ id: 1, organization_id: "org-a", title: "T" }], rowCount: 1 }; return { rows: [{ id: 2, organization_id: "org-a" }], rowCount: 1 }; };
   const pool = { query, connect: async () => ({ query, release() {} }) };
   const app = express(); app.use(express.json());
   register(app, { pool, tenant: (_req) => "org-a", asText: (v) => String(v ?? "").trim(), classifyDbError: (_e, error) => ({ status: 500, error }), validateRelations: async () => {} });

@@ -188,10 +188,27 @@ async function executeAction(client, automation, source, { sendWhatsApp = sendWh
   if (automation.action === "create_project" && automation.trigger === "contract_signed") {
     if (!source.client_id) throw new Error("O contrato assinado precisa estar vinculado a um cliente.");
     await assertOrganizationRelation(client, "clients", source.client_id, automation.organization_id, "O cliente");
+    const locked = await client.query("select id,project_id,client_id,name,value,total_value from contracts where id=$1 and organization_id=$2 for update", [source.id, automation.organization_id]);
+    if (!locked.rowCount) throw new Error("O contrato assinado não pertence ao workspace.");
+    const current = locked.rows[0];
+    let existing = null;
+    if (current.project_id) {
+      const linked = await client.query("select id from projects where id=$1 and organization_id=$2", [current.project_id, automation.organization_id]);
+      existing = linked.rows[0] || null;
+    }
+    if (!existing) {
+      const byContract = await client.query("select id from projects where contract_id=$1 and organization_id=$2 order by id limit 1", [source.id, automation.organization_id]);
+      existing = byContract.rows[0] || null;
+    }
+    if (existing) {
+      await client.query("update contracts set project_id=$1,updated_at=now() where id=$2 and organization_id=$3", [existing.id, source.id, automation.organization_id]);
+      return { action: "create_project", project_id: existing.id, contract_id: source.id, reused: true };
+    }
     const project = await client.query(
       "insert into projects (organization_id,contract_id,client_id,name,status,progress,total_value) values ($1,$2,$3,$4,'active',0,$5) returning id",
-      [automation.organization_id, source.id, source.client_id, String(config.name || source.name || "Novo projeto").slice(0, 240), Number(source.value || 0)],
+      [automation.organization_id, source.id, current.client_id, String(config.name || current.name || "Novo projeto").slice(0, 240), Number(current.total_value ?? current.value ?? 0)],
     );
+    await client.query("update contracts set project_id=$1,updated_at=now() where id=$2 and organization_id=$3", [project.rows[0].id, source.id, automation.organization_id]);
     return { action: "create_project", project_id: project.rows[0].id, contract_id: source.id };
   }
   if (automation.action === "generate_document") {

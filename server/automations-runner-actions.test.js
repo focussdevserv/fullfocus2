@@ -10,11 +10,15 @@ function poolFor(automation, source) {
       if (sql.startsWith("select * from automations")) return { rows: [automation] };
       if (sql.includes("from leads s") || sql.includes("from opportunities s") || sql.includes("from proposals s") || sql.includes("from contracts s") || sql.includes("from projects s") || sql.includes("from tasks s")) return { rows: [source] };
       if (sql.startsWith("select id from leads")) return { rowCount: 1, rows: [{ id: source.id }] };
+      if (sql.startsWith("select id,project_id,client_id,name,value,total_value from contracts")) return { rowCount: 1, rows: [{ ...source }] };
+      if (sql.startsWith("select id from projects where id=")) return { rowCount: source.project_id ? 1 : 0, rows: source.project_id ? [{ id: source.project_id }] : [] };
+      if (sql.startsWith("select id from projects where contract_id=")) return { rowCount: source.project_id ? 1 : 0, rows: source.project_id ? [{ id: source.project_id }] : [] };
       if (sql.startsWith("insert into automation_runs")) return { rowCount: 1, rows: [{ id: 90 }] };
       if (sql.startsWith("insert into followups")) return { rowCount: 1, rows: [{ id: 91 }] };
       if (sql.startsWith("insert into receivables")) return { rowCount: 1, rows: [{ id: 92 }] };
       if (sql.startsWith("insert into contracts")) return { rowCount: 1, rows: [{ id: 93 }] };
       if (sql.startsWith("insert into projects")) return { rowCount: 1, rows: [{ id: 94 }] };
+      if (sql.startsWith("update contracts set project_id")) { source.project_id = params[0]; return { rowCount: 1, rows: [] }; }
       if (sql.startsWith("insert into files")) return { rowCount: 1, rows: [{ id: 95 }] };
       if (sql.startsWith("insert into satisfaction_requests")) return { rowCount: 1, rows: [{ id: 96, token: "token" }] };
       if (sql.startsWith("insert into events")) return { rowCount: 1, rows: [{ id: 97 }] };
@@ -51,10 +55,14 @@ test("gera contrato quando proposta é aprovada", async () => {
   assert.equal(calls.filter((call) => call.sql.startsWith("insert into contracts")).length, 1);
 });
 
-test("cria projeto quando contrato é assinado", async () => {
-  const { client, calls } = poolFor({ id: 49, organization_id: "org", trigger: "contract_signed", action: "create_project", config: {} }, { id: 50, name: "Site", client_id: 51, value: "3000" });
+test("criação de projeto por contrato é idempotente em execuções repetidas", async () => {
+  const source = { id: 50, name: "Site", client_id: 51, value: "3000", project_id: null };
+  const { client, calls } = poolFor({ id: 49, organization_id: "org", trigger: "contract_signed", action: "create_project", config: {} }, source);
   assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:00:00Z")), 1);
+  assert.equal(await runAutomationCycle({ connect: async () => client }, new Date("2026-09-14T12:01:00Z")), 1);
   assert.equal(calls.filter((call) => call.sql.startsWith("insert into projects")).length, 1);
+  assert.equal(calls.filter((call) => call.sql.includes("from contracts where id=$1") && call.sql.includes("for update")).length, 2);
+  assert.equal(source.project_id, 94);
 });
 
 test("registra documento gerado no acervo de arquivos", async () => {

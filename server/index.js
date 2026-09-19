@@ -24,7 +24,7 @@ import { registerAutomationRunRoutes } from "./routes/automation-runs.js";
 import { register as registerEventRoutes } from "./routes/events.js";
 import { startAutomationRunner } from "./automations-runner.js";
 import { ensureStarterLibrary } from "./starter-library.js";
-import { permissionAllows as permissionAllowsFromModule } from "./permissions.js";
+import { createPermissionMiddleware } from "./permissions.js";
 const { Pool } = pg;
 export const app = express();
 // O tráfego de produção passa pelo proxy Cloudflare; isso preserva req.secure
@@ -50,13 +50,20 @@ app.use(express.json({ limit: "1mb" }));
 app.use((_req, res, next) => { res.setHeader("X-Content-Type-Options", "nosniff"); res.setHeader("X-Frame-Options", "DENY"); res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin"); res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()"); if (process.env.NODE_ENV === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains"); next(); });
 app.use((req, _res, next) => { if (/^\/api\/(events|tasks)\/\d+-(?:[^/?]+)$/.test(req.path) || /^\/api\/(events|tasks)\/\d+\/(?:details|schedule)$/.test(req.path)) req.url = req.url.replace(/(\/api\/(?:events|tasks)\/\d+)(?:-[^/?]+|\/(?:details|schedule))/, "$1"); next(); });
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const publicRootFiles = new Set(["index.html", "app.js", "module-loader.js", "portal-actions.js", "service-worker.js", "styles.css", "ui.css", "ui.js", "design.css", "manifest.webmanifest"]);
 app.use((req, res, next) => {
   if (req.path === "/" || req.path === "/index.html" || req.path === "/service-worker.js") {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   }
   next();
 });
-app.use(express.static(frontendRoot));
+app.use("/assets", express.static(path.join(frontendRoot, "assets"), { dotfiles: "deny", index: false }));
+app.use("/modules", express.static(path.join(frontendRoot, "modules"), { dotfiles: "deny", index: false }));
+app.get(["/", ...[...publicRootFiles].map((file) => `/${file}`)], (req, res, next) => {
+  const file = req.path === "/" ? "index.html" : req.path.slice(1);
+  if (!publicRootFiles.has(file)) return next();
+  return res.sendFile(path.join(frontendRoot, file));
+});
 // Identidade oficial usada nos documentos públicos sem duplicar o logo em cada template HTML.
 app.use((req, res, next) => {
   const send = res.send.bind(res);
@@ -205,12 +212,7 @@ const entities = {
   , project_members: { fields: ["project_id", "user_id", "access_level", "files_visible", "tasks_visible", "added_at"], required: ["project_id", "user_id"] }, commissions: { fields: ["project_id", "user_id", "responsible", "description", "base_amount", "rate", "amount", "status"], required: ["description", "amount"] }
 };
 const archiveSpecs = { proposals: { fields: ["opportunity_id", "lead_id", "title", "amount", "status", "valid_until", "notes", "sent_at", "decided_at", "client_id", "contact_id", "project_id", "sales_owner", "issued_on", "presentation", "identified_need", "objective", "proposed_solution", "benefits", "differentiators", "service_type", "scope_included", "modules", "integrations", "technologies", "revisions_included", "responsibilities_provider", "responsibilities_client", "scope_excluded", "optional_services", "discount", "additional_fees", "final_amount", "down_payment", "balance_remaining", "installments", "installment_amount", "payment_method", "payment_due_dates", "late_fee", "late_interest", "recurring_costs", "proposal_terms", "approver_name", "approver_document", "approver_email", "approved_at", "acceptance_comment", "acceptance_ip", "accepted_terms"] }, campaigns: { fields: ["name", "channel", "status", "budget", "starts_on", "ends_on"] }, followups: { fields: ["lead_id", "due_at", "channel", "note", "done_at"] } };
-const permissionDomains = { contacts: "crm", companies: "crm", clients: "crm", leads: "crm", opportunities: "crm", projects: "operation", tasks: "operation", contracts: "operation", briefings: "operation", deliveries: "operation", infrastructure_assets: "operation", knowledge_articles: "operation", forms: "operation", revenues: "finance", expenses: "finance", receivables: "finance", charges: "finance", payments: "finance", payables: "finance", bank_accounts: "finance", invoices: "finance", team_roles: "team", team_goals: "team", absences: "team", time_entries: "team", team_messages: "team", project_members: "team", catalog_items: "catalog", automations: "integrations", templates: "integrations", integrations: "integrations", conversations: "conversations" };
 archiveSpecs.vault = { fields: ["client_id", "project_id", "name", "service", "expires_on", "secret_ciphertext", "secret_iv", "secret_tag", "created_by"] };
-permissionDomains.vault = "operation";
-const permissionAction = (method) => ({ GET: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" }[method]);
-permissionDomains.events = "operation";
-permissionDomains.commissions = "finance";
 app.use("/api", (req, res, next) => {
   const [, table] = req.path.split("/");
   if (!["POST", "PATCH"].includes(req.method) || table !== "invoices") return next();
@@ -223,16 +225,7 @@ app.use("/api", (req, res, next) => {
   }
   return next();
 });
-app.use("/api", async (req, res, next) => {
-  const [, table] = req.path.split("/"), domain = permissionDomains[table], action = permissionAction(req.method);
-  if (!domain || !action || !req.user || ["owner", "admin"].includes(req.user.role)) return next();
-  if (["team_roles", "audit_events", "trash"].includes(table)) return res.status(403).json({ error: "Apenas proprietários e administradores acessam este módulo." });
-  try {
-    const q = await pool.query("select tr.permissions from users u left join team_roles tr on tr.id=u.team_role_id and tr.organization_id=u.organization_id where u.id=$1 and u.organization_id=$2", [req.user.id, req.user.organization_id]);
-    if (!permissionAllowsFromModule(q.rows[0]?.permissions, domain, table, action)) return res.status(403).json({ error: "Seu cargo não permite esta ação." });
-    return next();
-  } catch { return res.status(503).json({ error: "Não foi possível validar as permissões." }); }
-});
+app.use("/api", createPermissionMiddleware({ pool }));
 const normalize = (table, body) => { const spec = entities[table]; const values = {}; for (const key of spec.fields) if (body?.[key] !== undefined) values[key] = body[key]; for (const key of ["email", "document", "phone"]) if (values[key] !== undefined) values[key] = normalizeIdentity(key, values[key]); if (["tasks", "leads", "opportunities"].includes(table) && typeof values.tags === "string") values.tags = values.tags.split(",").map(asText).filter(Boolean).slice(0, 8); if (!["amount", "value"].every((k) => values[k] === undefined || isValidAmount(table, k, values[k]))) throw new Error("amount must be a positive number"); return values; };
 const relations = { company_id: "companies", contact_id: "contacts", lead_id: "leads", opportunity_id: "opportunities", client_id: "clients", contract_id: "contracts", project_id: "projects", parent_id: "tasks", receivable_id: "receivables", charge_id: "charges", owner_id: "users", assignee_id: "users", user_id: "users" };
 async function validateRelations(values, org) { for (const [field, table] of Object.entries(relations)) { if (values[field] === undefined || values[field] === null || values[field] === "") continue; const result = await pool.query(`select 1 from ${table} where id=$1 and organization_id=$2`, [values[field], org]); if (!result.rowCount) { const error = new Error(`${field} does not belong to this organization.`); error.code = "invalid_relation"; throw error; } } }

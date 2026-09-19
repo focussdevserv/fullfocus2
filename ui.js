@@ -61,19 +61,24 @@ const ui = (() => {
   /* Confirmação inline: substitui o botão por "Sim / Não". */
   function confirmInline(buttonEl, { text = "Excluir?", onConfirm, onCancel }) {
     const holder = document.createElement("span"); holder.className = "ui-confirm";
+    holder.setAttribute("role", "group");
+    holder.setAttribute("aria-label", text);
     holder.innerHTML = `${esc(text)} <button class="text-action" type="button" data-yes>Sim</button> <button class="text-action" type="button" data-no>Não</button>`;
     const original = buttonEl;
     const wasHidden = original.hidden;
     const hadAriaHidden = original.hasAttribute("aria-hidden");
     const restore = () => {
+      const shouldRestoreFocus = holder.contains(document.activeElement);
       if (holder.isConnected) holder.replaceWith(original);
       original.hidden = wasHidden;
       if (hadAriaHidden) original.setAttribute("aria-hidden", "true");
       else original.removeAttribute("aria-hidden");
+      if (shouldRestoreFocus && !original.hidden) original.focus();
     };
     original.hidden = true;
     original.setAttribute("aria-hidden", "true");
     original.after(holder);
+    holder.querySelector("[data-yes]")?.focus();
     holder.querySelector("[data-no]").addEventListener("click", () => { restore(); onCancel?.(); });
     holder.querySelector("[data-yes]").addEventListener("click", async () => { const confirmButton = holder.querySelector("[data-yes]"); holder.querySelectorAll("button").forEach((b) => { b.disabled = true; b.setAttribute("aria-busy", "true"); }); confirmButton?.setAttribute("aria-label", "Confirmando…"); try { await onConfirm(); restore(); } catch (error) { holder.querySelectorAll("button").forEach((b) => { b.disabled = false; b.removeAttribute("aria-busy"); }); confirmButton?.setAttribute("aria-label", "Confirmar exclusão"); let message = holder.querySelector("[data-confirm-error]"); if (!message) { message = document.createElement("small"); message.dataset.confirmError = "true"; message.className = "ui-confirm-error"; message.setAttribute("role", "alert"); holder.append(" ", message); } message.textContent = error.message || "Não foi possível concluir a ação."; } });
   }
@@ -82,7 +87,9 @@ const ui = (() => {
   let toastTimer = null;
   function toast(message, tone = "info") {
     let el = document.querySelector(".ui-toast");
-    if (!el) { el = document.createElement("div"); el.className = "ui-toast"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); el.setAttribute("aria-atomic", "true"); document.body.append(el); }
+    if (!el) { el = document.createElement("div"); el.className = "ui-toast"; el.setAttribute("aria-atomic", "true"); document.body.append(el); }
+    el.setAttribute("role", tone === "error" ? "alert" : "status");
+    el.setAttribute("aria-live", tone === "error" ? "assertive" : "polite");
     el.textContent = message; el.dataset.tone = tone; el.classList.add("is-visible");
     window.clearTimeout(toastTimer); toastTimer = window.setTimeout(() => el.classList.remove("is-visible"), 3200);
   }
@@ -93,28 +100,39 @@ const ui = (() => {
     document.querySelectorAll(".ui-modal-backdrop, .ui-drawer-backdrop").forEach((overlay) => overlay.remove());
     const previouslyFocused = document.activeElement;
     const backdrop = document.createElement("div"); backdrop.className = "ui-modal-backdrop";
+    const fieldId = (name) => `ui-field-${String(name).replace(/[^a-z0-9_-]/gi, "-")}`;
+    const errorId = (name) => `${fieldId(name)}-error`;
+    const helpId = (name) => `${fieldId(name)}-help`;
     const control = (f) => {
       const value = values[f.name] ?? f.value ?? "";
       const autocomplete = f.autocomplete || (f.type === "email" ? "email" : f.type === "password" ? (/confirm|new/i.test(f.name) ? "new-password" : "current-password") : "off");
       const inputmode = f.inputmode || (f.type === "number" ? "decimal" : f.type === "tel" ? "tel" : f.type === "email" ? "email" : "text");
       const spellcheck = f.type === "email" || f.type === "password" || /email|username|code|token/i.test(f.name) ? 'spellcheck="false"' : "";
-      const common = `name="${esc(f.name)}" autocomplete="${esc(autocomplete)}" inputmode="${esc(inputmode)}" ${spellcheck} ${f.required === false ? "" : "required"} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""}`;
+      const describedBy = [f.help ? helpId(f.name) : "", errorId(f.name)].filter(Boolean).join(" ");
+      const common = `id="${esc(fieldId(f.name))}" name="${esc(f.name)}" autocomplete="${esc(autocomplete)}" inputmode="${esc(inputmode)}" aria-describedby="${esc(describedBy)}" ${spellcheck} ${f.required === false ? "" : "required"} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""}`;
       if (f.type === "select") return `<select ${common}>${(f.options || []).map(([v, l]) => `<option value="${esc(v)}" ${String(value) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
       if (f.type === "textarea") return `<textarea ${common} rows="${f.rows || 3}">${esc(value)}</textarea>`;
-      if (f.type === "checkbox") return `<label class="ui-check"><input type="checkbox" name="${esc(f.name)}" autocomplete="off" ${value ? "checked" : ""} /> <span>${esc(f.text || "")}</span></label>`;
+      if (f.type === "checkbox") return `<label class="ui-check"><input id="${esc(fieldId(f.name))}" type="checkbox" name="${esc(f.name)}" autocomplete="off" aria-describedby="${esc(errorId(f.name))}" ${value ? "checked" : ""} /> <span>${esc(f.text || f.label || "")}</span></label>`;
       const v = f.type === "datetime-local" ? toLocalInput(value) : f.type === "date" ? toDateInput(value) : value;
       return `<input type="${esc(f.type || "text")}" ${common} value="${esc(v)}" ${f.min !== undefined ? `min="${esc(f.min)}"` : ""} ${f.max !== undefined ? `max="${esc(f.max)}"` : ""} ${f.step !== undefined ? `step="${esc(f.step)}"` : ""} ${f.type === "number" && f.step === undefined ? 'step="0.01"' : ""} />`;
     };
     backdrop.innerHTML = `<form class="ui-modal" role="dialog" aria-modal="true" aria-labelledby="ui-modal-title" novalidate>
       <button class="ui-modal-close" type="button" aria-label="Fechar">×</button>
       <p class="card-kicker">${esc(subtitle || "Formulário")}</p><h2 id="ui-modal-title">${esc(title)}</h2>
-      <div class="ui-modal-fields">${fields.map((f) => f.type === "checkbox" ? `<div class="ui-field ${f.half ? "is-half" : ""}">${control(f)}</div>` : `<label class="ui-field ${f.half ? "is-half" : ""}">${esc(f.label)}${f.required === false ? "" : " *"}${control(f)}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`).join("")}</div>
+      <div class="ui-modal-fields">${fields.map((f) => f.type === "checkbox" ? `<div class="ui-field ${f.half ? "is-half" : ""}">${control(f)}<small class="ui-field-error" id="${esc(errorId(f.name))}" data-field-error="${esc(f.name)}" hidden></small></div>` : `<label class="ui-field ${f.half ? "is-half" : ""}" for="${esc(fieldId(f.name))}">${esc(f.label)}${f.required === false ? "" : " *"}${control(f)}${f.help ? `<small id="${esc(helpId(f.name))}">${esc(f.help)}</small>` : ""}<small class="ui-field-error" id="${esc(errorId(f.name))}" data-field-error="${esc(f.name)}" hidden></small></label>`).join("")}</div>
       <p class="ui-modal-status" role="status" aria-live="polite"></p>
       <div class="ui-modal-actions">${danger ? `<button class="text-action ui-danger-text" type="button" data-danger>${esc(danger.label)}</button>` : ""}<span></span><button class="button button-secondary compact-action" type="button" data-cancel>Cancelar</button><button class="button button-primary compact-action" type="submit">${esc(submitLabel)}</button></div>
     </form>`;
     document.body.append(backdrop);
     const formEl = backdrop.querySelector("form"), status = backdrop.querySelector(".ui-modal-status");
-    let dirty = false, discardPending = false;
+    let dirty = false, discardPending = false, submitting = false, dangerPending = false;
+    const setFieldError = (name, message = "") => {
+      const input = formEl.elements[name];
+      const error = [...formEl.querySelectorAll("[data-field-error]")].find((element) => element.dataset.fieldError === String(name));
+      input?.toggleAttribute("aria-invalid", Boolean(message));
+      if (error) { error.textContent = message; error.hidden = !message; }
+    };
+    const clearFieldErrors = () => fields.forEach((field) => setFieldError(field.name));
     const cleanup = () => { document.removeEventListener("keydown", onKey); if (activeOverlayCleanup === cleanup) activeOverlayCleanup = null; };
     activeOverlayCleanup = cleanup;
     const close = (force = false) => { if (!backdrop.isConnected) { cleanup(); return; } const saving = formEl.querySelector("[type=submit]")?.disabled; if (!force && !saving && dirty && !discardPending) { discardPending = true; status.textContent = "Existem alterações não salvas. Clique novamente em Descartar alterações para sair."; const cancel = formEl.querySelector("[data-cancel]"); if (cancel) cancel.textContent = "Descartar alterações"; return; } backdrop.remove(); cleanup(); if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus(); };
@@ -133,16 +151,19 @@ const ui = (() => {
     closeButton.focus();
     backdrop.querySelector("[data-cancel]").addEventListener("click", close);
     backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
-    const markDirty = () => { dirty = true; discardPending = false; };
+    const markDirty = (event) => { dirty = true; discardPending = false; if (event.target?.name) setFieldError(event.target.name); if (!submitting && status.getAttribute("role") === "alert") { status.setAttribute("role", "status"); status.textContent = ""; } };
     formEl.addEventListener("input", markDirty);
     formEl.addEventListener("change", markDirty);
-    backdrop.querySelector("[data-danger]")?.addEventListener("click", async () => { status.textContent = ""; try { await danger.onClick(); if (backdrop.isConnected) close(true); } catch (error) { if (backdrop.isConnected) status.textContent = error.message; } });
+    backdrop.querySelector("[data-danger]")?.addEventListener("click", async (event) => { if (dangerPending) return; const dangerButton = event.currentTarget; dangerPending = true; dangerButton.disabled = true; dangerButton.setAttribute("aria-busy", "true"); status.setAttribute("role", "status"); status.textContent = "Excluindo…"; try { await danger.onClick(); if (backdrop.isConnected) close(true); } catch (error) { if (backdrop.isConnected) { status.setAttribute("role", "alert"); status.textContent = error.message || "Não foi possível excluir. Tente novamente."; dangerButton.disabled = false; dangerButton.removeAttribute("aria-busy"); dangerPending = false; } } });
     formEl.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (submitting) return;
+      clearFieldErrors();
       const missing = fields.find((f) => f.required !== false && f.type !== "checkbox" && !String(formEl.elements[f.name]?.value ?? "").trim());
-      if (missing) { status.setAttribute("role", "alert"); status.textContent = `Preencha "${missing.label}".`; formEl.elements[missing.name]?.focus(); return; }
+      if (missing) { const message = `Preencha “${missing.label}”.`; setFieldError(missing.name, message); status.setAttribute("role", "alert"); status.textContent = message; formEl.elements[missing.name]?.focus(); return; }
       if (!formEl.checkValidity()) {
         const invalid = [...formEl.elements].find((element) => element.willValidate && !element.validity.valid);
+        if (invalid?.name) setFieldError(invalid.name, invalid.validationMessage || "Revise este campo.");
         status.setAttribute("role", "alert");
         status.textContent = invalid?.validationMessage || "Revise os campos destacados antes de salvar.";
         invalid?.focus();
@@ -152,15 +173,16 @@ const ui = (() => {
       const invalidJson = fields.find((f) => f.json && String(formEl.elements[f.name]?.value || "").trim() && (() => { try { JSON.parse(formEl.elements[f.name].value); return false; } catch { return true; } })());
       if (invalidJson) {
         const invalid = formEl.elements[invalidJson.name];
+        setFieldError(invalidJson.name, `Corrija o JSON em “${invalidJson.label}”.`);
         status.setAttribute("role", "alert");
-        status.textContent = `Corrija o JSON em "${invalidJson.label}" antes de salvar.`;
+        status.textContent = `Corrija o JSON em “${invalidJson.label}” antes de salvar.`;
         invalid?.focus();
         return;
       }
       const out = {};
       fields.forEach((f) => { const el = formEl.elements[f.name]; if (!el) return; if (f.type === "checkbox") { out[f.name] = el.checked; return; } let v = el.value; if (f.type === "datetime-local") v = v ? new Date(v).toISOString() : null; else if (f.type === "number") v = v === "" ? null : Number(String(v).replace(",", ".")); else if (f.json) v = v.trim() ? JSON.parse(v) : null; else if (v === "") v = null; out[f.name] = v; });
-      const submit = formEl.querySelector("[type=submit]"); submit.disabled = true; submit.setAttribute("aria-busy", "true"); status.setAttribute("role", "status"); status.textContent = "Salvando…";
-      try { await onSubmit(out); if (backdrop.isConnected) close(); } catch (error) { status.setAttribute("role", "alert"); status.textContent = error.message || "Não foi possível salvar. Tente novamente."; submit.disabled = false; submit.removeAttribute("aria-busy"); }
+      const submit = formEl.querySelector("[type=submit]"); submitting = true; submit.disabled = true; submit.setAttribute("aria-busy", "true"); status.setAttribute("role", "status"); status.textContent = "Salvando…";
+      try { await onSubmit(out); if (backdrop.isConnected) close(); } catch (error) { status.setAttribute("role", "alert"); status.textContent = error.message || "Não foi possível salvar. Tente novamente."; submit.disabled = false; submit.removeAttribute("aria-busy"); submitting = false; }
     });
     formEl.querySelector("input, select, textarea")?.focus();
     return { close };

@@ -197,15 +197,27 @@ export function register(app, ctx) {
     if (status !== undefined) { if (!PROPOSAL_STATUSES.includes(status)) return bad(res, "Situação inválida."); push("status", status); if (status === "sent") set.push("sent_at=coalesce(sent_at, now())"); if (status === "accepted" || status === "rejected") set.push("decided_at=now()"); }
     if (!set.length) return bad(res, "Nenhum campo válido informado.");
     params.push(req.params.id, org);
+    const decision = status === "accepted" || status === "rejected";
+    const db = decision && pool.connect ? await pool.connect().catch(() => null) : pool;
+    if (!db) return res.status(503).json({ error: "Serviço indisponível." });
     try {
-      const q = await pool.query(`update proposals set ${set.join(",")}, updated_at=now() where id=$${params.length - 1} and organization_id=$${params.length} returning *`, params);
-      if (!q.rowCount) return res.status(404).json({ error: "Proposta não encontrada." });
+      if (decision) {
+        await db.query("begin");
+        const current = await db.query("select * from proposals where id=$1 and organization_id=$2 for update", [req.params.id, org]);
+        if (!current.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Proposta não encontrada." }); }
+        if (current.rows[0].status === status) { await db.query("commit"); return res.json({ proposal: current.rows[0], replayed: true }); }
+        if (["accepted", "rejected"].includes(current.rows[0].status)) { await db.query("rollback"); return res.status(409).json({ error: "A proposta já possui uma decisão definitiva." }); }
+      }
+      const q = await db.query(`update proposals set ${set.join(",")}, updated_at=now() where id=$${params.length - 1} and organization_id=$${params.length} returning *`, params);
+      if (!q.rowCount) { if (decision) await db.query("rollback"); return res.status(404).json({ error: "Proposta não encontrada." }); }
       const row = q.rows[0];
-      if (status === "accepted" && row.opportunity_id) await pool.query("update opportunities set stage='won', updated_at=now() where id=$1 and organization_id=$2", [row.opportunity_id, org]);
-      if (status === "rejected" && row.opportunity_id) await pool.query("update opportunities set stage='lost', updated_at=now() where id=$1 and organization_id=$2 and stage <> 'won'", [row.opportunity_id, org]);
-      if (status === "accepted") await pool.query("update leads set status='won', updated_at=now() where organization_id=$2 and (id=$1 or id=(select lead_id from opportunities where id=$3 and organization_id=$2))", [row.lead_id || null, org, row.opportunity_id || null]);
-      res.json({ proposal: row });
-    } catch (e) { fail(res, e, "Não foi possível atualizar a proposta."); }
+      if (status === "accepted" && row.opportunity_id) await db.query("update opportunities set stage='won', updated_at=now() where id=$1 and organization_id=$2", [row.opportunity_id, org]);
+      if (status === "rejected" && row.opportunity_id) await db.query("update opportunities set stage='lost', updated_at=now() where id=$1 and organization_id=$2 and stage <> 'won'", [row.opportunity_id, org]);
+      if (status === "accepted") await db.query("update leads set status='won', updated_at=now() where organization_id=$2 and (id=$1 or id=(select lead_id from opportunities where id=$3 and organization_id=$2))", [row.lead_id || null, org, row.opportunity_id || null]);
+      if (decision) await db.query("commit");
+      res.json({ proposal: row, replayed: false });
+    } catch (e) { if (decision) await db.query("rollback").catch(() => {}); fail(res, e, "Não foi possível atualizar a proposta."); }
+    finally { if (decision) db.release?.(); }
   });
   app.put("/api/proposals/:id/items", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
