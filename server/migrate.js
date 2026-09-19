@@ -10,6 +10,9 @@ import { fileURLToPath } from "node:url";
       workers não disputam o mesmo arquivo. */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const MIGRATION_LOCK_SQL = "select pg_advisory_lock($1, $2)";
+const MIGRATION_UNLOCK_SQL = "select pg_advisory_unlock($1, $2) as unlocked";
+const MIGRATION_LOCK_KEYS = [0x464f4353, 0x4d494752]; // "FOCS" / "MIGR"
 
 export async function listMigrationFiles(directory = path.join(here, "migrations")) {
   let entries = [];
@@ -24,12 +27,18 @@ export async function listMigrationFiles(directory = path.join(here, "migrations
 
 export async function runMigrations(pool, { schemaFile = path.join(here, "schema.sql"), directory = path.join(here, "migrations"), logger = console } = {}) {
   const schema = await readFile(schemaFile, "utf8");
-  await pool.query(schema);
-  await pool.query("create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())");
-  const applied = new Set((await pool.query("select name from schema_migrations")).rows.map((row) => row.name));
   const files = await listMigrationFiles(directory);
   const client = await pool.connect();
+  let locked = false;
+  let destroyClient = false;
+  let failure;
+  let appliedFiles;
   try {
+    await client.query(MIGRATION_LOCK_SQL, MIGRATION_LOCK_KEYS);
+    locked = true;
+    await client.query(schema);
+    await client.query("create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())");
+    const applied = new Set((await client.query("select name from schema_migrations")).rows.map((row) => row.name));
     for (const name of files) {
       if (applied.has(name)) continue;
       const sql = await readFile(path.join(directory, name), "utf8");
@@ -45,8 +54,21 @@ export async function runMigrations(pool, { schemaFile = path.join(here, "schema
         throw error;
       }
     }
+    appliedFiles = files.filter((name) => !applied.has(name));
+  } catch (error) {
+    failure = error;
   } finally {
-    client.release();
+    if (locked) {
+      try {
+        const result = await client.query(MIGRATION_UNLOCK_SQL, MIGRATION_LOCK_KEYS);
+        if (result.rows[0]?.unlocked !== true) throw new Error("[migrate] advisory lock nao foi liberado");
+      } catch (error) {
+        destroyClient = true;
+        if (!failure) failure = error;
+      }
+    }
+    client.release(destroyClient);
   }
-  return files.filter((name) => !applied.has(name));
+  if (failure) throw failure;
+  return appliedFiles;
 }
