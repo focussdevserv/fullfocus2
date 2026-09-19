@@ -37,6 +37,35 @@ test("listagem de contatos aplica busca, filtros, paginação e workspace", asyn
   assert.deepEqual(call.params, [org, "%ana%", "5", 10, 2]);
 });
 
+test("cadastro cliente-first aceita apenas o básico e cria vínculos opcionais", async () => {
+  const state = { clients: [], nextCompany: 20, nextContact: 30, nextClient: 40 };
+  const pool = { query: async (sql, params) => {
+    if (sql.startsWith("select id from companies where organization_id=$1 and lower(trim(name))")) return { rowCount: 0, rows: [] };
+    if (sql.startsWith("insert into companies")) return { rowCount: 1, rows: [{ id: state.nextCompany++ }] };
+    if (sql.startsWith("select id from contacts where organization_id=$1")) return { rowCount: 0, rows: [] };
+    if (sql.startsWith("insert into contacts")) return { rowCount: 1, rows: [{ id: state.nextContact++ }] };
+    if (sql.startsWith("select id from clients where organization_id=$1")) {
+      const client = state.clients.find((item) => (params[1] && item.email === params[1]) || (params[2] && item.phone === params[2]));
+      return { rowCount: client ? 1 : 0, rows: client ? [client] : [] };
+    }
+    if (sql.startsWith("insert into clients")) {
+      const client = { id: state.nextClient++, name: params[3], document: params[4], email: params[5], phone: params[6], status: params[7] };
+      state.clients.push(client);
+      return { rowCount: 1, rows: [client] };
+    }
+    return { rowCount: 0, rows: [] };
+  } };
+  const app = express(); app.use(express.json()); register(app, { pool, tenant: () => org, asText: (v) => typeof v === "string" ? v.trim() : "", classifyDbError: () => ({ status: 503, error: "erro" }) });
+  const first = await request({ app }, "/api/clients/quick", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Ana", email: "ana@example.com", company_name: "Empresa Ana" }) });
+  assert.equal(first.status, 201);
+  assert.equal((await first.json()).created, true);
+  assert.equal(state.clients.length, 1);
+  const duplicate = await request({ app }, "/api/clients/quick", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Ana duplicada", email: "ana@example.com" }) });
+  assert.equal(duplicate.status, 200);
+  assert.equal((await duplicate.json()).created, false);
+  assert.equal(state.clients.length, 1);
+});
+
 test("listagem de clientes oculta dados financeiros e observacoes internas", async () => {
   const app = express(); app.use(express.json());
   const pool = { query: async () => ({ rowCount: 1, rows: [{ id: 9, name: "Cliente", pix_key: "segredo", invoice_data: { cpf: "123" }, internal_notes: "restrito" }] }) };

@@ -462,7 +462,7 @@ app.get("/api/:table", async (req, res, next) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 250), offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0); values.push(limit, offset);
   try { const q = await pool.query(`select * from ${table} where ${where.join(" and ")} order by created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ [table]: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch { res.status(503).json({ error: "Não foi possível carregar os registros." }); }
 });
-app.post("/api/clients/quick", async (req, res) => {
+app.post("/api/clients/quick-legacy-disabled", async (req, res) => {
   const org = tenant(req, res); if (!org) return;
   const text = (key) => asText(req.body?.[key]) || null;
   const name = asText(req.body?.name), document = normalizeIdentity("document", req.body?.document);
