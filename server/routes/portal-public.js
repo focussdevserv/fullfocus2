@@ -36,7 +36,7 @@ export function registerPortalPublicRoute(app, { pool }) {
   const portalLink = async (token) => (await pool.query("select client_id,organization_id from client_portal_links where token_hash=$1 and (expires_at is null or expires_at > now())", [tokenHash(token)])).rows[0];
   app.use("/api/portal/:token", (req, res, next) => {
     if (!(req.get("accept") || "").includes("text/html")) return next();
-    const send = res.send.bind(res), token = JSON.stringify(String(req.params.token));
+    const send = res.send.bind(res);
     res.send = (body) => {
       if (typeof body !== "string" || !body.includes("</main>")) return send(body);
       const safeToken = String(req.params.token).replace(/[^A-Za-z0-9_-]/g, "");
@@ -45,6 +45,7 @@ export function registerPortalPublicRoute(app, { pool }) {
       const injected = `<section id="portal-approvals" class="card" hidden><h2>Aprovações pendentes</h2><div data-approval-list></div></section><script>(async()=>{const root=document.querySelector("#portal-approvals"),list=root?.querySelector("[data-approval-list]"),token=${token};if(!root||!list)return;const esc=(value)=>String(value??"").replace(/[&<>\"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));const form=(kind,item)=>{const wrapper=document.createElement("div");wrapper.className="portal-approval-item";wrapper.innerHTML=`<strong>${esc(kind==="proposal"?item.title:"Versão "+item.version)}</strong><p class="muted">${esc(kind==="proposal"?"Proposta comercial":item.project_name||"Entrega do projeto")}</p><form><label>Nome completo<input name="name" required minlength="2"></label><label>E-mail<input name="email" type="email" required></label><label>Comentário<textarea name="comment"></textarea></label><button type="submit">${kind==="proposal"?"Aprovar proposta":"Aprovar entrega"}</button><output role="status"></output></form>`;const f=wrapper.querySelector("form"),out=wrapper.querySelector("output");f.addEventListener("submit",async(e)=>{e.preventDefault();const b=f.querySelector("button");b.disabled=true;out.textContent="Registrando...";try{const r=await fetch(`/api/portal/${token}/${kind}s/${item.id}/approve`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(f)))});const d=await r.json();if(!r.ok)throw new Error(d.error||"Não foi possível aprovar.");wrapper.remove();if(!list.children.length)root.hidden=true;out.textContent="Aprovado."}catch(error){out.textContent=error.message;b.disabled=false}});return wrapper};try{const r=await fetch(`/api/portal/${token}`,{headers:{accept:"application/json"}}),data=await r.json();if(!r.ok)throw new Error(data.error||"Não foi possível carregar aprovações.");const proposals=(data.proposals||[]).filter((x)=>["sent","viewed","negotiation"].includes(x.status)),deliveries=(data.deliveries||[]).filter((x)=>!x.client_approved&&["ready","published"].includes(x.status));[...proposals.map((x)=>form("proposal",x)),...deliveries.map((x)=>form("delivery",x))].forEach((x)=>list.append(x));root.hidden=!list.children.length}catch(error){root.hidden=true}})();</script>`;
       return send(body.replace("</main>", `${injected}</main>`));
       */
+      return send(body.replace("</main>", `${injected}</main>`));
     };
     next();
   });
