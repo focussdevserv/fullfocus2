@@ -1,9 +1,9 @@
 /* Rotas específicas do domínio financeiro. */
 import { pixPayload, pixQrDataUrl } from "../pix.js";
-import { createCheckoutPreference, createPixPayment, getPayment, mercadoPagoConfigured, mercadoPagoWebhookConfigured, newIdempotencyKey, paymentState, validateMercadoPagoWebhook } from "../mercadopago.js";
+import { createCheckoutPreference, createPixOrder, getOrder, getPayment, mercadoPagoConfigured, mercadoPagoWebhookConfigured, newIdempotencyKey, paymentState, validateMercadoPagoWebhook } from "../mercadopago.js";
 
-async function processMercadoPagoPayment({ pool, dataId }) {
-  const payment = await getPayment(dataId);
+async function processMercadoPagoPayment({ pool, dataId, type = "payment" }) {
+  const payment = type === "order" ? await getOrder(dataId) : await getPayment(dataId);
   if (!payment.external_id) return;
   const db = pool.connect ? await pool.connect() : pool;
   try {
@@ -14,10 +14,11 @@ async function processMercadoPagoPayment({ pool, dataId }) {
     const state = paymentState(payment.status);
     await db.query("update charges set status=$1,provider_status=$2,provider_payload=$3::jsonb where id=$4", [state, payment.status, JSON.stringify(payment.raw || {}), charge.id]);
     if (state !== "paid") { await db.query("commit"); return; }
-    const duplicate = await db.query("select id from payments where organization_id=$1 and external_id=$2 limit 1", [charge.organization_id, payment.external_id]);
+    const paymentExternalId = payment.payment_id || payment.external_id;
+    const duplicate = await db.query("select id from payments where organization_id=$1 and external_id=$2 limit 1", [charge.organization_id, paymentExternalId]);
     if (!duplicate.rowCount) {
-      const amount = Number(payment.raw?.transaction_amount || charge.amount || 0);
-      const inserted = await db.query("insert into payments (organization_id,receivable_id,charge_id,amount,paid_at,method,external_id,provider_status) values ($1,$2,$3,$4,now(),'mercado_pago',$5,$6) returning *", [charge.organization_id, charge.receivable_id, charge.id, amount, payment.external_id, payment.status]);
+      const amount = Number(payment.amount || payment.raw?.transaction_amount || charge.amount || 0);
+      const inserted = await db.query("insert into payments (organization_id,receivable_id,charge_id,amount,paid_at,method,external_id,provider_status) values ($1,$2,$3,$4,now(),'mercado_pago',$5,$6) returning *", [charge.organization_id, charge.receivable_id, charge.id, amount, paymentExternalId, payment.status]);
       const receivable = await db.query("select * from receivables where id=$1 and organization_id=$2 for update", [charge.receivable_id, charge.organization_id]);
       if (receivable.rowCount) {
         const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [charge.receivable_id, charge.organization_id]);
@@ -104,9 +105,10 @@ export function register(app, ctx) {
   app.post("/api/webhooks/mercadopago", (req, res) => {
     if (!mercadoPagoWebhookConfigured()) return res.status(503).json({ error: "Webhook do Mercado Pago ainda não foi configurado." });
     const dataId = asText(req.query?.["data.id"] || req.body?.data?.id);
+    const type = asText(req.query?.type || req.body?.type || req.body?.topic) || "payment";
     if (!validateMercadoPagoWebhook({ signature: req.get("x-signature"), requestId: req.get("x-request-id"), dataId })) return res.status(401).json({ error: "Assinatura do webhook inválida." });
     res.status(200).json({ received: true });
-    void processMercadoPagoPayment({ pool, dataId }).catch(() => {});
+    void processMercadoPagoPayment({ pool, dataId, type }).catch(() => {});
   });
   app.post("/api/receivables/:id/create-charge", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
@@ -130,7 +132,7 @@ export function register(app, ctx) {
         let providerCharge;
         try {
           providerCharge = channel === "pix"
-            ? await createPixPayment({ amount, description: source.description, email, externalReference, idempotencyKey })
+            ? await createPixOrder({ amount, description: source.description, email, externalReference, idempotencyKey })
             : await createCheckoutPreference({ amount, title: source.description, email, externalReference, idempotencyKey });
         } catch {
           return res.status(502).json({ error: "O Mercado Pago não conseguiu criar a cobrança. Verifique as credenciais e tente novamente." });

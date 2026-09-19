@@ -56,6 +56,27 @@ export function normalizePayment(data) {
   };
 }
 
+function orderPayment(data) {
+  return data?.transactions?.payments?.[0] || data?.transaction?.payments?.[0] || {};
+}
+
+export function normalizeOrder(data) {
+  const payment = orderPayment(data);
+  const method = payment.payment_method || {};
+  const qr = method.qr_code_base64 ? `data:image/png;base64,${method.qr_code_base64}` : null;
+  return {
+    id: data?.id == null ? null : String(data.id),
+    status: String(payment.status || data?.status || "pending"),
+    external_id: data?.id == null ? null : String(data.id),
+    payment_id: payment.id == null ? null : String(payment.id),
+    payment_url: method.ticket_url || null,
+    pix_payload: method.qr_code || null,
+    pix_qr_data_url: qr,
+    amount: Number(payment.amount ?? data?.total_amount ?? 0),
+    raw: data
+  };
+}
+
 export async function createPixPayment({ amount, description, email, identification, externalReference, expirationDate, idempotencyKey, fetchImpl } = {}) {
   const body = {
     transaction_amount: Number(amount),
@@ -66,6 +87,20 @@ export async function createPixPayment({ amount, description, email, identificat
   };
   if (expirationDate) body.date_of_expiration = expirationDate;
   return normalizePayment(await requestMercadoPago("/v1/payments", { method: "POST", body, idempotencyKey, fetchImpl }));
+}
+
+export async function createPixOrder({ amount, description, email, externalReference, expirationTime = "P1D", idempotencyKey, fetchImpl } = {}) {
+  const total = Number(amount);
+  const body = {
+    type: "online",
+    total_amount: total.toFixed(2),
+    external_reference: String(externalReference || ""),
+    processing_mode: "automatic",
+    transactions: { payments: [{ amount: total.toFixed(2), payment_method: { id: "pix", type: "bank_transfer" }, ...(expirationTime ? { expiration_time: expirationTime } : {}) }] },
+    payer: { email: String(email || "") },
+    ...(description ? { description: String(description).slice(0, 150) } : {})
+  };
+  return normalizeOrder(await requestMercadoPago("/v1/orders", { method: "POST", body, idempotencyKey, fetchImpl }));
 }
 
 export async function createCheckoutPreference({ amount, title, email, externalReference, notificationUrl = `${appUrl()}/api/webhooks/mercadopago`, idempotencyKey, fetchImpl } = {}) {
@@ -81,6 +116,10 @@ export async function createCheckoutPreference({ amount, title, email, externalR
 
 export async function getPayment(paymentId, { fetchImpl } = {}) {
   return normalizePayment(await requestMercadoPago(`/v1/payments/${encodeURIComponent(paymentId)}`, { fetchImpl }));
+}
+
+export async function getOrder(orderId, { fetchImpl } = {}) {
+  return normalizeOrder(await requestMercadoPago(`/v1/orders/${encodeURIComponent(orderId)}`, { fetchImpl }));
 }
 
 function timingSafeHexEqual(left, right) {
@@ -99,10 +138,9 @@ export function validateMercadoPagoWebhook({ signature, requestId, dataId, secre
 
 export function paymentState(status) {
   const value = String(status || "").toLowerCase();
-  if (value === "approved") return "paid";
-  if (["pending", "in_process", "action_required", "authorized"].includes(value)) return "pending";
+  if (["approved", "processed", "accredited", "completed"].includes(value)) return "paid";
+  if (["pending", "in_process", "action_required", "authorized", "created"].includes(value)) return "pending";
   if (["refunded", "charged_back"].includes(value)) return "refunded";
   if (["rejected", "cancelled", "canceled", "expired"].includes(value)) return "cancelled";
   return "pending";
 }
-

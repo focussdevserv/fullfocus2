@@ -1,6 +1,6 @@
 # Mercado Pago na Focussdev
 
-A integração usa o token somente no servidor e mantém o fluxo manual como fallback quando a conta ainda não foi configurada.
+A integração usa o token somente no servidor e mantém o fluxo manual como fallback quando a conta ainda não foi configurada. Para Pix, usa a API de Orders recomendada pelo Mercado Pago; o Checkout Pro continua sendo usado para link, cartão e boleto.
 
 ## Variáveis de ambiente
 
@@ -15,9 +15,9 @@ Nunca coloque essas variáveis no frontend, no banco, em uma proposta ou no Git.
 
 ## O que fica disponível
 
-- `pix`: cria cobrança Pix no Mercado Pago e retorna QR Code, Pix copia e cola e status externo.
+- `pix`: cria uma Order Pix no Mercado Pago e retorna QR Code, Pix copia e cola, link de instruções e status externo.
 - `card`, `boleto` e `link`: criam um link seguro do Checkout Pro; o cliente escolhe o meio disponível no checkout.
-- webhook `POST /api/webhooks/mercadopago`: valida `x-signature`, consulta o pagamento e baixa a conta a receber uma única vez.
+- webhook `POST /api/webhooks/mercadopago`: valida `x-signature`, consulta a Order ou o pagamento recebido e baixa a conta a receber uma única vez.
 - `GET /api/integrations/mercadopago/status`: mostra somente o estado da configuração, sem revelar segredo.
 
 O fluxo de assinaturas continua gerando as contas a receber do sistema. Cada parcela pode gerar sua cobrança Mercado Pago. A cobrança recorrente automática por preapproval/subscription deve ser ativada em uma etapa própria, depois de definir regras de cancelamento, renovação e consentimento do cliente.
@@ -31,5 +31,6 @@ O fluxo de assinaturas continua gerando as contas a receber do sistema. Cada par
 5. Publique as variáveis no servidor e reinicie o serviço.
 6. Confirme em `GET /api/integrations/mercadopago/status` que `configured` e `webhook_configured` estão `true`.
 
-O sistema usa uma chave de idempotência por cobrança para evitar duplicidades quando a API ou a rede repetir uma requisição.
+Para o evento recomendado, selecione `Order (Mercado Pago)`. A URL deve terminar em `/api/webhooks/mercadopago` e o servidor precisa estar acessível publicamente em HTTPS.
 
+O sistema usa uma chave de idempotência por cobrança para evitar duplicidades quando a API ou a rede repetir uma requisição.
