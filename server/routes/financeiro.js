@@ -1,5 +1,5 @@
 /* Rotas específicas do domínio financeiro. */
-import { createCheckoutPreference, createPixOrder, getOrder, getPayment, mercadoPagoConfigured, mercadoPagoWebhookConfigured, newIdempotencyKey, paymentState, validateMercadoPagoWebhook } from "../mercadopago.js";
+import { cancelOrder, createCheckoutPreference, createPixOrder, createSubscription, getOrder, getPayment, getSubscription, mercadoPagoConfigured, mercadoPagoWebhookConfigured, newIdempotencyKey, paymentState, refundOrder, updateSubscription, validateMercadoPagoWebhook } from "../mercadopago.js";
 
 async function processMercadoPagoPayment({ pool, dataId, type = "payment" }) {
   const payment = type === "order" ? await getOrder(dataId) : await getPayment(dataId);
@@ -29,6 +29,13 @@ async function processMercadoPagoPayment({ pool, dataId, type = "payment" }) {
     }
     await db.query("commit");
   } catch (error) { await db.query("rollback").catch(() => {}); throw error; } finally { db.release?.(); }
+}
+
+async function processMercadoPagoSubscription({ pool, dataId }) {
+  const provider = await getSubscription(dataId);
+  const status = String(provider?.status || "pending").toLowerCase();
+  const internal = status === "authorized" ? "active" : status === "paused" ? "paused" : ["cancelled", "canceled"].includes(status) ? "cancelled" : "active";
+  await pool.query("update subscriptions set status=$1,provider_status=$2,provider_payload=$3::jsonb,updated_at=now() where provider='mercado_pago' and provider_id=$4", [internal, status, JSON.stringify(provider || {}), String(dataId)]);
 }
 
 export function register(app, ctx) {
@@ -108,7 +115,9 @@ export function register(app, ctx) {
     const type = asText(req.query?.type || req.body?.type || req.body?.topic) || "payment";
     if (!validateMercadoPagoWebhook({ signature: req.get("x-signature"), requestId: req.get("x-request-id"), dataId })) return res.status(401).json({ error: "Assinatura do webhook inválida." });
     res.status(200).json({ received: true });
-    void processMercadoPagoPayment({ pool, dataId, type }).catch(() => {});
+    void (type === "subscription_preapproval" || type === "preapproval"
+      ? processMercadoPagoSubscription({ pool, dataId })
+      : processMercadoPagoPayment({ pool, dataId, type })).catch(() => {});
   });
   app.post("/api/receivables/:id/create-charge", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
@@ -144,6 +153,33 @@ export function register(app, ctx) {
         return res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: true, provider: "mercado_pago", payment_url: providerCharge.payment_url, pix: providerCharge.pix_payload ? { payload: providerCharge.pix_payload, qr_data_url: providerCharge.pix_qr_data_url, document_kind: documentKind } : null, notice: channel === "pix" ? "Cobrança Pix criada no Mercado Pago. Use o QR Code ou Pix copia e cola." : "Link de pagamento criado no Mercado Pago." });
       }
     } catch (e) { error(res, e, "Não foi possível gerar a cobrança."); }
+  });
+  app.post("/api/charges/:id/cancel", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    if (!mercadoPagoConfigured()) return res.status(503).json({ error: "Mercado Pago não está configurado." });
+    try {
+      const q = await pool.query("select * from charges where id=$1 and organization_id=$2 and provider='mercado_pago'", [req.params.id, org]);
+      if (!q.rowCount) return res.status(404).json({ error: "Cobrança Mercado Pago não encontrada." });
+      const charge = q.rows[0];
+      const result = await cancelOrder(charge.external_id);
+      const updated = await pool.query("update charges set status='cancelled',provider_status=$1,provider_payload=$2::jsonb where id=$3 and organization_id=$4 returning *", [result?.status || "cancelled", JSON.stringify(result || {}), charge.id, org]);
+      return res.json({ charge: updated.rows[0], provider: result });
+    } catch (e) { return error(res, e, "Não foi possível cancelar a cobrança no Mercado Pago."); }
+  });
+  app.post("/api/charges/:id/refund", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    if (!mercadoPagoConfigured()) return res.status(503).json({ error: "Mercado Pago não está configurado." });
+    try {
+      const q = await pool.query("select * from charges where id=$1 and organization_id=$2 and provider='mercado_pago'", [req.params.id, org]);
+      if (!q.rowCount) return res.status(404).json({ error: "Cobrança Mercado Pago não encontrada." });
+      const charge = q.rows[0], payload = charge.provider_payload || {};
+      const paymentId = payload?.transactions?.payments?.[0]?.id || payload?.transaction?.payments?.[0]?.id;
+      const amount = req.body?.amount == null ? undefined : Number(req.body.amount);
+      if (amount !== undefined && (!Number.isFinite(amount) || amount <= 0 || amount > Number(charge.amount) + 0.005)) return res.status(400).json({ error: "Valor de reembolso inválido." });
+      const result = await refundOrder(charge.external_id, { amount, paymentId });
+      const updated = await pool.query("update charges set status='refunded',provider_status=$1,provider_payload=$2::jsonb where id=$3 and organization_id=$4 returning *", [result?.status || "refunded", JSON.stringify(result || {}), charge.id, org]);
+      return res.json({ charge: updated.rows[0], provider: result });
+    } catch (e) { return error(res, e, "Não foi possível reembolsar a cobrança no Mercado Pago."); }
   });
   app.post("/api/contracts/:id/create-receivables", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
@@ -182,7 +218,8 @@ export function register(app, ctx) {
   });
 
   app.get("/api/subscriptions", async (req, res) => { const org = tenant(req, res); if (!org) return; try { const q = await pool.query("select s.*,c.name client_name from subscriptions s left join clients c on c.id=s.client_id and c.organization_id=s.organization_id where s.organization_id=$1 order by s.created_at desc", [org]); res.json({ subscriptions: q.rows }); } catch (e) { error(res,e,"Não foi possível carregar as assinaturas."); } });
-  app.post("/api/subscriptions", async (req, res) => { const org = tenant(req, res); if (!org) return; const plan=asText(req.body?.plan), amount=Number(req.body?.amount), interval=["monthly","yearly"].includes(req.body?.interval)?req.body.interval:"monthly", clientId=req.body?.client_id || null; if (!plan || !Number.isFinite(amount) || amount < 0) return res.status(400).json({error:"Informe plano e valor válidos."}); try { await validateRelations({client_id:clientId},org); const q=await pool.query("insert into subscriptions (organization_id,client_id,plan,amount,interval,next_billing_on) values ($1,$2,$3,$4,$5,$6) returning *",[org,clientId,plan,amount,interval,req.body?.next_billing_on || null]); res.status(201).json({subscription:q.rows[0]}); } catch(e) { if(e.code==="invalid_relation") return res.status(400).json({error:e.message}); error(res,e,"Não foi possível criar a assinatura."); } });
-  app.patch("/api/subscriptions/:id", async (req,res) => { const org=tenant(req,res); if(!org)return; const status=["active","paused","cancelled"].includes(req.body?.status)?req.body.status:null; if(!status)return res.status(400).json({error:"Status inválido."}); try { const q=await pool.query("update subscriptions set status=$1,updated_at=now() where id=$2 and organization_id=$3 returning *",[status,req.params.id,org]); if(!q.rowCount)return res.status(404).json({error:"Assinatura não encontrada."}); res.json({subscription:q.rows[0]}); }catch(e){error(res,e,"Não foi possível atualizar a assinatura.");} });
+  app.post("/api/subscriptions", async (req, res) => { const org = tenant(req, res); if (!org) return; const plan=asText(req.body?.plan), amount=Number(req.body?.amount), interval=["monthly","yearly"].includes(req.body?.interval)?req.body.interval:"monthly", clientId=req.body?.client_id || null; if (!plan || !Number.isFinite(amount) || amount < 0) return res.status(400).json({error:"Informe plano e valor válidos."}); try { await validateRelations({client_id:clientId},org); const q=await pool.query("insert into subscriptions (organization_id,client_id,plan,amount,interval,next_billing_on,provider) values ($1,$2,$3,$4,$5,$6,'mercado_pago') returning *",[org,clientId,plan,amount,interval,req.body?.next_billing_on || null]); res.status(201).json({subscription:q.rows[0]}); } catch(e) { if(e.code==="invalid_relation") return res.status(400).json({error:e.message}); error(res,e,"Não foi possível criar a assinatura."); } });
+  app.post("/api/subscriptions/:id/create-provider", async (req, res) => { const org=tenant(req,res); if(!org)return; if(!mercadoPagoConfigured()) return res.status(503).json({error:"Mercado Pago não está configurado."}); try { const q=await pool.query("select s.*,c.email client_email from subscriptions s left join clients c on c.id=s.client_id and c.organization_id=s.organization_id where s.id=$1 and s.organization_id=$2",[req.params.id,org]); if(!q.rowCount)return res.status(404).json({error:"Assinatura não encontrada."}); const source=q.rows[0]; const email=asText(source.client_email || req.body?.email); if(!email)return res.status(400).json({error:"Cadastre o e-mail do cliente antes de criar a autorização recorrente."}); const provider=await createSubscription({reason:source.plan,email,amount:source.amount,interval:source.interval,externalReference:`focussdev:${org}:subscription:${source.id}`}); const updated=await pool.query("update subscriptions set provider='mercado_pago',provider_id=$1,provider_status=$2,provider_url=$3,provider_payload=$4::jsonb,updated_at=now() where id=$5 and organization_id=$6 returning *",[provider?.id || null,provider?.status || "pending",provider?.init_point || provider?.sandbox_init_point || null,JSON.stringify(provider||{}),source.id,org]); res.status(201).json({subscription:updated.rows[0],authorization_url:provider?.init_point || provider?.sandbox_init_point || null}); } catch(e){error(res,e,"Não foi possível criar a autorização recorrente no Mercado Pago.");} });
+  app.patch("/api/subscriptions/:id", async (req,res) => { const org=tenant(req,res); if(!org)return; const status=["active","paused","cancelled"].includes(req.body?.status)?req.body.status:null; if(!status)return res.status(400).json({error:"Status inválido."}); try { const current=await pool.query("select * from subscriptions where id=$1 and organization_id=$2",[req.params.id,org]); if(!current.rowCount)return res.status(404).json({error:"Assinatura não encontrada."}); const source=current.rows[0]; if(source.provider_id && mercadoPagoConfigured()) { const providerStatus = status === "cancelled" ? "cancelled" : status === "active" ? "authorized" : "paused"; await updateSubscription(source.provider_id,{status:providerStatus}); } const q=await pool.query("update subscriptions set status=$1,provider_status=$2,updated_at=now() where id=$3 and organization_id=$4 returning *",[status,status,req.params.id,org]); res.json({subscription:q.rows[0]}); }catch(e){error(res,e,"Não foi possível atualizar a assinatura.");} });
   app.delete("/api/subscriptions/:id", async (req,res) => { const org=tenant(req,res);if(!org)return;try{const q=await pool.query("delete from subscriptions where id=$1 and organization_id=$2 returning id",[req.params.id,org]);if(!q.rowCount)return res.status(404).json({error:"Assinatura não encontrada."});res.status(204).end();}catch(e){error(res,e,"Não foi possível excluir a assinatura.");} });
 }

@@ -122,6 +122,42 @@ export async function getOrder(orderId, { fetchImpl } = {}) {
   return normalizeOrder(await requestMercadoPago(`/v1/orders/${encodeURIComponent(orderId)}`, { fetchImpl }));
 }
 
+export async function createSubscription({ reason, email, amount, interval = "months", externalReference, backUrl = `${appUrl()}/configuracoes`, startDate, endDate, fetchImpl } = {}) {
+  const body = {
+    reason: String(reason || "Assinatura Focussdev").slice(0, 255),
+    payer_email: String(email || ""),
+    external_reference: String(externalReference || ""),
+    auto_recurring: {
+      frequency: 1,
+      frequency_type: interval === "yearly" ? "months" : "months",
+      transaction_amount: Number(amount),
+      currency_id: "BRL",
+      ...(interval === "yearly" ? { frequency: 12 } : {}),
+      ...(startDate ? { start_date: startDate } : {}),
+      ...(endDate ? { end_date: endDate } : {})
+    },
+    back_url: backUrl
+  };
+  return requestMercadoPago("/preapproval", { method: "POST", body, fetchImpl });
+}
+
+export async function updateSubscription(subscriptionId, changes, { fetchImpl } = {}) {
+  return requestMercadoPago(`/preapproval/${encodeURIComponent(subscriptionId)}`, { method: "PUT", body: changes, fetchImpl });
+}
+
+export async function getSubscription(subscriptionId, { fetchImpl } = {}) {
+  return requestMercadoPago(`/preapproval/${encodeURIComponent(subscriptionId)}`, { fetchImpl });
+}
+
+export async function cancelOrder(orderId, { idempotencyKey = newIdempotencyKey(), fetchImpl } = {}) {
+  return requestMercadoPago(`/v1/orders/${encodeURIComponent(orderId)}/cancel`, { method: "POST", body: {}, idempotencyKey, fetchImpl });
+}
+
+export async function refundOrder(orderId, { amount, paymentId, idempotencyKey = newIdempotencyKey(), fetchImpl } = {}) {
+  const body = amount == null ? {} : { amount: Number(amount), ...(paymentId ? { payment_id: String(paymentId) } : {}) };
+  return requestMercadoPago(`/v1/orders/${encodeURIComponent(orderId)}/refund`, { method: "POST", body, idempotencyKey, fetchImpl });
+}
+
 function timingSafeHexEqual(left, right) {
   const a = Buffer.from(String(left || ""), "hex");
   const b = Buffer.from(String(right || ""), "hex");

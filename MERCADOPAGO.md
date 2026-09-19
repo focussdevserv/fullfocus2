@@ -20,7 +20,16 @@ Nunca coloque essas variáveis no frontend, no banco, em uma proposta ou no Git.
 - webhook `POST /api/webhooks/mercadopago`: valida `x-signature`, consulta a Order ou o pagamento recebido e baixa a conta a receber uma única vez.
 - `GET /api/integrations/mercadopago/status`: mostra somente o estado da configuração, sem revelar segredo.
 
-O fluxo de assinaturas continua gerando as contas a receber do sistema. Cada parcela pode gerar sua cobrança Mercado Pago. A cobrança recorrente automática por preapproval/subscription deve ser ativada em uma etapa própria, depois de definir regras de cancelamento, renovação e consentimento do cliente.
+O fluxo de assinaturas continua gerando as contas a receber do sistema. Cada parcela pode gerar sua cobrança Mercado Pago. Para cobrança recorrente automática, o cliente precisa autorizar a assinatura pelo link do Mercado Pago.
+
+## Recorrências, cancelamento e reembolso
+
+- `POST /api/subscriptions/:id/create-provider`: cria a autorização recorrente no Mercado Pago e retorna o link para o cliente consentir.
+- `PATCH /api/subscriptions/:id`: sincroniza ativo, pausado ou cancelado com a assinatura do Mercado Pago quando houver `provider_id`.
+- `POST /api/charges/:id/cancel`: cancela uma Order pendente.
+- `POST /api/charges/:id/refund`: faz reembolso total ou parcial de uma Order paga.
+
+O cliente precisa autorizar a recorrência pelo link do Mercado Pago; o app não armazena dados de cartão. A API oficial de assinaturas usa `POST /preapproval`, e o Mercado Pago permite pausar ou cancelar uma assinatura existente.
 
 ## Configuração no painel do Mercado Pago
 

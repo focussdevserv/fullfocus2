@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { createPixOrder, createPixPayment, normalizeOrder, normalizePayment, paymentState, validateMercadoPagoWebhook } from "./mercadopago.js";
+import { cancelOrder, createPixOrder, createPixPayment, createSubscription, normalizeOrder, normalizePayment, paymentState, refundOrder, validateMercadoPagoWebhook } from "./mercadopago.js";
 
 test("Pix usa endpoint correto e envia idempotência", async () => {
   const calls = [];
@@ -54,4 +54,23 @@ test("Orders API cria Pix e retorna QR/copia e cola", async () => {
   assert.equal(result.payment_id, "PAY-1");
   assert.equal(result.pix_payload, "000201");
   assert.equal(normalizeOrder({ id: "ORD-2", total_amount: "10.00", status: "processed" }).external_id, "ORD-2");
+});
+
+test("assinatura e operações de ciclo de vida usam endpoints do Mercado Pago", async () => {
+  const previousToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  process.env.MERCADOPAGO_ACCESS_TOKEN = "test-token";
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ id: "pre-1", status: "pending", init_point: "https://mp.test/subscribe" }), { status: 200 });
+  };
+  const subscription = await createSubscription({ reason: "Manutenção", email: "cliente@example.com", amount: 297, interval: "monthly", externalReference: "sub-1", fetchImpl });
+  await cancelOrder("ORD-1", { fetchImpl });
+  await refundOrder("ORD-1", { amount: 10, paymentId: "PAY-1", fetchImpl });
+  if (previousToken === undefined) delete process.env.MERCADOPAGO_ACCESS_TOKEN; else process.env.MERCADOPAGO_ACCESS_TOKEN = previousToken;
+  assert.equal(subscription.init_point, "https://mp.test/subscribe");
+  assert.equal(calls[0].url, "https://api.mercadopago.com/preapproval");
+  assert.equal(calls[1].url, "https://api.mercadopago.com/v1/orders/ORD-1/cancel");
+  assert.equal(calls[2].url, "https://api.mercadopago.com/v1/orders/ORD-1/refund");
+  assert.deepEqual(JSON.parse(calls[2].options.body), { amount: 10, payment_id: "PAY-1" });
 });
