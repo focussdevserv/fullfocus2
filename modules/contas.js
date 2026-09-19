@@ -291,6 +291,7 @@ openClientDetails = async function openCompleteClientSheet(record) {
     }));
   } catch (error) { if (overview.isConnected) overview.insertAdjacentHTML("beforeend", contaState("error", error.message)); }
 };
+window.FocusOpenClientDetails = (record) => openClientDetails(record);
 
 async function renderPortal() { return renderList("portal", "Portal do cliente", "Gere links seguros para clientes acompanharem contratos e contas em aberto.", "/api/clients", "clients", "client"); }
 const portalAccessObserver = new MutationObserver(() => {

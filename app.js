@@ -646,7 +646,29 @@ document.querySelectorAll(".create-menu a").forEach((link) => link.addEventListe
   finally { link.removeAttribute("aria-busy"); }
 }));
 dialogForm.addEventListener("submit", async (event) => { event.preventDefault(); if (dialogForm.dataset.busy === "1") return; const config = createConfig[dialogForm.dataset.kind]; if (!config) return; const request = dialogRequest, routeAtStart = window.location.hash; const payload = Object.fromEntries(new FormData(dialogForm)); dialogForm.querySelectorAll('input[type="checkbox"]').forEach((input) => { payload[input.name] = input.checked; }); if (payload.amount) payload.amount = payload.amount.replace(",", "."); dialogForm.querySelectorAll('input[type="datetime-local"]').forEach((input) => { if (input.value) payload[input.name] = new Date(input.value).toISOString(); }); Object.keys(payload).forEach((key) => { if (payload[key] === "") delete payload[key]; }); const submit = dialogForm.querySelector("[type=submit]"); dialogForm.dataset.busy = "1"; submit.disabled = true; submit.setAttribute("aria-busy", "true"); dialogStatus.setAttribute("role", "status"); dialogStatus.setAttribute("aria-live", "polite"); dialogStatus.textContent = "Salvando…"; try { const method = dialogForm.dataset.method || "POST", endpoint = dialogForm.dataset.endpoint || config.endpoint; const response = await fetch(endpoint, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível salvar."); if (request !== dialogRequest || createDialog.hidden || routeAtStart !== window.location.hash) return; closeCreateDialog(); /* Re-renderiza a tela atual (qualquer módulo) e atualiza o painel inicial. */ renderHashRoute(window.location.hash); if ((!window.location.hash || window.location.hash === "#inicio") && !routeRenderers.inicio) await syncDashboard(); } catch (error) { if (request === dialogRequest && !createDialog.hidden) { dialogStatus.setAttribute("role", "alert"); dialogStatus.textContent = error.message || "Não foi possível salvar. Tente novamente."; } } finally { if (request === dialogRequest) { delete dialogForm.dataset.busy; submit.disabled = false; submit.removeAttribute("aria-busy"); } } });
-new MutationObserver(() => {
+ // Depois do cadastro rápido, leva o usuário direto para a ficha 360 do cliente.
+ // A busca posterior evita duplicar a lógica de persistência do formulário global.
+ dialogForm.addEventListener("submit", (event) => {
+   if (dialogForm.dataset.kind !== "cliente" || dialogForm.dataset.method || window.location.hash !== "#clientes") return;
+   const values = Object.fromEntries(new FormData(dialogForm));
+   const routeAtStart = window.location.hash;
+   setTimeout(async () => {
+     if (!createDialog.hidden || window.location.hash !== routeAtStart) return;
+     try {
+       const data = await api("/api/clients?limit=250");
+       const normalize = (value) => String(value || "").trim().toLowerCase();
+       const digits = (value) => String(value || "").replace(/\D/g, "");
+       const match = (data.clients || []).find((item) =>
+         (values.email && normalize(item.email) === normalize(values.email)) ||
+         (values.phone && digits(item.phone) === digits(values.phone)) ||
+         (values.document && digits(item.document) === digits(values.document)) ||
+         (!values.email && !values.phone && !values.document && normalize(item.name) === normalize(values.name))
+       );
+       if (match) window.FocusOpenClientDetails?.(match);
+     } catch { /* a listagem posterior não deve bloquear o cadastro já concluído */ }
+   }, 500);
+ });
+ new MutationObserver(() => {
   dialogFields.querySelectorAll("input, select, textarea").forEach((control) => {
     if (!control.getAttribute("autocomplete") && control.type !== "password") control.setAttribute("autocomplete", "off");
     if (control.type === "file" && !control.accept) control.accept = "image/*,application/pdf,text/plain";
