@@ -232,7 +232,7 @@ function renderMetrics({ revenues, expenses, receivables, leads, tasks, projects
   } else unavailable("tasks");
 
   if (projects) {
-    const active = projects.filter((p) => String(p.status || "active") === "active");
+    const active = projects.filter((p) => !["done", "published", "cancelled", "paused"].includes(String(p.status || "active").toLowerCase()));
     const stalled = active.filter((p) => Number(p.progress || 0) === 0).length;
     setMetric("projects", String(active.length), stalled ? `${plural(stalled, "sem progresso", "sem progresso")}` : active.length ? "Todos em andamento" : "Nenhum projeto ativo");
   } else unavailable("projects");
