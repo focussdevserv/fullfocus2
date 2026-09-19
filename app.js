@@ -50,6 +50,11 @@ const initialDashboardMarkup = dashboardGrid?.innerHTML || "";
 function enhanceNavGroups() {
   const groups = [...document.querySelectorAll(".main-nav .nav-group")];
   groups.forEach((group, index) => {
+    try {
+      if (index > 0 && !localStorage.getItem(`focusdev_nav_${index}`)) group.classList.add("is-collapsed");
+    } catch { /* preferÃªncia local indisponÃ­vel */ }
+  });
+  groups.forEach((group, index) => {
     if (index === 0 || group.querySelector(".nav-group-toggle")) return;
     const title = group.querySelector("p");
     if (!title) return;
@@ -59,6 +64,7 @@ function enhanceNavGroups() {
     toggle.setAttribute("aria-expanded", "true");
     toggle.innerHTML = `<span>${title.textContent}</span><span aria-hidden="true">⌃</span>`;
     title.replaceWith(toggle);
+    if (group.classList.contains("is-collapsed")) toggle.setAttribute("aria-expanded", "false");
     toggle.addEventListener("click", () => {
       const collapsed = group.classList.toggle("is-collapsed");
       toggle.setAttribute("aria-expanded", String(!collapsed));
