@@ -604,6 +604,56 @@ svg {
   padding: 0 12px 24px;
 }
 
+.sidebar-shortcuts {
+  margin: 0 0 22px;
+  padding: 0 4px 18px;
+  border-bottom: 1px solid rgb(112 145 196 / 18%);
+}
+.sidebar-shortcuts > p {
+  margin: 0 12px 8px;
+  color: #7f9bca;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.sidebar-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.sidebar-shortcut-grid a {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #c4d5f3;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.sidebar-shortcut-grid a:hover,
+.sidebar-shortcut-grid a:focus-visible {
+  border-color: rgb(114 167 255 / 34%);
+  outline: 0;
+  background: rgb(52 91 157 / 24%);
+  color: #fff;
+}
+.sidebar-shortcut-grid span {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 5px;
+  background: rgb(76 130 226 / 25%);
+  color: #8eb7ff;
+  font-size: 11px;
+}
+
 .main-nav {
   display: grid;
   gap: 18px;

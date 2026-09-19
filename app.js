@@ -723,6 +723,14 @@ function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   if (focusRouteHeading) appTitle?.focus({ preventScroll: true });
 }
 document.addEventListener("click", (event) => {
+  const shortcut = event.target.closest?.("[data-sidebar-shortcut]");
+  if (shortcut) {
+    event.preventDefault();
+    const href = shortcut.getAttribute("href") || "#inicio";
+    if (window.location.hash !== href) history.pushState(null, "", href);
+    renderHashRoute(href);
+    return;
+  }
   const item = event.target.closest?.(".nav-item");
   if (!item) return;
   event.preventDefault();
