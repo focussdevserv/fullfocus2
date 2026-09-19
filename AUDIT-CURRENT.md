@@ -49,6 +49,7 @@ Os testes automatizados comprovam sintaxe, contratos e regras cobertas pelos tes
 4. A base de dados já possui relações para clientes, leads, oportunidades, projetos, tarefas, contratos, financeiro, agenda, arquivos, portal e integrações; o risco principal atual é fluxo incompleto, não ausência total de tabelas.
 5. O dashboard ainda preserva markup inicial para evitar tela vazia durante carregamento. Isso é fallback de UX, não evidência de dados fictícios, mas deve ser conferido no smoke test.
 6. Os relatórios históricos `AUDIT-FULLFOCUSS.md` e `AUDIT-AUTO-REPORT.md` não devem ser usados como retrato atual sem revalidação; contêm afirmações anteriores à evolução recente do código.
+7. A central de configurações agora carrega somente `configuracoes-hub.js`; implementações antigas permanecem no repositório como histórico, mas não são mais carregadas juntas nem disputam handlers da tela.
 
 ## Botões e fluxos que exigem validação manual prioritária
 
