@@ -8,6 +8,7 @@ function renderAgent() {
   const config = agentState.config || {};
   const enabled = Boolean(config.enabled);
   const aiReady = Boolean(config.ai_configured);
+  const canChat = enabled && aiReady;
   const messages = agentState.messages;
   dashboardGrid.innerHTML = `<section class="agent-hero">
     <div class="agent-hero-copy"><div class="agent-eyebrow"><span class="agent-pulse ${enabled ? "is-on" : ""}"></span> Atendimento inteligente</div><h2>${esc(config.name || "Agente Focussdev")}</h2><p>Um espaço seguro para testar o atendimento comercial e os comandos autorizados do seu agente.</p><div class="agent-hero-actions"><span class="agent-status-pill ${enabled ? "is-on" : ""}">${enabled ? "Agente ativo" : "Agente desativado"}</span><span class="agent-status-pill ${aiReady ? "is-on" : ""}">${aiReady ? "IA conectada" : "IA aguardando configuração"}</span></div></div>
@@ -22,7 +23,7 @@ function renderAgent() {
   <section class="agent-workspace">
     <article class="data-card agent-config-card">
       <div class="agent-panel-heading"><div><p class="card-kicker">Configuração</p><h3>Como o agente deve operar</h3><p class="agent-help">Defina a identidade e o nível de autonomia. Ações externas continuam condicionadas às permissões do sistema.</p></div><span class="agent-panel-icon" aria-hidden="true">⚙</span></div>
-      <div class="agent-connection ${aiReady ? "is-ready" : ""}"><span class="agent-connection-dot"></span><div><strong>${aiReady ? "Serviço de IA conectado" : "Chave de IA não configurada"}</strong><small>${aiReady ? "O servidor está pronto para processar mensagens." : "Configure a chave no ambiente do servidor para habilitar respostas."}</small></div></div>
+      <div class="agent-connection ${canChat ? "is-ready" : ""}"><span class="agent-connection-dot"></span><div><strong>${canChat ? "Agente pronto para teste" : aiReady ? "Ative o agente para testar" : "Chave de IA não configurada"}</strong><small>${canChat ? "As respostas usarão o catálogo e o contexto autorizado do workspace." : aiReady ? "Salve a configuração com o agente ativo para liberar a conversa." : "Configure OPENAI_API_KEY no ambiente do servidor para habilitar respostas."}</small></div></div>
       <form class="agent-form" data-agent-config>
         <label>Nome do agente<input name="name" value="${esc(config.name || "Agente Focussdev")}" required></label>
         <label>Modelo<input name="model" value="${esc(config.model || "gpt-5")}" required></label>
@@ -33,9 +34,9 @@ function renderAgent() {
     </article>
     <article class="data-card agent-chat-card">
       <div class="agent-panel-heading"><div><p class="card-kicker">Teste controlado</p><h3>Converse com o agente</h3><p class="agent-help">Use uma pergunta comercial ou simule um comando administrativo autorizado.</p></div><button class="compact-action" data-agent-clear type="button">Nova conversa</button></div>
-      <div class="agent-suggestions"><span>Experimente:</span><button type="button" data-agent-prompt="Quero um site para minha clínica. O que você recomenda?">Recomendar serviço</button><button type="button" data-agent-prompt="Quais informações você precisa para preparar uma proposta?">Preparar proposta</button></div>
-      <div class="agent-messages" data-agent-messages>${messages.map((item) => `<div class="agent-message ${item.role === "assistant" ? "is-agent" : "is-user"}"><span class="agent-message-label">${item.role === "assistant" ? "Agente" : "Você"}</span>${esc(item.text)}</div>`).join("") || `<div class="agent-empty"><span class="agent-empty-icon" aria-hidden="true">✦</span><strong>A conversa começa aqui</strong><p>Envie uma mensagem para testar o agente com segurança.</p></div>`}</div>
-      <form class="agent-compose" data-agent-compose><textarea name="message" rows="3" placeholder="Ex.: Quero um site para minha clínica. O que você recomenda?" aria-label="Mensagem para o agente" required></textarea><div class="agent-compose-footer"><span class="agent-compose-note">As ações só são executadas com ferramenta e autorização.</span><button class="button button-primary" type="submit">Enviar mensagem</button></div><output data-agent-status role="status"></output></form>
+      <div class="agent-suggestions"><span>Experimente:</span><button type="button" data-agent-prompt="Quero um site para minha clínica. O que você recomenda?" ${canChat ? "" : "disabled"}>Recomendar serviço</button><button type="button" data-agent-prompt="Quais informações você precisa para preparar uma proposta?" ${canChat ? "" : "disabled"}>Preparar proposta</button></div>
+      <div class="agent-messages" data-agent-messages>${messages.map((item) => `<div class="agent-message ${item.role === "assistant" ? "is-agent" : "is-user"}"><span class="agent-message-label">${item.role === "assistant" ? "Agente" : "Você"}</span>${esc(item.text)}</div>`).join("") || `<div class="agent-empty"><span class="agent-empty-icon" aria-hidden="true">✦</span><strong>${canChat ? "A conversa começa aqui" : "Conversa bloqueada até concluir a configuração"}</strong><p>${canChat ? "Envie uma mensagem para testar o agente com segurança." : "Ative o agente e configure a integração de IA para liberar o teste."}</p></div>`}</div>
+      <form class="agent-compose" data-agent-compose><textarea name="message" rows="3" placeholder="Ex.: Quero um site para minha clínica. O que você recomenda?" aria-label="Mensagem para o agente" ${canChat ? "required" : "disabled"}></textarea><div class="agent-compose-footer"><span class="agent-compose-note">As ações só são executadas com ferramenta e autorização.</span><button class="button button-primary" type="submit" ${canChat ? "" : "disabled"}>${canChat ? "Enviar mensagem" : "Configuração necessária"}</button></div><output data-agent-status role="status"></output></form>
     </article>
   </section>`;
   dashboardGrid.querySelector("[name=autonomy_level]").value = String(config.autonomy_level ?? 1);
