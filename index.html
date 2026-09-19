@@ -29,7 +29,7 @@
       /* Fallback para deploys/proxies que ainda não disponibilizaram o arquivo externo. */
       window.addEventListener("DOMContentLoaded", () => {
         if (window.FocusModuleLoader) return;
-        const groups = { inicio:["inicio.js"], tarefas:["tarefas.js"], agenda:["agenda.js","agenda-enhanced.js"], "caixa-de-entrada":["inbox.js"], conversas:["inbox.js"], crm:["crm.js"], leads:["crm.js"], campanhas:["crm.js"], funil:["crm.js"], oportunidades:["crm.js"], propostas:["crm.js"], "follow-ups":["crm.js"], contatos:["contas.js"], empresas:["contas.js"], clientes:["contas.js"], "consulta-cnpj":["contas.js"], "portal-do-cliente":["contas.js"], contratos:["operacao.js"], projetos:["operacao.js"], "visao-financeira":["financeiro.js"], receitas:["financeiro.js"], despesas:["financeiro.js"], "contas-a-receber":["financeiro.js"], cobrancas:["cobrancas.js","mercadopago-finance-ui.js"], assinaturas:["assinaturas.js","mercadopago-finance-ui.js"], catalogo:["catalogo.js"], automacoes:["automacoes.js","automacoes-workspace.js"], templates:["templates.js"], "base-de-conhecimento":["base-conhecimento.js"], formularios:["formularios.js"], integracoes:["integracoes.js"], tickets:["tickets.js"], arquivos:["arquivos.js"], lixeira:["lixeira.js"], whatsapp:["whatsapp.js"], agente:["agente.js"], briefings:["briefings.js"], "contas-a-pagar":["contas-pagar.js"], "notas-fiscais":["notas-fiscais.js"], "contas-bancarias":["contas-bancarias.js"], relatorios:["relatorios-financeiros.js"], equipe:["team-access.js"], auditoria:["auditoria.js"], infraestrutura:["infraestrutura.js"], metas:["gestao.js"], comissoes:["gestao.js"], ausencias:["gestao.js"], horas:["gestao.js"], aprovacoes:["estrutura.js"], cofre:["estrutura.js"], alteracoes:["estrutura.js"], entregas:["estrutura.js"] };
+        const groups = { inicio:["inicio.js"], tarefas:["tarefas.js"], agenda:["agenda.js","agenda-enhanced.js"], "caixa-de-entrada":["inbox.js"], conversas:["inbox.js"], crm:["crm.js"], leads:["crm.js"], campanhas:["crm.js"], funil:["crm.js"], oportunidades:["crm.js"], propostas:["crm.js"], "follow-ups":["crm.js"], contatos:["contas.js"], empresas:["contas.js"], clientes:["contas.js"], "consulta-cnpj":["contas.js"], "portal-do-cliente":["contas.js"], contratos:["operacao.js"], projetos:["operacao.js"], "visao-financeira":["financeiro.js"], receitas:["financeiro.js"], despesas:["financeiro.js"], "contas-a-receber":["financeiro.js"], cobrancas:["cobrancas.js","mercadopago-finance-ui.js"], assinaturas:["assinaturas.js","mercadopago-finance-ui.js"], catalogo:["catalogo.js"], automacoes:["automacoes.js","automacoes-workspace.js"], templates:["templates.js"], "base-de-conhecimento":["base-conhecimento.js"], formularios:["formularios.js"], integracoes:["integracoes.js"], tickets:["tickets.js"], arquivos:["arquivos.js"], lixeira:["lixeira.js"], whatsapp:["whatsapp.js"], agente:["agente.js"], briefings:["briefings.js"], "contas-a-pagar":["contas-pagar.js"], "notas-fiscais":["notas-fiscais.js"], "contas-bancarias":["contas-bancarias.js"], relatorios:["relatorios-financeiros.js"], equipe:["team-access.js"], auditoria:["auditoria.js"], infraestrutura:["infraestrutura.js"], metas:["gestao.js"], comissoes:["gestao.js"], ausencias:["gestao.js"], horas:["gestao.js"], aprovacoes:["estrutura.js"], cofre:["estrutura.js"], alteracoes:["estrutura.js"], entregas:["estrutura.js"], configuracoes:["configuracoes-hub.js"] };
         const loaded = new Map();
         const load = (key) => Promise.all((groups[key] || []).map((file) => { if (!loaded.has(file)) loaded.set(file, import(`/modules/${file}?v=4`)); return loaded.get(file); }));
         window.FocusModuleLoader = { load };
@@ -269,35 +269,32 @@
             <a class="nav-item" href="#aprovacoes">Aprovações</a>
           </div>
           <div class="nav-group">
-            <p>CRM</p>
+            <p>Comercial</p>
             <a class="nav-item" href="#crm">CRM comercial</a>
             <a class="nav-item" href="#leads">Leads</a>
             <a class="nav-item" href="#funil">Funil de vendas</a>
             <a class="nav-item" href="#oportunidades">Oportunidades</a>
-            <a class="nav-item" href="#campanhas">Campanhas</a>
             <a class="nav-item" href="#propostas">Propostas</a>
             <a class="nav-item" href="#follow-ups">Follow-ups</a>
+            <a class="nav-item" href="#campanhas">Campanhas</a>
           </div>
           <div class="nav-group">
-            <p>Clientes e contatos</p>
-            <a class="nav-item" href="#conversas">Conversas</a>
-            <a class="nav-item" href="#contatos">Contatos</a>
-            <a class="nav-item" href="#consulta-cnpj">Consulta CNPJ</a>
+            <p>Clientes</p>
             <a class="nav-item" href="#clientes">Clientes</a>
             <a class="nav-item" href="#empresas">Empresas</a>
+            <a class="nav-item" href="#contatos">Contatos</a>
+            <a class="nav-item" href="#conversas">Conversas</a>
+            <a class="nav-item" href="#consulta-cnpj">Consulta CNPJ</a>
           </div>
           <div class="nav-group">
-            <p>Operação</p>
-            <a class="nav-item" href="#contratos">Contratos</a>
+            <p>Entrega</p>
             <a class="nav-item" href="#projetos">Projetos</a>
+            <a class="nav-item" href="#contratos">Contratos</a>
             <a class="nav-item" href="#portal-do-cliente">Portal do cliente</a>
             <a class="nav-item" href="#briefings">Briefings</a>
             <a class="nav-item" href="#alteracoes">Alterações de escopo</a>
             <a class="nav-item" href="#entregas">Entregas e publicações</a>
-            <a class="nav-item" href="#infraestrutura">Infraestrutura</a>
-            <a class="nav-item" href="#cofre">Cofre de acessos</a>
             <a class="nav-item" href="#arquivos">Arquivos</a>
-            <a class="nav-item" href="#base-de-conhecimento">Base de conhecimento</a>
             <a class="nav-item" href="#tickets">Tickets</a>
           </div>
           <div class="nav-group">
@@ -314,11 +311,8 @@
             <a class="nav-item" href="#relatorios">Relatórios</a>
           </div>
           <div class="nav-group">
-            <p>Catálogo</p>
+            <p>Crescimento</p>
             <a class="nav-item" href="#catalogo">Catálogo</a>
-          </div>
-          <div class="nav-group">
-            <p>Automações</p>
             <a class="nav-item" href="#automacoes">Automações</a>
             <a class="nav-item" href="#templates">Templates</a>
             <a class="nav-item" href="#integracoes">Integrações</a>
@@ -327,15 +321,18 @@
             <a class="nav-item" href="#formularios">Formulários</a>
           </div>
           <div class="nav-group">
-            <p>Configurações</p>
+            <p>Administração</p>
+            <a class="nav-item" href="#configuracoes">Configurações</a>
             <a class="nav-item" href="#equipe">Equipe</a>
             <a class="nav-item" href="#horas">Horas trabalhadas</a>
             <a class="nav-item" href="#metas">Metas</a>
             <a class="nav-item" href="#comissoes">Comissões</a>
             <a class="nav-item" href="#ausencias">Ausências</a>
-            <a class="nav-item" href="#configuracoes">Configurações</a>
             <a class="nav-item" href="#auditoria">Auditoria</a>
             <a class="nav-item" href="#lixeira">Lixeira</a>
+            <a class="nav-item" href="#infraestrutura">Infraestrutura</a>
+            <a class="nav-item" href="#cofre">Cofre de acessos</a>
+            <a class="nav-item" href="#base-de-conhecimento">Base de conhecimento</a>
           </div>
         </nav>
 
