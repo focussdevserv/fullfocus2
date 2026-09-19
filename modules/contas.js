@@ -285,7 +285,7 @@ openClientDetails = async function openCompleteClientSheet(record) {
       if (!item) return;
       try {
         await window.FocusModuleLoader?.load(relatedModules[kind]);
-        if (kind === "proposta") return window.FocusEditProposal?.(item);
+        if (kind === "proposta") return window.FocusEditProposal?.(item, record.id, record.name);
         openEditDialog(kind, item, button.dataset.clientRelatedEndpoint);
       } catch (error) { ui.toast(error.message || "Não foi possível abrir a edição.", "error"); }
     }));

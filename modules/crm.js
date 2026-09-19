@@ -554,11 +554,17 @@ async function proposalForm(p, after, fromClientSheet = false) {
   const routeAtStart = location.hash;
   const [opps, leads, clients, projects] = await Promise.all([options("opportunities"), options("leads"), options("clients"), options("projects")]);
   if (location.hash !== routeAtStart || (!fromClientSheet && !Object.values(crmRoutes).includes(routeAtStart))) return;
+  const boundClientId = fromClientSheet && p?.client_id ? String(p.client_id) : "";
+  const boundClient = boundClientId ? clients.find((client) => String(client.id) === boundClientId) : null;
+  const clientOptions = boundClientId
+    ? [[boundClientId, p?.client_name || boundClient?.name || "Cliente atual"]]
+    : [["", "Sem cliente"], ...clients.map((client) => [String(client.id), client.name])];
+  const feedback = fromClientSheet ? uiToast : toast;
   form({ title: p?.id ? "Editar proposta" : "Nova proposta", subtitle: "CRM", submitLabel: p?.id ? "Salvar" : "Criar", values: p ? { ...p, opportunity_id: p.opportunity_id ? String(p.opportunity_id) : "", lead_id: p.lead_id ? String(p.lead_id) : "", client_id: p.client_id ? String(p.client_id) : "", project_id: p.project_id ? String(p.project_id) : "" } : {}, fields: [
     { name: "title", label: "Título" },
     { name: "opportunity_id", label: "Oportunidade", type: "select", required: false, options: [["", "Sem oportunidade"], ...opps.map((o) => [String(o.id), `${o.name} · ${money(o.amount)}`])], half: true },
     { name: "lead_id", label: "Lead", type: "select", required: false, options: [["", "Sem lead"], ...leads.map((l) => [String(l.id), l.name])], half: true },
-    { name: "client_id", label: "Cliente", type: "select", required: false, options: [["", "Sem cliente"], ...clients.map((c) => [String(c.id), c.name])], half: true },
+    { name: "client_id", label: "Cliente", type: "select", required: false, options: clientOptions, half: true },
     { name: "project_id", label: "Projeto", type: "select", required: false, options: [["", "Sem projeto"], ...projects.map((project) => [String(project.id), project.name])], half: true },
     { name: "amount", label: "Valor (R$)", type: "number", required: false, half: true, help: "Com itens, o valor é a soma deles." },
     { name: "valid_until", label: "Válida até", type: "date", required: false, half: true },
@@ -569,22 +575,36 @@ async function proposalForm(p, after, fromClientSheet = false) {
     { name: "scope_included", label: "Escopo incluído", type: "textarea", required: false, rows: 3 },
     { name: "proposal_terms", label: "Termos comerciais", type: "textarea", required: false, rows: 3 },
     { name: "notes", label: "Condições / observações", type: "textarea", required: false, rows: 4 },
-  ], onSubmit: async (values) => { if (values.amount === null) values.amount = 0; if (p?.id) await api(`/api/proposals/${p.id}`, { method: "PATCH", body: values }); else { const { proposal } = await api("/api/proposals", { method: "POST", body: values }); toast("Proposta criada. Adicione os itens.", "success"); after(); proposalDrawer(proposal.id, after); return; } toast("Proposta atualizada.", "success"); after(); } });
+  ], onSubmit: async (values) => {
+    if (boundClientId) values.client_id = boundClientId;
+    if (values.amount === null) values.amount = 0;
+    if (p?.id) await api(`/api/proposals/${p.id}`, { method: "PATCH", body: values });
+    else {
+      const { proposal } = await api("/api/proposals", { method: "POST", body: values });
+      feedback("Proposta criada. Adicione os itens.", "success");
+      after();
+      proposalDrawer(proposal.id, after, fromClientSheet);
+      return;
+    }
+    feedback("Proposta atualizada.", "success");
+    after();
+  } });
 }
 
 /* Permite abrir o editor completo de proposta sem abandonar a ficha do cliente. */
 window.FocusOpenProposalForClient = async function FocusOpenProposalForClient(clientId, clientName) {
-  await proposalForm({ client_id: String(clientId), title: `Proposta · ${clientName || "Cliente"}` }, () => {}, true);
+  await proposalForm({ client_id: String(clientId), client_name: clientName || "Cliente atual", title: `Proposta · ${clientName || "Cliente"}` }, () => {}, true);
 };
 window.FocusOpenProposal = async function FocusOpenProposal() {
   await proposalForm(null, () => {}, true);
 };
-window.FocusEditProposal = async function FocusEditProposal(proposal) {
-  await proposalForm(proposal, () => {}, true);
+window.FocusEditProposal = async function FocusEditProposal(proposal, clientId, clientName) {
+  await proposalForm({ ...proposal, client_id: String(clientId || proposal?.client_id || ""), client_name: clientName || proposal?.client_name }, () => {}, true);
 };
 
-async function proposalDrawer(id, after) {
+async function proposalDrawer(id, after, fromClientSheet = false) {
   const d = drawer({ title: "Proposta", subtitle: "Carregando…", html: stateBlock.loading("Carregando proposta…") });
+  const feedback = fromClientSheet ? uiToast : toast;
   try {
     const { proposal: p } = await api(`/api/proposals/${id}`);
     const catalog = await options("catalog");
@@ -618,15 +638,15 @@ async function proposalDrawer(id, after) {
         if (summary) summary.textContent = `Valor final: ${money(finalAmount)} · Entrada: ${money(down)} · Saldo: ${money(balance)} · ${installments}x de ${money(installmentAmount)}`;
       };
       d.body.querySelectorAll("[data-price]").forEach((input) => input.addEventListener("input", updatePricingPreview));
-      d.body.querySelector("[data-save]").addEventListener("click", async (event) => { const save = event.currentTarget, routeAtStart = location.hash; if (save.disabled || routeAtStart !== "#propostas") return; save.disabled = true; save.setAttribute("aria-busy", "true"); save.textContent = "Salvando…"; try { const { proposal } = await api(`/api/proposals/${p.id}/items`, { method: "PUT", body: { items } }); if (location.hash !== routeAtStart || !d.body.isConnected) return; p.amount = proposal.amount; const pricing = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: pricingValues() }); if (location.hash !== routeAtStart || !d.body.isConnected) return; Object.assign(p, pricing.proposal); toast("Itens e valores salvos.", "success"); after(); render(); } catch (error) { if (location.hash !== routeAtStart || !d.body.isConnected) return; save.disabled = false; save.removeAttribute("aria-busy"); save.textContent = "Salvar itens"; toast(error.message, "error"); } finally { if (save.isConnected) { save.disabled = false; save.removeAttribute("aria-busy"); } } });
-      d.body.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", async () => { b.disabled = true; b.setAttribute("aria-busy", "true"); try { await api(`/api/proposals/${p.id}`, { method: "PATCH", body: { status: b.dataset.status } }); d.close(); toast("Situação atualizada.", "success"); after(); } catch (error) { b.disabled = false; b.removeAttribute("aria-busy"); toast(error.message, "error"); } }));
-      d.body.querySelector("[data-edit]").addEventListener("click", () => { d.close(); proposalForm(p, after); });
+      d.body.querySelector("[data-save]").addEventListener("click", async (event) => { const save = event.currentTarget, routeAtStart = location.hash; if (save.disabled) return; save.disabled = true; save.setAttribute("aria-busy", "true"); save.textContent = "Salvando…"; try { const { proposal } = await api(`/api/proposals/${p.id}/items`, { method: "PUT", body: { items } }); if (location.hash !== routeAtStart || !d.body.isConnected) return; p.amount = proposal.amount; const pricing = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: pricingValues() }); if (location.hash !== routeAtStart || !d.body.isConnected) return; Object.assign(p, pricing.proposal); feedback("Itens e valores salvos.", "success"); after(); render(); } catch (error) { if (location.hash !== routeAtStart || !d.body.isConnected) return; save.disabled = false; save.removeAttribute("aria-busy"); save.textContent = "Salvar itens"; feedback(error.message, "error"); } finally { if (save.isConnected) { save.disabled = false; save.removeAttribute("aria-busy"); } } });
+      d.body.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", async () => { b.disabled = true; b.setAttribute("aria-busy", "true"); try { await api(`/api/proposals/${p.id}`, { method: "PATCH", body: { status: b.dataset.status } }); d.close(); feedback("Situação atualizada.", "success"); after(); } catch (error) { b.disabled = false; b.removeAttribute("aria-busy"); feedback(error.message, "error"); } }));
+      d.body.querySelector("[data-edit]").addEventListener("click", () => { d.close(); proposalForm(p, after, fromClientSheet); });
       d.body.querySelector("[data-contract]")?.addEventListener("click", () => { sessionStorage.setItem("focusdev.contractProposalId", p.id); d.close(); location.hash = "#contratos"; });
       d.body.querySelector("[data-client]")?.addEventListener("click", async (event) => { const b = event.currentTarget; b.disabled = true; try { const data = await api(`/api/clients/${p.client_id}/overview`); d.close(); window.FocusOpenClientDetails?.(data.client); } catch (error) { b.disabled = false; toast(error.message, "error"); } });
       d.body.querySelector("[data-print]").addEventListener("click", () => printProposal(p, items));
     };
     render();
-    d.body.addEventListener("click", async (event) => { const button = event.target.closest?.("[data-recalculate]"), routeAtStart = location.hash; if (!button || button.disabled || routeAtStart !== "#propostas") return; const values = Object.fromEntries([...d.body.querySelectorAll("[data-price]")].map((input) => [input.dataset.price, input.value])); button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Calculando…"; try { const data = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: values }); if (location.hash !== routeAtStart || !d.body.isConnected) return; Object.assign(p, data.proposal); render(); toast("Valores da proposta recalculados.", "success"); } catch (error) { if (location.hash === routeAtStart && button.isConnected) { toast(error.message, "error"); button.disabled = false; button.removeAttribute("aria-busy"); button.textContent = "Calcular valores"; } } finally { if (button.isConnected) { button.disabled = false; button.removeAttribute("aria-busy"); } } });
+    d.body.addEventListener("click", async (event) => { const button = event.target.closest?.("[data-recalculate]"), routeAtStart = location.hash; if (!button || button.disabled) return; const values = Object.fromEntries([...d.body.querySelectorAll("[data-price]")].map((input) => [input.dataset.price, input.value])); button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Calculando…"; try { const data = await api(`/api/proposals/${p.id}/recalculate`, { method: "POST", body: values }); if (location.hash !== routeAtStart || !d.body.isConnected) return; Object.assign(p, data.proposal); render(); feedback("Valores da proposta recalculados.", "success"); } catch (error) { if (location.hash === routeAtStart && button.isConnected) { feedback(error.message, "error"); button.disabled = false; button.removeAttribute("aria-busy"); button.textContent = "Calcular valores"; } } finally { if (button.isConnected) { button.disabled = false; button.removeAttribute("aria-busy"); } } });
   } catch (error) { d.body.innerHTML = stateBlock.error(error.message, "crm-drawer-retry"); }
 }
 

@@ -92,3 +92,21 @@ test("frontend envia sessão, mostra estados legíveis e não promove permissão
   assert.match(permissions, /if \(!permissions \|\| typeof permissions !== "object"\) return false/);
   assert.match(permissions, /Rota sem política de acesso explícita/);
 });
+
+test("ficha do cliente mantém o vínculo e salva itens e recálculo da proposta fora da rota exclusiva", () => {
+  const crm = source("modules/crm.js");
+  const contas = source("modules/contas.js");
+  const drawerFlow = crm.slice(crm.indexOf("async function proposalDrawer"), crm.indexOf("function printProposal"));
+  assert.match(contas, /FocusOpenProposalForClient\(clientId, tools\.dataset\.clientName\)/);
+  assert.match(contas, /FocusEditProposal\?\.\(item, record\.id, record\.name\)/);
+  assert.match(crm, /if \(boundClientId\) values\.client_id = boundClientId/);
+  assert.match(crm, /proposalDrawer\(proposal\.id, after, fromClientSheet\)/);
+  assert.match(drawerFlow, /api\(`\/api\/proposals\/\$\{p\.id\}\/items`, \{ method: "PUT"/);
+  assert.match(drawerFlow, /api\(`\/api\/proposals\/\$\{p\.id\}\/recalculate`, \{ method: "POST"/);
+  assert.doesNotMatch(drawerFlow, /routeAtStart !== "#propostas"/);
+  assert.match(drawerFlow, /save\.textContent = "Salvando…"/);
+  assert.match(drawerFlow, /feedback\("Itens e valores salvos\.", "success"\)/);
+  assert.match(drawerFlow, /feedback\(error\.message, "error"\)/);
+  assert.match(drawerFlow, /save\.disabled = false/);
+  assert.match(drawerFlow, /button\.disabled = false/);
+});
