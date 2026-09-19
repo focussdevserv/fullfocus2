@@ -8,7 +8,7 @@
     contratos: ["operacao.js"], projetos: ["operacao.js"],
     "visao-financeira": ["financeiro.js"], receitas: ["financeiro.js"], despesas: ["financeiro.js"], "contas-a-receber": ["financeiro.js"],
     cobrancas: ["cobrancas.js", "mercadopago-finance-ui.js"], assinaturas: ["assinaturas.js", "mercadopago-finance-ui.js"], catalogo: ["catalogo.js"],
-    automacoes: ["automacoes.js", "automacoes-workspace.js"], templates: ["templates.js"], "base-de-conhecimento": ["base-conhecimento.js"], formularios: ["formularios.js"], integracoes: ["integracoes.js", "integracoes-enhanced.js"], tickets: ["tickets.js"], arquivos: ["arquivos.js"], lixeira: ["lixeira.js"],
+    automacoes: ["automacoes.js", "automacoes-workspace.js"], templates: ["templates.js"], "base-de-conhecimento": ["base-conhecimento.js"], formularios: ["formularios.js"], integracoes: ["integracoes.js", "integracoes-enhanced.js"], tickets: ["operacao.js", "tickets.js"], arquivos: ["operacao.js", "arquivos.js"], lixeira: ["lixeira.js"],
     configuracoes: ["configuracoes-hub.js"], whatsapp: ["whatsapp.js"], agente: ["agente.js"], briefings: ["briefings.js"], "contas-a-pagar": ["contas-pagar.js"], "notas-fiscais": ["notas-fiscais.js"], "contas-bancarias": ["contas-bancarias.js"], relatorios: ["relatorios-financeiros.js"],
     equipe: ["team-access.js"], auditoria: ["auditoria.js"], infraestrutura: ["infraestrutura.js"], metas: ["gestao.js"], comissoes: ["gestao.js"], ausencias: ["gestao.js"], horas: ["gestao.js"], aprovacoes: ["estrutura.js"], cofre: ["estrutura.js"], alteracoes: ["estrutura.js"], entregas: ["estrutura.js"]
   };
@@ -31,19 +31,21 @@
     });
     return Promise.race([importPromise, timeout]);
   };
-  const load = (key) => Promise.all((groups[key] || []).map((file) => {
-    loadStyle(file);
-    if (!loaded.has(file)) {
-      const request = importWithTimeout(file).catch((error) => {
+  const load = async (key) => {
+    for (const file of groups[key] || []) {
+      loadStyle(file);
+      if (!loaded.has(file)) {
+        const request = importWithTimeout(file).catch((error) => {
         // Uma falha transitória não pode deixar uma promessa rejeitada presa no cache.
         // Assim, o botão de retry faz uma nova tentativa de verdade.
-        loaded.delete(file);
-        throw error;
-      });
-      loaded.set(file, request);
+          loaded.delete(file);
+          throw error;
+        });
+        loaded.set(file, request);
+      }
+      await loaded.get(file);
     }
-    return loaded.get(file);
-  }));
+  };
   window.FocusModuleLoader = { load };
   window.addEventListener("focusdev:route-needed", (event) => {
     const key = event.detail?.key;

@@ -89,3 +89,9 @@ Os testes automatizados comprovam sintaxe, contratos e regras cobertas pelos tes
 ## Próximo slice de implementação
 
 O próximo trabalho deve ser o smoke test funcional autenticado do fluxo de cliente e ficha 360. Ele é a dependência mais importante para propostas, contratos, projetos e cobranças. Só depois de confirmar esse caminho deve-se avançar para integrações financeiras e automações.
+## CorreÃ§Ã£o aplicada nesta rodada
+
+- `arquivos` e `tickets` passaram a carregar `operacao.js` antes da prÃ³pria tela, pois reutilizam configuraÃ§Ãµes de criaÃ§Ã£o definidas nesse mÃ³dulo.
+- O carregador de mÃ³dulos passou a respeitar a ordem declarada de dependÃªncias, evitando que uma tela dependente seja executada antes do mÃ³dulo-base.
+- O fallback de carregamento embutido no `index.html` recebeu a mesma correÃ§Ã£o para deploys em que o loader externo nÃ£o esteja disponÃ­vel.
+- VerificaÃ§Ã£o: `npm run check`, `npm run build` e `npm test` aprovados; 168 testes sem falhas.
