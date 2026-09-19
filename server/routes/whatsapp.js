@@ -256,10 +256,12 @@ export function register(app, ctx) {
       if (data?.key?.fromMe) return res.status(204).end();
       const number = normalizeNumber(String(data?.key?.remoteJid || "").split("@")[0]);
       const body = data?.message?.conversation || data?.message?.extendedTextMessage?.text || data?.message?.imageMessage?.caption || "[mídia recebida]";
-      if (!number) return res.status(204).end();
+      const providerMessageId = String(data?.key?.id || "").trim();
+      if (!number || !providerMessageId) return res.status(204).end();
       const conv = await upsertConversation(org, number, data?.pushName, channel);
-      await pool.query("insert into messages (organization_id, conversation_id, direction, body) values ($1,$2,'in',$3)", [org, conv.id, String(body).slice(0, 4000)]);
-      await pool.query("update conversations set last_message_at=now(), unread_count=unread_count+1, status='open', updated_at=now() where id=$1", [conv.id]);
+      const accepted = await pool.query("insert into messages (organization_id, conversation_id, direction, body, provider_message_id) values ($1,$2,'in',$3,$4) on conflict do nothing returning id", [org, conv.id, String(body).slice(0, 4000), providerMessageId]);
+      if (!accepted.rowCount) return res.status(204).end();
+      await pool.query("update conversations set last_message_at=now(), unread_count=unread_count+1, status='open', updated_at=now() where id=$1 and organization_id=$2", [conv.id, org]);
       if (channel === "assistant") {
         const allowed = String(process.env.ASSISTANT_WHATSAPP_NUMBER || "").replace(/\D/g, "");
         if (!allowed || allowed !== number) return res.status(204).end();

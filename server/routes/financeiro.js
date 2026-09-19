@@ -60,6 +60,9 @@ export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
   const processPaymentWebhook = ctx.processMercadoPagoPayment || processMercadoPagoPayment;
   const processSubscriptionWebhook = ctx.processMercadoPagoSubscription || processMercadoPagoSubscription;
+  const createPixCharge = ctx.createPixOrder || createPixOrder;
+  const createCheckoutCharge = ctx.createCheckoutPreference || createCheckoutPreference;
+  const createIdempotencyKey = ctx.newIdempotencyKey || newIdempotencyKey;
   const error = (res, e, fallback) => { const out = classifyDbError(e, fallback); res.status(out.status).json({ error: out.error }); };
   app.get("/api/bank_accounts", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
@@ -153,35 +156,62 @@ export function register(app, ctx) {
     const org = tenant(req, res); if (!org) return;
     const channel = ["pix", "boleto", "card", "link"].includes(req.body?.channel) ? req.body.channel : "link";
     try {
-      const receivable = await pool.query("select * from receivables where id=$1 and organization_id=$2", [req.params.id, org]);
-      if (!receivable.rowCount) return res.status(404).json({ error: "Conta a receber não encontrada." });
-      const source = receivable.rows[0];
-      if (["paid", "cancelled"].includes(source.status)) return res.status(400).json({ error: "Esta conta não aceita novas cobranças." });
-      if (!mercadoPagoConfigured()) return res.status(503).json({ error: "Mercado Pago não está configurado. Configure o Access Token antes de gerar cobranças." });
-      if (req.body?.channel === "transfer" || req.body?.provider === "manual") return res.status(400).json({ error: "A Focussdev utiliza exclusivamente o Mercado Pago para cobranças." });
-      const existing = await pool.query("select * from charges where receivable_id=$1 and organization_id=$2 and status in ('draft','generated','sent','pending') order by created_at desc limit 1", [source.id, org]);
-      if (existing.rowCount) return res.json({ charge: existing.rows[0], created: false, provider_connected: existing.rows[0].provider === "mercado_pago", pix: existing.rows[0].pix_payload ? { payload: existing.rows[0].pix_payload, qr_data_url: existing.rows[0].pix_qr_data_url, document_kind: existing.rows[0].document_kind } : null });
-      const amount = Number(source.updated_amount ?? source.amount);
-      if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "A conta a receber não possui um valor válido." });
-      const useMercadoPago = mercadoPagoConfigured() && channel !== "transfer" && req.body?.provider !== "manual";
-      if (useMercadoPago) {
-        const client = source.client_id ? await pool.query("select name,email,document from clients where id=$1 and organization_id=$2", [source.client_id, org]) : { rows: [] };
-        const email = asText(client.rows[0]?.email);
-        if (!email) return res.status(400).json({ error: "Cadastre o e-mail do cliente antes de gerar uma cobrança Mercado Pago." });
-        const idempotencyKey = newIdempotencyKey();
-        const externalReference = `focussdev:${org}:receivable:${source.id}`;
-        let providerCharge;
-        try {
-          providerCharge = channel === "pix"
-            ? await createPixOrder({ amount, description: source.description, email, externalReference, idempotencyKey })
-            : await createCheckoutPreference({ amount, title: source.description, email, externalReference, idempotencyKey });
-        } catch {
-          return res.status(502).json({ error: "O Mercado Pago não conseguiu criar a cobrança. Verifique as credenciais e tente novamente." });
+      const db = pool.connect ? await pool.connect() : pool;
+      let reservation;
+      try {
+        await db.query("begin");
+        const receivable = await db.query("select * from receivables where id=$1 and organization_id=$2 for update", [req.params.id, org]);
+        if (!receivable.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Conta a receber não encontrada." }); }
+        const source = receivable.rows[0];
+        if (["paid", "cancelled"].includes(source.status)) { await db.query("rollback"); return res.status(400).json({ error: "Esta conta não aceita novas cobranças." }); }
+        if (!mercadoPagoConfigured()) { await db.query("rollback"); return res.status(503).json({ error: "Mercado Pago não está configurado. Configure o Access Token antes de gerar cobranças." }); }
+        if (req.body?.channel === "transfer" || req.body?.provider === "manual") { await db.query("rollback"); return res.status(400).json({ error: "A Focussdev utiliza exclusivamente o Mercado Pago para cobranças." }); }
+        const amount = Number(source.updated_amount ?? source.amount);
+        if (!Number.isFinite(amount) || amount <= 0) { await db.query("rollback"); return res.status(400).json({ error: "A conta a receber não possui um valor válido." }); }
+        const existing = await db.query("select * from charges where receivable_id=$1 and organization_id=$2 and status in ('draft','generated','sent','pending') order by created_at desc limit 1", [source.id, org]);
+        if (existing.rowCount && existing.rows[0].external_id) {
+          await db.query("commit");
+          const charge = existing.rows[0];
+          return res.json({ charge, created: false, provider_connected: charge.provider === "mercado_pago", pix: charge.pix_payload ? { payload: charge.pix_payload, qr_data_url: charge.pix_qr_data_url, document_kind: charge.document_kind } : null });
         }
-        const documentKind = channel === "pix" ? "mercadopago_pix" : "mercadopago_checkout";
-        const charge = await pool.query("insert into charges (organization_id,receivable_id,client_id,project_id,provider,external_id,provider_status,provider_payload,idempotency_key,channel,status,amount,due_at,message,payment_url,pix_payload,pix_qr_data_url,document_kind) values ($1,$2,$3,$4,'mercado_pago',$5,$6,$7::jsonb,$8,$9,'pending',$10,$11,$12,$13,$14,$15,$16) returning *", [org, source.id, source.client_id, source.project_id, providerCharge.external_id, providerCharge.status, JSON.stringify(providerCharge.raw || {}), idempotencyKey, channel, amount, source.due_at, asText(req.body?.message) || `Cobrança Mercado Pago: ${source.description}`, providerCharge.payment_url, providerCharge.pix_payload, providerCharge.pix_qr_data_url, documentKind]);
-        return res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: true, provider: "mercado_pago", payment_url: providerCharge.payment_url, pix: providerCharge.pix_payload ? { payload: providerCharge.pix_payload, qr_data_url: providerCharge.pix_qr_data_url, document_kind: documentKind } : null, notice: channel === "pix" ? "Cobrança Pix criada no Mercado Pago. Use o QR Code ou Pix copia e cola." : "Link de pagamento criado no Mercado Pago." });
+        const client = source.client_id ? await db.query("select name,email,document from clients where id=$1 and organization_id=$2", [source.client_id, org]) : { rows: [] };
+        const email = asText(client.rows[0]?.email);
+        if (!email) { await db.query("rollback"); return res.status(400).json({ error: "Cadastre o e-mail do cliente antes de gerar uma cobrança Mercado Pago." }); }
+        if (existing.rowCount) {
+          let charge = existing.rows[0];
+          if (!charge.idempotency_key) {
+            const keyed = await db.query("update charges set idempotency_key=$1 where id=$2 and organization_id=$3 and idempotency_key is null returning *", [createIdempotencyKey(), charge.id, org]);
+            charge = keyed.rows[0] || charge;
+          }
+          reservation = { charge, source, amount: Number(charge.amount ?? amount), email, created: false };
+        } else {
+          const idempotencyKey = createIdempotencyKey();
+          const documentKind = channel === "pix" ? "mercadopago_pix" : "mercadopago_checkout";
+          const charge = await db.query("insert into charges (organization_id,receivable_id,client_id,project_id,provider,provider_status,provider_payload,idempotency_key,channel,status,amount,due_at,message,document_kind) values ($1,$2,$3,$4,'mercado_pago','creating','{}'::jsonb,$5,$6,'pending',$7,$8,$9,$10) returning *", [org, source.id, source.client_id, source.project_id, idempotencyKey, channel, amount, source.due_at, asText(req.body?.message) || `Cobrança Mercado Pago: ${source.description}`, documentKind]);
+          reservation = { charge: charge.rows[0], source, amount, email, created: true };
+        }
+        await db.query("commit");
+      } catch (e) {
+        await db.query("rollback").catch(() => {});
+        throw e;
+      } finally { db.release?.(); }
+
+      const { charge: reserved, source, amount, email } = reservation;
+      const idempotencyKey = reserved.idempotency_key;
+      const reservedChannel = reserved.channel || channel;
+      const externalReference = `focussdev:${org}:receivable:${source.id}`;
+      let providerCharge;
+      try {
+        providerCharge = reservedChannel === "pix"
+          ? await createPixCharge({ amount, description: source.description, email, externalReference, idempotencyKey })
+          : await createCheckoutCharge({ amount, title: source.description, email, externalReference, idempotencyKey });
+      } catch {
+        await pool.query("update charges set provider_status='creation_failed' where id=$1 and organization_id=$2 and external_id is null", [reserved.id, org]).catch(() => {});
+        return res.status(502).json({ error: "O Mercado Pago não conseguiu criar a cobrança. Verifique as credenciais e tente novamente." });
       }
+      const documentKind = reservedChannel === "pix" ? "mercadopago_pix" : "mercadopago_checkout";
+      const charge = await pool.query("update charges set external_id=$1,provider_status=$2,provider_payload=$3::jsonb,payment_url=$4,pix_payload=$5,pix_qr_data_url=$6,document_kind=$7 where id=$8 and organization_id=$9 returning *", [providerCharge.external_id, providerCharge.status, JSON.stringify(providerCharge.raw || {}), providerCharge.payment_url, providerCharge.pix_payload, providerCharge.pix_qr_data_url, documentKind, reserved.id, org]);
+      return res.status(reservation.created ? 201 : 200).json({ charge: charge.rows[0], created: reservation.created, provider_connected: true, provider: "mercado_pago", payment_url: providerCharge.payment_url, pix: providerCharge.pix_payload ? { payload: providerCharge.pix_payload, qr_data_url: providerCharge.pix_qr_data_url, document_kind: documentKind } : null, notice: reservedChannel === "pix" ? "Cobrança Pix criada no Mercado Pago. Use o QR Code ou Pix copia e cola." : "Link de pagamento criado no Mercado Pago." });
     } catch (e) { error(res, e, "Não foi possível gerar a cobrança."); }
   });
   app.post("/api/charges/:id/cancel", async (req, res) => {

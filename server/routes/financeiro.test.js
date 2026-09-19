@@ -13,7 +13,7 @@ function setup(options = {}) {
     connect: async () => ({ query: async (sql, params) => {
       calls.push({ sql, params });
       if (sql.startsWith("select * from contracts where")) return { rowCount: 1, rows: [{ id: 9, organization_id: ORG, client_id: 7, status: "active", name: "Site", value: "2700", down_payment: "300", installments: 2, installment_value: "1200", payment_method: "pix" }] };
-      if (sql.startsWith("select * from receivables where")) return { rowCount: 1, rows: [{ id: 7, organization_id: ORG, client_id: 3, project_id: 4, contract_id: 5, description: "Parcela", amount: "100", status: "pending" }] };
+      if (sql.startsWith("select * from receivables where")) return options.missingReceivable ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ id: 7, organization_id: ORG, client_id: 3, project_id: 4, contract_id: 5, description: "Parcela", amount: "100", status: "pending" }] };
       if (sql.startsWith("select coalesce(sum(amount)")) return { rowCount: 1, rows: [{ total: 0 }] };
       if (sql.startsWith("insert into payments")) return { rowCount: 1, rows: [{ id: 31, amount: params[2], method: params[3] }] };
       if (sql.startsWith("update receivables")) return { rowCount: 1, rows: [{ id: 7, status: params[0] }] };
@@ -40,7 +40,60 @@ test("baixa manual segue a politica configurada e confirma receita", async () =>
 test("erro na baixa manual faz rollback e nao confirma sucesso", async () => { const t = setup({ failRevenue: true }); const response = await request(t, "/api/receivables/7/record-payment", { method: "POST", body: { amount: 40, method: "pix" } }); assert.equal(response.status, 503); assert.equal(t.calls.some((call) => call.sql === "rollback"), true); assert.equal(t.calls.some((call) => call.sql === "commit"), false); });
 test("baixa conta a pagar cria despesa paga", async () => { const t = setup(); const response = await request(t, "/api/payables/11/record-payment", { method: "POST", body: {} }); assert.equal(response.status, 201); assert.equal((await response.json()).expense.status, "paid"); assert.equal(t.calls.some((call) => call.sql.startsWith("insert into expenses")), true); });
 test("movimentação bancária atualiza o saldo", async () => { const t = setup(); const response = await request(t, "/api/bank_accounts/8/transactions", { method: "POST", body: { kind: "credit", amount: 100, description: "Recebimento" } }); assert.equal(response.status, 201); assert.equal((await response.json()).bank_account.current_balance, "600"); });
-test("cobrança exige conta a receber do workspace", async () => { const t = setup(); const response = await request(t, "/api/receivables/7/create-charge", { method: "POST", body: { channel: "pix" } }); assert.equal(response.status, 404); });
+test("cobrança exige conta a receber do workspace", async () => { const t = setup({ missingReceivable: true }); const response = await request(t, "/api/receivables/7/create-charge", { method: "POST", body: { channel: "pix" } }); assert.equal(response.status, 404); });
+test("retry da cobrança reutiliza a chave persistida antes de chamar o Mercado Pago", async () => {
+  const previousToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  process.env.MERCADOPAGO_ACCESS_TOKEN = "test-token";
+  const state = { charge: null, providerKeys: [], inserts: 0 };
+  const db = { release() {}, query: async (sql, params = []) => {
+    if (sql === "begin" || sql === "commit" || sql === "rollback") return { rowCount: 0, rows: [] };
+    if (sql.startsWith("select * from receivables")) return { rowCount: 1, rows: [{ id: 7, organization_id: ORG, client_id: 3, project_id: 4, description: "Parcela", amount: "100", due_at: "2026-09-30", status: "pending" }] };
+    if (sql.startsWith("select * from charges")) return { rowCount: state.charge ? 1 : 0, rows: state.charge ? [state.charge] : [] };
+    if (sql.startsWith("select name,email,document from clients")) return { rowCount: 1, rows: [{ email: "cliente@example.com" }] };
+    if (sql.startsWith("insert into charges")) {
+      state.inserts += 1;
+      state.charge = { id: 55, organization_id: ORG, receivable_id: 7, provider: "mercado_pago", provider_status: "creating", idempotency_key: params[4], channel: "pix", status: "pending", amount: 100 };
+      return { rowCount: 1, rows: [state.charge] };
+    }
+    throw new Error(`SQL inesperado na transação: ${sql}`);
+  } };
+  const pool = { connect: async () => db, query: async (sql, params = []) => {
+    if (sql.startsWith("update charges set provider_status='creation_failed'")) { state.charge.provider_status = "creation_failed"; return { rowCount: 1, rows: [] }; }
+    if (sql.startsWith("update charges set external_id=")) {
+      state.charge = { ...state.charge, external_id: params[0], provider_status: params[1], payment_url: params[3], pix_payload: params[4], pix_qr_data_url: params[5], document_kind: params[6] };
+      return { rowCount: 1, rows: [state.charge] };
+    }
+    throw new Error(`SQL inesperado fora da transação: ${sql}`);
+  } };
+  let attempt = 0;
+  const app = express(); app.use(express.json());
+  register(app, {
+    pool,
+    tenant: () => ORG,
+    asText: (value) => typeof value === "string" ? value.trim() : "",
+    classifyDbError: (_error, fallback) => ({ status: 503, error: fallback }),
+    validateRelations: async () => {},
+    newIdempotencyKey: () => "stable-charge-key",
+    createPixOrder: async ({ idempotencyKey }) => {
+      state.providerKeys.push(idempotencyKey);
+      attempt += 1;
+      if (attempt === 1) throw new Error("timeout após envio");
+      return { external_id: "ORDER-1", status: "action_required", payment_url: "https://mp.test/pix", pix_payload: "000201", pix_qr_data_url: "data:image/png;base64,aGk=", raw: { id: "ORDER-1" } };
+    }
+  });
+  const server = createServer(app);
+  try {
+    const first = await request({ server }, "/api/receivables/7/create-charge", { method: "POST", body: { channel: "pix" } });
+    assert.equal(first.status, 502);
+    const retry = await request({ server }, "/api/receivables/7/create-charge", { method: "POST", body: { channel: "pix" } });
+    assert.equal(retry.status, 200);
+    assert.equal((await retry.json()).created, false);
+    assert.equal(state.inserts, 1);
+    assert.deepEqual(state.providerKeys, ["stable-charge-key", "stable-charge-key"]);
+  } finally {
+    if (previousToken === undefined) delete process.env.MERCADOPAGO_ACCESS_TOKEN; else process.env.MERCADOPAGO_ACCESS_TOKEN = previousToken;
+  }
+});
 test("gera entrada e parcelas do contrato sem duplicar", async () => { const t = setup(); const response = await request(t, "/api/contracts/9/create-receivables", { method: "POST", body: {} }); assert.equal(response.status, 201); assert.equal((await response.json()).receivables.length, 3); assert.equal(t.calls.filter((x) => x.sql.startsWith("insert into receivables")).length, 3); });
 
 test("summary agrega por mês", async () => { const t = setup(); const response = await request(t, "/api/finance/summary?months=6"); assert.equal(response.status, 200); assert.deepEqual((await response.json()).summary[0], { month: "2026-08", revenue: "10", expense: "3", result: "7" }); });

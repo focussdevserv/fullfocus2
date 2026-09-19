@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createServer } from "node:http";
-import { register } from "./whatsapp.js";
+import { register, webhookTokenFor } from "./whatsapp.js";
 
 function response(status, payload) {
   return { status, ok: status >= 200 && status < 300, text: async () => JSON.stringify(payload) };
@@ -62,4 +62,42 @@ test("conectar cria instância, registra webhook e devolve apenas o QR", async (
   assert.ok(calls.some((call) => call.url.includes("/instance/create")));
   assert.ok(calls.some((call) => call.url.includes("/webhook/set")));
   assert.ok(calls.every((call) => call.options.headers.apikey === secret));
+});
+
+test("webhook repetido aceita provider_message_id uma vez antes de incrementar não lidos ou acionar agente", async (t) => {
+  const org = "00000000-0000-0000-0000-000000000001";
+  const providerIds = new Set();
+  let unreadUpdates = 0;
+  let agentConfigReads = 0;
+  const previousAllowed = process.env.ASSISTANT_WHATSAPP_NUMBER;
+  process.env.ASSISTANT_WHATSAPP_NUMBER = "5511999990000";
+  t.after(() => { if (previousAllowed === undefined) delete process.env.ASSISTANT_WHATSAPP_NUMBER; else process.env.ASSISTANT_WHATSAPP_NUMBER = previousAllowed; });
+  const pool = { query: async (sql, params = []) => {
+    if (sql.startsWith("select organization_id from integrations")) return { rowCount: 1, rows: [{ organization_id: org }] };
+    if (sql.startsWith("select id from conversations")) return { rowCount: 1, rows: [{ id: 9 }] };
+    if (sql.startsWith("update conversations set remote_number")) return { rowCount: 1, rows: [] };
+    if (sql.startsWith("insert into messages") && sql.includes("provider_message_id")) {
+      const providerMessageId = params[3];
+      if (providerIds.has(providerMessageId)) return { rowCount: 0, rows: [] };
+      providerIds.add(providerMessageId);
+      return { rowCount: 1, rows: [{ id: 11 }] };
+    }
+    if (sql.startsWith("update conversations set last_message_at") && sql.includes("unread_count=unread_count+1")) { unreadUpdates += 1; return { rowCount: 1, rows: [] }; }
+    if (sql.startsWith("select enabled,model,system_prompt from agent_configs")) { agentConfigReads += 1; return { rowCount: 1, rows: [{ enabled: false }] }; }
+    throw new Error(`SQL inesperado: ${sql}`);
+  } };
+  const app = express(); app.use(express.json());
+  register(app, { pool, tenant: () => org, classifyDbError: (error, fallback) => ({ status: 500, error: error.message || fallback }) });
+  const server = createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  t.after(() => server.close());
+  const token = webhookTokenFor(org);
+  const payload = { event: "messages.upsert", instance: "focus-00000000-aux", data: { key: { id: "provider-message-1", remoteJid: "5511999990000@s.whatsapp.net", fromMe: false }, message: { conversation: "Olá" }, pushName: "Cliente" } };
+  const first = await request(server, `/api/whatsapp/webhook/${token}`, { method: "POST", body: payload });
+  const repeated = await request(server, `/api/whatsapp/webhook/${token}`, { method: "POST", body: payload });
+  assert.equal(first.status, 204);
+  assert.equal(repeated.status, 204);
+  assert.equal(providerIds.size, 1);
+  assert.equal(unreadUpdates, 1);
+  assert.equal(agentConfigReads, 1);
 });
