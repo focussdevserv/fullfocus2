@@ -9,7 +9,8 @@
     "check": "node scripts/check.mjs",
     "check-routes": "node scripts/check-routes.mjs",
     "build": "node scripts/build.mjs",
-    "bump": "node scripts/bump-assets.mjs"
+    "bump": "node scripts/bump-assets.mjs",
+    "smoke:production": "node scripts/production-smoke.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

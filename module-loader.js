@@ -24,9 +24,24 @@
     document.head.append(link);
     styles.set(name, link);
   };
+  const importWithTimeout = (file, timeoutMs = 10000) => {
+    const importPromise = import(`./modules/${file}?v=4`);
+    const timeout = new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(`O módulo ${file} demorou mais que o esperado para carregar.`)), timeoutMs);
+    });
+    return Promise.race([importPromise, timeout]);
+  };
   const load = (key) => Promise.all((groups[key] || []).map((file) => {
     loadStyle(file);
-    if (!loaded.has(file)) loaded.set(file, import(`./modules/${file}?v=4`));
+    if (!loaded.has(file)) {
+      const request = importWithTimeout(file).catch((error) => {
+        // Uma falha transitória não pode deixar uma promessa rejeitada presa no cache.
+        // Assim, o botão de retry faz uma nova tentativa de verdade.
+        loaded.delete(file);
+        throw error;
+      });
+      loaded.set(file, request);
+    }
     return loaded.get(file);
   }));
   window.FocusModuleLoader = { load };
