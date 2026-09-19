@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { cancelOrder, createPixOrder, createPixPayment, createSubscription, normalizeOrder, normalizePayment, paymentState, refundOrder, validateMercadoPagoWebhook } from "./mercadopago.js";
+import { cancelOrder, createCheckoutPreference, createPixOrder, createPixPayment, createSubscription, normalizeOrder, normalizePayment, paymentState, refundOrder, validateMercadoPagoWebhook } from "./mercadopago.js";
 
 test("Pix usa endpoint correto e envia idempotência", async () => {
   const calls = [];
@@ -73,4 +73,17 @@ test("assinatura e operações de ciclo de vida usam endpoints do Mercado Pago",
   assert.equal(calls[1].url, "https://api.mercadopago.com/v1/orders/ORD-1/cancel");
   assert.equal(calls[2].url, "https://api.mercadopago.com/v1/orders/ORD-1/refund");
   assert.deepEqual(JSON.parse(calls[2].options.body), { amount: 10, payment_id: "PAY-1" });
+});
+
+test("Checkout de cartão e boleto também usa Orders", async () => {
+  const previousToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  process.env.MERCADOPAGO_ACCESS_TOKEN = "test-token";
+  const result = await createCheckoutPreference({ amount: 999, title: "Site", email: "cliente@example.com", externalReference: "order-1", idempotencyKey: "order-idem-2", fetchImpl: async (url, options) => {
+    assert.equal(url, "https://api.mercadopago.com/v1/orders");
+    assert.equal(JSON.parse(options.body).processing_mode, "automatic");
+    return new Response(JSON.stringify({ id: "ORD-CHECKOUT", status: "created", checkout_url: "https://mp.test/checkout" }), { status: 201 });
+  } });
+  if (previousToken === undefined) delete process.env.MERCADOPAGO_ACCESS_TOKEN; else process.env.MERCADOPAGO_ACCESS_TOKEN = previousToken;
+  assert.equal(result.external_id, "ORD-CHECKOUT");
+  assert.equal(result.payment_url, "https://mp.test/checkout");
 });

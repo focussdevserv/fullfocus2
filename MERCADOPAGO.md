@@ -1,6 +1,6 @@
 # Mercado Pago na Focussdev
 
-A integração usa o token somente no servidor e mantém o fluxo manual como fallback quando a conta ainda não foi configurada. Para Pix, usa a API de Orders recomendada pelo Mercado Pago; o Checkout Pro continua sendo usado para link, cartão e boleto.
+A integração usa o token somente no servidor e mantém o fluxo manual como fallback quando a conta ainda não foi configurada. Pix, cartão, boleto e link usam a API de Orders do Mercado Pago.
 
 ## Variáveis de ambiente
 
@@ -16,7 +16,7 @@ Nunca coloque essas variáveis no frontend, no banco, em uma proposta ou no Git.
 ## O que fica disponível
 
 - `pix`: cria uma Order Pix no Mercado Pago e retorna QR Code, Pix copia e cola, link de instruções e status externo.
-- `card`, `boleto` e `link`: criam um link seguro do Checkout Pro; o cliente escolhe o meio disponível no checkout.
+- `card`, `boleto` e `link`: criam uma Order com `checkout_url`; o cliente escolhe o meio disponível no checkout.
 - webhook `POST /api/webhooks/mercadopago`: valida `x-signature`, consulta a Order ou o pagamento recebido e baixa a conta a receber uma única vez.
 - `GET /api/integrations/mercadopago/status`: mostra somente o estado da configuração, sem revelar segredo.
 

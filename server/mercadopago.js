@@ -69,7 +69,7 @@ export function normalizeOrder(data) {
     status: String(payment.status || data?.status || "pending"),
     external_id: data?.id == null ? null : String(data.id),
     payment_id: payment.id == null ? null : String(payment.id),
-    payment_url: method.ticket_url || null,
+    payment_url: method.ticket_url || data?.checkout_url || null,
     pix_payload: method.qr_code || null,
     pix_qr_data_url: qr,
     amount: Number(payment.amount ?? data?.total_amount ?? 0),
@@ -105,13 +105,17 @@ export async function createPixOrder({ amount, description, email, externalRefer
 
 export async function createCheckoutPreference({ amount, title, email, externalReference, notificationUrl = `${appUrl()}/api/webhooks/mercadopago`, idempotencyKey, fetchImpl } = {}) {
   const body = {
-    items: [{ title: String(title || "Serviço Focussdev"), quantity: 1, unit_price: Number(amount), currency_id: "BRL" }],
+    type: "online",
+    processing_mode: "automatic",
+    total_amount: Number(amount).toFixed(2),
     external_reference: externalReference,
-    notification_url: notificationUrl,
+    description: String(title || "Serviço Focussdev").slice(0, 150),
+    items: [{ title: String(title || "Serviço Focussdev"), quantity: 1, unit_price: Number(amount).toFixed(2), total_amount: Number(amount).toFixed(2), currency_id: "BRL" }],
     ...(email ? { payer: { email } } : {})
   };
-  const data = await requestMercadoPago("/checkout/preferences", { method: "POST", body, idempotencyKey, fetchImpl });
-  return { id: data?.id == null ? null : String(data.id), status: "pending", external_id: data?.id == null ? null : String(data.id), payment_url: data?.init_point || data?.sandbox_init_point || null, pix_payload: null, pix_qr_data_url: null, raw: data };
+  const data = await requestMercadoPago("/v1/orders", { method: "POST", body: { ...body, ...(notificationUrl ? {} : {}) }, idempotencyKey, fetchImpl });
+  const normalized = normalizeOrder(data);
+  return { ...normalized, payment_url: data?.checkout_url || normalized.payment_url };
 }
 
 export async function getPayment(paymentId, { fetchImpl } = {}) {
