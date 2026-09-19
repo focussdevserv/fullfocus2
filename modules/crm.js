@@ -576,6 +576,9 @@ async function proposalForm(p, after, fromClientSheet = false) {
 window.FocusOpenProposalForClient = async function FocusOpenProposalForClient(clientId, clientName) {
   await proposalForm({ client_id: String(clientId), title: `Proposta · ${clientName || "Cliente"}` }, () => {}, true);
 };
+window.FocusOpenProposal = async function FocusOpenProposal() {
+  await proposalForm(null, () => {}, true);
+};
 window.FocusEditProposal = async function FocusEditProposal(proposal) {
   await proposalForm(proposal, () => {}, true);
 };
