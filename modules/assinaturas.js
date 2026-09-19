@@ -3,8 +3,25 @@ const subMoneyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", cu
 const subMoney = (value) => subMoneyFormatter.format(Number(value || 0));
 const subDate = (value) => { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("pt-BR").format(date); };
 const subStatus = { active: "Ativa", paused: "Pausada", cancelled: "Cancelada", pending: "Pagamento pendente" };
+const subProviderStatus = { authorized: "Autorizada no Mercado Pago", pending: "Aguardando autorização", paused: "Pausada no Mercado Pago", cancelled: "Cancelada no Mercado Pago" };
 const subscriptionFilter = { search: "", status: "", request: 0 };
 const isDueWithinNextWeek = (value) => { if (!value) return false; const time = new Date(value).getTime(); return Number.isFinite(time) && time >= Date.now() && time <= Date.now() + 7 * 864e5; };
+async function createMercadoPagoAuthorization(item, button) {
+  const original = button.textContent;
+  button.disabled = true; button.textContent = "Gerando…";
+  try {
+    const result = await api(`/api/subscriptions/${item.id}/create-provider`, { method: "POST", body: {} });
+    if (result.authorization_url) window.open(result.authorization_url, "_blank", "noopener,noreferrer");
+    toast(result.authorization_url ? "Autorização criada. O cliente precisa aprovar no Mercado Pago." : "Autorização criada, mas o link não foi retornado.", result.authorization_url ? "success" : "error");
+    renderSubscriptionsScreen();
+  } catch (error) { button.disabled = false; button.textContent = original; toast(error.message, "error"); }
+}
+async function changeSubscriptionStatus(item, status, button) {
+  const original = button.textContent;
+  button.disabled = true; button.textContent = status === "cancelled" ? "Cancelando…" : status === "paused" ? "Pausando…" : "Reativando…";
+  try { await api(`/api/subscriptions/${item.id}`, { method: "PATCH", body: { status } }); toast(`Assinatura ${status === "cancelled" ? "cancelada" : status === "paused" ? "pausada" : "reativada"}.`, "success"); renderSubscriptionsScreen(); }
+  catch (error) { button.disabled = false; button.textContent = original; toast(error.message, "error"); }
+}
 async function subscriptionForm(item = null) { const routeAtStart = location.hash; if (routeAtStart !== "#assinaturas") return; const clients = item ? [] : ((await api("/api/clients?limit=250")).clients || []); if (location.hash !== routeAtStart || location.hash !== "#assinaturas") return; const fields = item ? [{ name: "status", label: "Status", type: "select", options: Object.entries(subStatus) }] : [{ name: "client_id", label: "Cliente", type: "select", required: false, options: [["", "Sem cliente"], ...clients.map((client) => [client.id, client.name])] }, { name: "plan", label: "Plano", required: true }, { name: "amount", label: "Valor", type: "number", min: 0.01, step: 0.01 }, { name: "interval", label: "Intervalo", type: "select", options: [["monthly", "Mensal"], ["yearly", "Anual"]] }, { name: "next_billing_on", label: "Próxima cobrança", type: "date", required: false }]; ui.form({ title: item ? "Atualizar status da assinatura" : "Nova assinatura", subtitle: "Financeiro", values: item || {}, fields, submitLabel: item ? "Salvar status" : "Criar assinatura", onSubmit: async (values) => { await api(item ? `/api/subscriptions/${item.id}` : "/api/subscriptions", { method: item ? "PATCH" : "POST", body: values }); if (location.hash !== routeAtStart || location.hash !== "#assinaturas") return; toast(item ? "Status atualizado." : "Assinatura criada.", "success"); renderSubscriptionsScreen(); } }); }
 
 async function renderSubscriptionsScreen() {
