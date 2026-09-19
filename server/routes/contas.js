@@ -73,26 +73,33 @@ export function register(app, ctx) {
     const org = tenant(req, res); if (!org) return;
     const body = req.body || {}, name = asText(body.name), email = asText(body.email) || null, phone = asText(body.phone || body.whatsapp) || null, document = asText(body.document).replace(/\D/g, "") || null;
     if (!name) return res.status(400).json({ error: "Informe o nome do cliente." });
+    const db = pool.connect ? await pool.connect().catch(() => null) : pool;
+    if (!db) return res.status(503).json({ error: "Não foi possível iniciar o cadastro do cliente." });
     try {
-      const existing = await pool.query("select id from clients where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(coalesce(phone,''),'\\D','','g')=regexp_replace($3,'\\D','','g')) or ($4<>'' and regexp_replace(coalesce(document,''),'\\D','','g')=$4)) limit 1", [org, email || "", phone || "", document || ""]);
-      if (existing.rowCount) return res.json({ client: existing.rows[0], created: false });
+      await db.query("begin");
+      const identityLocks = [email && `email:${email.toLowerCase()}`, phone && `phone:${digitsOnly(phone)}`, document && `document:${document}`].filter(Boolean).sort();
+      for (const identity of identityLocks) await db.query("select pg_advisory_xact_lock(hashtext($1),hashtext($2))", [String(org), identity]);
+      const existing = await db.query("select id from clients where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(coalesce(phone,''),'\\D','','g')=regexp_replace($3,'\\D','','g')) or ($4<>'' and regexp_replace(coalesce(document,''),'\\D','','g')=$4)) limit 1", [org, email || "", phone || "", document || ""]);
+      if (existing.rowCount) { await db.query("commit"); return res.json({ id: existing.rows[0].id, client: existing.rows[0], created: false }); }
       let companyId = body.company_id || null, contactId = body.contact_id || null;
-      if (companyId) { const company = await pool.query("select id from companies where id=$1 and organization_id=$2", [companyId, org]); if (!company.rowCount) return res.status(400).json({ error: "Empresa inválida para este workspace." }); }
+      if (companyId) { const company = await db.query("select id from companies where id=$1 and organization_id=$2", [companyId, org]); if (!company.rowCount) { await db.query("rollback"); return res.status(400).json({ error: "Empresa inválida para este workspace." }); } }
       if (!companyId && asText(body.company_name)) {
-        const company = await pool.query("select id from companies where organization_id=$1 and lower(trim(name))=lower(trim($2)) limit 1", [org, asText(body.company_name)]);
-        companyId = company.rows[0]?.id || (await pool.query("insert into companies (organization_id,name,document) values ($1,$2,$3) returning id", [org, asText(body.company_name), asText(body.company_document) || null])).rows[0].id;
+        const companyName = asText(body.company_name);
+        await db.query("select pg_advisory_xact_lock(hashtext($1),hashtext($2))", [String(org), `company:${companyName.toLowerCase()}`]);
+        const company = await db.query("select id from companies where organization_id=$1 and lower(trim(name))=lower(trim($2)) limit 1", [org, companyName]);
+        companyId = company.rows[0]?.id || (await db.query("insert into companies (organization_id,name,document) values ($1,$2,$3) returning id", [org, companyName, asText(body.company_document) || null])).rows[0].id;
       }
-      if (contactId) { const contact = await pool.query("select id from contacts where id=$1 and organization_id=$2", [contactId, org]); if (!contact.rowCount) return res.status(400).json({ error: "Contato inválido para este workspace." }); }
+      if (contactId) { const contact = await db.query("select id from contacts where id=$1 and organization_id=$2", [contactId, org]); if (!contact.rowCount) { await db.query("rollback"); return res.status(400).json({ error: "Contato inválido para este workspace." }); } }
       if (!contactId && (email || phone)) {
-        const contact = await pool.query("select id from contacts where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(coalesce(phone,''),'\\D','','g')=regexp_replace($3,'\\D','','g'))) limit 1", [org, email || "", phone || ""]);
-        contactId = contact.rows[0]?.id || (await pool.query("insert into contacts (organization_id,name,email,phone,company_id) values ($1,$2,$3,$4,$5) returning id", [org, name, email, phone, companyId])).rows[0].id;
+        const contact = await db.query("select id from contacts where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(coalesce(phone,''),'\\D','','g')=regexp_replace($3,'\\D','','g'))) limit 1", [org, email || "", phone || ""]);
+        contactId = contact.rows[0]?.id || (await db.query("insert into contacts (organization_id,name,email,phone,company_id) values ($1,$2,$3,$4,$5) returning id", [org, name, email, phone, companyId])).rows[0].id;
       }
-      const existingAfterContact = await pool.query("select id from clients where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(coalesce(phone,''),'\\D','','g')=regexp_replace($3,'\\D','','g'))) limit 1", [org, email || "", phone || ""]);
-      if (existingAfterContact.rowCount) return res.json({ client: existingAfterContact.rows[0], created: false });
       const status = ["active", "inactive", "blocked"].includes(body.status) ? body.status : "active";
-      const client = await pool.query("insert into clients (organization_id,company_id,contact_id,name,document,email,phone,status) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *", [org, companyId, contactId, name, document, email, phone, status]);
-      res.status(201).json({ client: client.rows[0], created: true });
-    } catch (error) { const out = classifyDbError(error, "Não foi possível cadastrar o cliente."); res.status(out.status).json({ error: out.error }); }
+      const client = await db.query("insert into clients (organization_id,company_id,contact_id,name,document,email,phone,status) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *", [org, companyId, contactId, name, document, email, phone, status]);
+      await db.query("commit");
+      res.status(201).json({ id: client.rows[0].id, client: client.rows[0], company_id: companyId, contact_id: contactId, created: true });
+    } catch (error) { await db.query("rollback").catch(() => {}); const out = classifyDbError(error, "Não foi possível cadastrar o cliente."); res.status(out.status).json({ error: out.error }); }
+    finally { db.release?.(); }
   });
   const relationOverview = async (req, res, table) => {
     const org = tenant(req, res); if (!org) return;
@@ -147,7 +154,7 @@ export function register(app, ctx) {
         pool.query("select id,name,email,phone,role from contacts where organization_id=$1 and (id=$2 or company_id=$3) order by name", [org, row.contact_id || 0, row.company_id || 0]),
         pool.query("select c.id,c.subject,c.channel,c.status,c.remote_number,c.unread_count,c.last_message_at,(select body from messages m where m.conversation_id=c.id order by m.created_at desc limit 1) last_message from conversations c where c.organization_id=$1 and (c.client_id=$2 or c.contact_id=$3) order by c.last_message_at desc nulls last,c.created_at desc limit 20", [org, row.id, row.contact_id || 0]),
         pool.query("select id,name,status,value,starts_on,ends_on from contracts where organization_id=$1 and client_id=$2 order by created_at desc", [org, row.id]),
-        pool.query("select p.id,p.title,p.status,p.amount,p.valid_until from proposals p left join opportunities o on o.id=p.opportunity_id and o.organization_id=p.organization_id left join leads l on l.id=p.lead_id and l.organization_id=p.organization_id where p.organization_id=$1 and ((o.company_id=$2 and $2 is not null) or (l.contact_id=$3 and $3 is not null)) order by p.created_at desc limit 20", [org, row.company_id || null, row.contact_id || null]),
+        pool.query("select p.id,p.title,p.status,p.amount,p.valid_until from proposals p left join opportunities o on o.id=p.opportunity_id and o.organization_id=p.organization_id left join leads l on l.id=p.lead_id and l.organization_id=p.organization_id where p.organization_id=$1 and (p.client_id=$4 or (o.company_id=$2 and $2 is not null) or (l.contact_id=$3 and $3 is not null)) order by p.created_at desc limit 20", [org, row.company_id || null, row.contact_id || null, row.id]),
         pool.query("select id,description,amount,due_at,status,paid_at from receivables where organization_id=$1 and client_id=$2 order by due_at desc limit 20", [org, row.id]),
         pool.query("select id,name,status,progress,due_on,production_url,repository_url from projects where organization_id=$1 and client_id=$2 order by created_at desc", [org, row.id]),
         pool.query("select id,title,status,priority,due_at,project_id from tasks where organization_id=$1 and (client_id=$2 or project_id in (select id from projects where organization_id=$1 and client_id=$2)) order by due_at nulls last,created_at desc limit 30", [org, row.id]),

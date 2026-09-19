@@ -370,6 +370,12 @@ createConfig.empresa = { title: "Nova empresa", endpoint: "/api/companies", fiel
 createConfig.cliente = { title: "Novo cliente", endpoint: "/api/clients/quick", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone"), field("whatsapp", "WhatsApp"), field("company_name", "Empresa (opcional)"), field("company_document", "CNPJ da empresa"), field("street", "EndereÃ§o"), field("street_number", "NÃºmero"), field("city", "Cidade"), field("state", "UF"), field("zip_code", "CEP")] };
 /* Fluxo inicial simples: cliente é independente; empresa e contato são opcionais. Os demais dados entram na ficha. */
 createConfig.cliente = { title: "Novo cliente", endpoint: "/api/clients/quick", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone/WhatsApp", "tel"), field("company_name", "Empresa (opcional)"), field("company_document", "CNPJ da empresa (opcional)"), field("status", "Situação", "select", { options: [["active", "Ativo"], ["inactive", "Inativo"], ["blocked", "Bloqueado"]] })] };
+createConfig.cliente.onCreated = (data, payload) => {
+  if (location.hash !== "#clientes" || !data?.client?.id) return;
+  // O endpoint rápido já devolve o ID canônico, inclusive quando encontra um
+  // cadastro existente. Isso torna a abertura da ficha imediata e inequívoca.
+  window.FocusOpenClientDetails?.({ ...payload, ...data.client });
+};
 window.prepareCreate = async function prepareQuickCreate(kind, shouldOpen = true) { if (shouldOpen && location.hash !== "#portal-do-cliente") openCreateDialog(kind); };
 
 dashboardGrid.addEventListener("click", async (event) => {

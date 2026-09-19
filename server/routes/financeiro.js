@@ -1,45 +1,65 @@
 /* Rotas específicas do domínio financeiro. */
 import { cancelOrder, createCheckoutPreference, createPixOrder, createSubscription, getOrder, getPayment, getSubscription, mercadoPagoConfigured, mercadoPagoWebhookConfigured, newIdempotencyKey, paymentState, refundOrder, updateSubscription, validateMercadoPagoWebhook } from "../mercadopago.js";
 
-async function processMercadoPagoPayment({ pool, dataId, type = "payment" }) {
-  const payment = type === "order" ? await getOrder(dataId) : await getPayment(dataId);
-  if (!payment.external_id) return;
+export async function processMercadoPagoPayment({ pool, dataId, type = "payment", getOrderImpl = getOrder, getPaymentImpl = getPayment }) {
+  const payment = type === "order" ? await getOrderImpl(dataId) : await getPaymentImpl(dataId);
+  if (!payment.external_id) throw new Error("O Mercado Pago não retornou um identificador para o pagamento.");
   const db = pool.connect ? await pool.connect() : pool;
   try {
     await db.query("begin");
     const chargeResult = await db.query("select * from charges where provider='mercado_pago' and external_id=$1 for update", [payment.external_id]);
-    if (!chargeResult.rowCount) { await db.query("rollback"); return; }
+    if (!chargeResult.rowCount) { await db.query("rollback"); throw new Error("Cobrança do webhook não encontrada."); }
     const charge = chargeResult.rows[0];
     const state = paymentState(payment.status);
-    await db.query("update charges set status=$1,provider_status=$2,provider_payload=$3::jsonb where id=$4", [state, payment.status, JSON.stringify(payment.raw || {}), charge.id]);
-    if (state !== "paid") { await db.query("commit"); return; }
+    const eventKey = `mercadopago:${type}:${dataId}:${String(payment.status || "pending").toLowerCase()}`;
+    const processed = await db.query("select id from audit_events where organization_id=$1 and action='mercadopago_webhook' and changes->>'event_key'=$2 limit 1", [charge.organization_id, eventKey]);
+    if (processed.rowCount) { await db.query("commit"); return { duplicate: true, eventKey }; }
+    await db.query("update charges set status=$1,provider_status=$2,provider_payload=$3::jsonb where id=$4 and organization_id=$5", [state, payment.status, JSON.stringify(payment.raw || {}), charge.id, charge.organization_id]);
     const paymentExternalId = payment.payment_id || payment.external_id;
-    const duplicate = await db.query("select id from payments where organization_id=$1 and external_id=$2 limit 1", [charge.organization_id, paymentExternalId]);
-    if (!duplicate.rowCount) {
+    if (state === "paid") {
+      const duplicate = await db.query("select id from payments where organization_id=$1 and external_id=$2 limit 1", [charge.organization_id, paymentExternalId]);
+      if (!duplicate.rowCount) {
       const amount = Number(payment.amount || payment.raw?.transaction_amount || charge.amount || 0);
-      const inserted = await db.query("insert into payments (organization_id,receivable_id,charge_id,amount,paid_at,method,external_id,provider_status) values ($1,$2,$3,$4,now(),'mercado_pago',$5,$6) returning *", [charge.organization_id, charge.receivable_id, charge.id, amount, paymentExternalId, payment.status]);
-      const receivable = await db.query("select * from receivables where id=$1 and organization_id=$2 for update", [charge.receivable_id, charge.organization_id]);
-      if (receivable.rowCount) {
-        const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [charge.receivable_id, charge.organization_id]);
-        const paid = Number(prior.rows[0]?.total || 0) >= Number(receivable.rows[0].amount || 0) - 0.005;
-        await db.query("update receivables set status=$1,paid_at=case when $1='paid' then now() else paid_at end,updated_at=now() where id=$2 and organization_id=$3", [paid ? "paid" : "partially_paid", charge.receivable_id, charge.organization_id]);
-        await db.query("insert into revenues (organization_id,description,client_id,project_id,contract_id,amount,net_amount,payment_method,paid_at,status) values ($1,$2,$3,$4,$5,$6,$6,'mercado_pago',now(),'confirmed')", [charge.organization_id, receivable.rows[0].description, receivable.rows[0].client_id, receivable.rows[0].project_id, receivable.rows[0].contract_id, amount]);
+        await db.query("insert into payments (organization_id,receivable_id,charge_id,amount,paid_at,method,external_id,provider_status) values ($1,$2,$3,$4,now(),'mercado_pago',$5,$6) returning *", [charge.organization_id, charge.receivable_id, charge.id, amount, paymentExternalId, payment.status]);
+        const receivable = await db.query("select * from receivables where id=$1 and organization_id=$2 for update", [charge.receivable_id, charge.organization_id]);
+        if (receivable.rowCount) {
+          const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [charge.receivable_id, charge.organization_id]);
+          const paid = Number(prior.rows[0]?.total || 0) >= Number(receivable.rows[0].amount || 0) - 0.005;
+          await db.query("update receivables set status=$1,paid_at=case when $1='paid' then now() else paid_at end,updated_at=now() where id=$2 and organization_id=$3", [paid ? "paid" : "partially_paid", charge.receivable_id, charge.organization_id]);
+          await db.query("insert into revenues (organization_id,description,client_id,project_id,contract_id,amount,net_amount,payment_method,paid_at,status) values ($1,$2,$3,$4,$5,$6,$6,'mercado_pago',now(),'confirmed')", [charge.organization_id, receivable.rows[0].description, receivable.rows[0].client_id, receivable.rows[0].project_id, receivable.rows[0].contract_id, amount]);
+        }
       }
-      void inserted;
+    }
+    await db.query("insert into audit_events (organization_id,action,entity_type,entity_id,changes) values ($1,'mercadopago_webhook','charges',$2,$3::jsonb)", [charge.organization_id, charge.id, JSON.stringify({ event_key: eventKey, data_id: String(dataId), provider_status: String(payment.status || "") })]);
+    await db.query("commit");
+    return { duplicate: false, eventKey };
+  } catch (error) { await db.query("rollback").catch(() => {}); throw error; } finally { db.release?.(); }
+}
+
+export async function processMercadoPagoSubscription({ pool, dataId, getSubscriptionImpl = getSubscription }) {
+  const provider = await getSubscriptionImpl(dataId);
+  const status = String(provider?.status || "pending").toLowerCase();
+  const internal = status === "authorized" ? "active" : status === "paused" ? "paused" : ["cancelled", "canceled"].includes(status) ? "cancelled" : "active";
+  const db = pool.connect ? await pool.connect() : pool;
+  try {
+    await db.query("begin");
+    const subscriptions = await db.query("select id,organization_id from subscriptions where provider='mercado_pago' and provider_id=$1 for update", [String(dataId)]);
+    if (!subscriptions.rowCount) { await db.query("rollback"); throw new Error("Assinatura do webhook não encontrada."); }
+    for (const subscription of subscriptions.rows) {
+      const eventKey = `mercadopago:subscription:${dataId}:${status}`;
+      const processed = await db.query("select id from audit_events where organization_id=$1 and action='mercadopago_webhook' and changes->>'event_key'=$2 limit 1", [subscription.organization_id, eventKey]);
+      if (processed.rowCount) continue;
+      await db.query("update subscriptions set status=$1,provider_status=$2,provider_payload=$3::jsonb,updated_at=now() where id=$4 and organization_id=$5", [internal, status, JSON.stringify(provider || {}), subscription.id, subscription.organization_id]);
+      await db.query("insert into audit_events (organization_id,action,entity_type,entity_id,changes) values ($1,'mercadopago_webhook','subscriptions',$2,$3::jsonb)", [subscription.organization_id, subscription.id, JSON.stringify({ event_key: eventKey, data_id: String(dataId), provider_status: status })]);
     }
     await db.query("commit");
   } catch (error) { await db.query("rollback").catch(() => {}); throw error; } finally { db.release?.(); }
 }
 
-async function processMercadoPagoSubscription({ pool, dataId }) {
-  const provider = await getSubscription(dataId);
-  const status = String(provider?.status || "pending").toLowerCase();
-  const internal = status === "authorized" ? "active" : status === "paused" ? "paused" : ["cancelled", "canceled"].includes(status) ? "cancelled" : "active";
-  await pool.query("update subscriptions set status=$1,provider_status=$2,provider_payload=$3::jsonb,updated_at=now() where provider='mercado_pago' and provider_id=$4", [internal, status, JSON.stringify(provider || {}), String(dataId)]);
-}
-
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
+  const processPaymentWebhook = ctx.processMercadoPagoPayment || processMercadoPagoPayment;
+  const processSubscriptionWebhook = ctx.processMercadoPagoSubscription || processMercadoPagoSubscription;
   const error = (res, e, fallback) => { const out = classifyDbError(e, fallback); res.status(out.status).json({ error: out.error }); };
   app.get("/api/bank_accounts", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
@@ -62,7 +82,6 @@ export function register(app, ctx) {
     const org = tenant(req, res); if (!org) return;
     const amount = Number(req.body?.amount), method = asText(req.body?.method) || "manual";
     if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Informe um valor de pagamento válido." });
-    return res.status(409).json({ error: "As baixas de contas a receber são confirmadas exclusivamente pelo Mercado Pago." });
     const db = pool.connect ? await pool.connect() : pool;
     try {
       await db.query("begin");
@@ -109,15 +128,19 @@ export function register(app, ctx) {
     try { await db.query("begin"); const account = await db.query("select * from bank_accounts where id=$1 and organization_id=$2 for update", [req.params.id, org]); if (!account.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Conta bancária não encontrada." }); } const transaction = await db.query("insert into bank_account_transactions (organization_id,bank_account_id,kind,amount,description) values ($1,$2,$3,$4,$5) returning *", [org, req.params.id, kind, amount, description]); const delta = kind === "credit" ? amount : -amount; const updated = await db.query("update bank_accounts set current_balance=coalesce(current_balance,0)+$1,updated_at=now() where id=$2 and organization_id=$3 returning *", [delta, req.params.id, org]); await db.query("commit"); res.status(201).json({ transaction: transaction.rows[0], bank_account: updated.rows[0] }); } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível registrar a movimentação."); } finally { db.release?.(); }
   });
   app.get("/api/integrations/mercadopago/status", (_req, res) => res.json({ configured: mercadoPagoConfigured(), webhook_configured: mercadoPagoWebhookConfigured(), provider: "mercado_pago", capabilities: ["pix", "checkout", "card", "boleto", "webhook"] }));
-  app.post("/api/webhooks/mercadopago", (req, res) => {
+  app.post("/api/webhooks/mercadopago", async (req, res) => {
     if (!mercadoPagoWebhookConfigured()) return res.status(503).json({ error: "Webhook do Mercado Pago ainda não foi configurado." });
     const dataId = asText(req.query?.["data.id"] || req.body?.data?.id);
     const type = asText(req.query?.type || req.body?.type || req.body?.topic) || "payment";
     if (!validateMercadoPagoWebhook({ signature: req.get("x-signature"), requestId: req.get("x-request-id"), dataId })) return res.status(401).json({ error: "Assinatura do webhook inválida." });
-    res.status(200).json({ received: true });
-    void (type === "subscription_preapproval" || type === "preapproval"
-      ? processMercadoPagoSubscription({ pool, dataId })
-      : processMercadoPagoPayment({ pool, dataId, type })).catch(() => {});
+    try {
+      await (type === "subscription_preapproval" || type === "preapproval"
+        ? processSubscriptionWebhook({ pool, dataId })
+        : processPaymentWebhook({ pool, dataId, type }));
+      return res.status(200).json({ received: true });
+    } catch {
+      return res.status(503).json({ received: false, error: "Não foi possível persistir o webhook. O Mercado Pago pode tentar novamente." });
+    }
   });
   app.post("/api/receivables/:id/create-charge", async (req, res) => {
     const org = tenant(req, res); if (!org) return;

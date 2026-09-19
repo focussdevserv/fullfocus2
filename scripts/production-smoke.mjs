@@ -1,11 +1,14 @@
 const baseUrl = (process.env.SMOKE_URL || "https://focussdev.space").replace(/\/$/, "");
 const checks = [
-  ["module loader current", "/module-loader.js?v=4"],
   ["aplicação", "/"],
   ["health da API", "/api/health"],
-  ["loader de módulos", "/module-loader.js?v=3"],
+  ["loader de módulos", "/module-loader.js?v=4"],
   ["CSS principal", "/styles.css?v=18"],
+  ["aplicação atual", "/app.js?v=21"],
   ["módulo inicial", "/modules/inicio.js?v=4"],
+  ["módulo de tarefas", "/modules/tarefas.js?v=4"],
+  ["módulo de clientes", "/modules/contas.js?v=4"],
+  ["service worker", "/service-worker.js"],
 ];
 
 let failed = 0;

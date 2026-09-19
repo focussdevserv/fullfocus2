@@ -9,7 +9,7 @@ const PRIORITY = { urgent: ["Urgente", "priority-urgent"], high: ["Alta", "prior
 const DAY = 86_400_000;
 
 const taskSavedMode = (() => { try { return localStorage.getItem("focusdev_tasks_mode"); } catch { return null; } })();
-const state = { mode: taskSavedMode || "list", status: "open", priority: "all", project: "all", sort: "due", query: "", tasks: [], projects: [], pendingDelete: null, request: 0, mutation: 0 };
+const state = { mode: taskSavedMode || "list", status: "open", priority: "all", project: "all", sort: "due", query: "", tasks: [], projects: [], clients: [], pendingDelete: null, request: 0, mutation: 0 };
 
 const esc = (v) => escapeHtml(v == null ? "" : String(v));
 const taskTimeFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -44,7 +44,7 @@ async function renderTasks() {
   const restoreSearchFocus = ui.keepSearchFocus(dashboardGrid, ".tasks-search");
   dashboardGrid.innerHTML = `<section class="page-intro"><div><p class="card-kicker">Meu dia</p><h2>Tarefas</h2><p>Organize prioridades e acompanhe o trabalho da equipe.</p></div></section>${stateBlock.loading("Carregando tarefas…")}`;
   const params = new URLSearchParams(); if (state.query.trim()) params.set("search", state.query.trim()); if (state.status !== "all") params.set("status", state.status); if (state.priority !== "all") params.set("priority", state.priority); if (state.project !== "all") params.set("project_id", state.project);
-  const [tasks, projects] = await Promise.allSettled([api(`/api/tasks?${params}`), api("/api/projects")]);
+  const [tasks, projects, clients] = await Promise.allSettled([api(`/api/tasks?${params}`), api("/api/projects"), api("/api/clients")]);
   if (request !== state.request || location.hash !== "#tarefas") return;
   if (tasks.status === "rejected") {
     dashboardGrid.removeAttribute("aria-busy");
@@ -54,9 +54,13 @@ async function renderTasks() {
   }
   state.tasks = tasks.value.tasks || [];
   state.projects = projects.status === "fulfilled" ? projects.value.projects || [] : [];
-  // Projetos disponíveis no dialog de criação/edição.
+  state.clients = clients.status === "fulfilled" ? clients.value.clients || [] : [];
+  // Cada relação atualiza somente o próprio campo; carregar clientes não pode
+  // substituir as opções de projeto (nem o inverso).
   const projectField = createConfig.tarefa.fields.find((f) => f.name === "project_id");
+  const clientField = createConfig.tarefa.fields.find((f) => f.name === "client_id");
   if (projectField) projectField.options = [["", "Sem projeto"], ...state.projects.map((p) => [String(p.id), p.name])];
+  if (clientField) clientField.options = [["", "Sem cliente"], ...state.clients.map((client) => [String(client.id), client.name])];
   draw();
   dashboardGrid.removeAttribute("aria-busy");
   restoreSearchFocus();

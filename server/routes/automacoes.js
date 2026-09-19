@@ -28,21 +28,50 @@ const INTEGRATION_PROVIDERS = [
   "webhook", "api",
 ];
 
+const INTEGRATION_CAPABILITIES = {
+  whatsapp: { label: "WhatsApp / Evolution API", available: true, configuration: "dedicated", route: "whatsapp", can_test: false, adapter: "evolution" },
+  mercado_pago: { label: "Mercado Pago", available: true, configuration: "dedicated", route: "cobrancas", can_test: false, adapter: "mercado_pago" },
+  webhook: { label: "Webhook", available: true, configuration: "inline", can_test: true, adapter: "webhook" },
+  n8n: { label: "n8n", available: true, configuration: "inline", can_test: true, adapter: "webhook" },
+  email: { label: "E-mail transacional", available: false, configuration: "environment", can_test: false, adapter: "resend" },
+  smtp: { label: "SMTP", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  google_calendar: { label: "Google Calendar", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  google_drive: { label: "Google Drive", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  github: { label: "GitHub", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  asaas: { label: "Asaas", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  stripe: { label: "Stripe", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  firebase: { label: "Firebase", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  supabase: { label: "Supabase", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  cnpj: { label: "Consulta CNPJ", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  esign: { label: "Assinatura eletrônica", available: false, configuration: "unavailable", can_test: false, adapter: null },
+  api: { label: "API própria", available: false, configuration: "unavailable", can_test: false, adapter: null },
+};
+
+const SECRET_KEYS = new Set(["apikey", "token", "secret", "password", "clientsecret", "authorization"]);
+const isSecretKey = (key) => SECRET_KEYS.has(String(key).replace(/[-_]/g, "").toLowerCase());
+const isMaskedSecret = (value) => typeof value === "string" && /^(?:\u2022|\*){4}/u.test(value);
+
+function mergeIntegrationConfig(existing, incoming) {
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return existing;
+  const merged = { ...(existing && typeof existing === "object" && !Array.isArray(existing) ? existing : {}) };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (isSecretKey(key) && (value === undefined || value === "" || isMaskedSecret(value))) continue;
+    if (value && typeof value === "object" && !Array.isArray(value)) merged[key] = mergeIntegrationConfig(merged[key], value);
+    else merged[key] = value;
+  }
+  return merged;
+}
+
 const maskIntegration = (row) => {
   if (!row || !row.config || typeof row.config !== "object") return row;
   const config = { ...row.config };
-  for (const key of ["apiKey", "token", "secret", "password"]) {
-    if (config[key]) config[key] = `••••${String(config[key]).slice(-4)}`;
-  }
   Object.assign(config, maskNestedConfig(config));
   Object.entries(config).forEach(([key, value]) => { if (value && typeof value === "object" && !Array.isArray(value)) config[key] = maskNestedConfig(value); });
   return { ...row, config };
 };
 function maskNestedConfig(value) {
-  const secretKeys = new Set(["apikey", "api_key", "token", "secret", "password", "clientsecret", "client_secret"]);
   return Object.fromEntries(Object.entries(value).map(([key, child]) => {
-    const normalized = key.replace(/[-_]/g, "").toLowerCase();
-    if (secretKeys.has(normalized) && child) return [key, `\u2022\u2022\u2022\u2022${String(child).slice(-4)}`];
+    if (isSecretKey(key) && child) return [key, "••••"];
     return [key, child && typeof child === "object" && !Array.isArray(child) ? maskNestedConfig(child) : child];
   }));
 }
@@ -52,6 +81,14 @@ const jsonValue = (value, fallback) => value === undefined ? fallback : value;
 
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError } = ctx;
+  const integrationTestAdapters = {
+    webhook: async (integration) => {
+      const target = await assertSafeOutboundUrl(integration.config?.webhookUrl || integration.config?.url);
+      const response = await fetch(target, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: "test" }), redirect: "manual", signal: AbortSignal.timeout(5000) });
+      return { ok: response.ok, status: response.status };
+    },
+    ...(ctx.integrationTestAdapters || {}),
+  };
   const fail = (res, error, fallback) => {
     const out = classifyDbError(error, fallback);
     res.status(out.status).json({ error: out.error });
@@ -80,6 +117,11 @@ export function register(app, ctx) {
     const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); params.push(limit, offset);
     try { const q = await pool.query(`select * from automations where ${where.join(" and ")} order by created_at desc limit $${params.length - 1} offset $${params.length}`, params); return res.json({ automations: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (error) { return fail(res, error, "Nao foi possivel carregar as automacoes."); }
   });
+  app.get("/api/integrations/capabilities", (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    res.json({ providers: INTEGRATION_CAPABILITIES });
+  });
+
   app.use("/api/integrations", async (req, res, next) => {
     if (req.method !== "GET") return next();
     const org = tenant(req, res); if (!org) return;
@@ -98,10 +140,7 @@ export function register(app, ctx) {
       const current = await pool.query("select config from integrations where id=$1 and organization_id=$2", [integrationId, org]);
       if (!current.rowCount) return res.status(404).json({ error: "Integração não encontrada." });
       const existing = current.rows[0]?.config && typeof current.rows[0].config === "object" ? current.rows[0].config : {};
-      const nextConfig = { ...req.body.config };
-      const secretKeys = ["apiKey", "api_key", "token", "secret", "password", "clientSecret", "client_secret"];
-      secretKeys.forEach((key) => { if (existing[key] !== undefined && (nextConfig[key] === undefined || (typeof nextConfig[key] === "string" && /^\u2022{4}/.test(nextConfig[key])))) nextConfig[key] = existing[key]; });
-      req.body.config = nextConfig;
+      req.body.config = mergeIntegrationConfig(existing, req.body.config);
       return next();
     } catch { return res.status(503).json({ error: "Não foi possível preservar a configuração protegida." }); }
   });
@@ -207,12 +246,22 @@ export function register(app, ctx) {
       const q = await pool.query("select * from integrations where id=$1 and organization_id=$2", [req.params.id, org]);
       if (!q.rowCount) return res.status(404).json({ error: "Integração não encontrada." });
       const integration = q.rows[0];
-      if (integration.provider !== "webhook") return res.status(409).json({ error: "Este provedor ainda não possui um teste de conexão implementado." });
-      let target; try { target = await assertSafeOutboundUrl(integration.config?.url); } catch (error) { return res.status(400).json({ error: error.message || "URL de webhook inválida." }); }
-      const response = await fetch(target, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event: "test" }), redirect: "manual", signal: AbortSignal.timeout(5000) });
-      res.json({ ok: response.ok, status: response.status });
-    } catch (error) { if (error.name === "TimeoutError") return res.status(400).json({ error: "Tempo esgotado ao testar webhook." }); fail(res, error, "Não foi possível testar a integração."); }
+      const capability = INTEGRATION_CAPABILITIES[integration.provider];
+      if (capability?.configuration === "dedicated") return res.status(409).json({ error: `Gerencie ${capability.label} na tela dedicada.`, route: capability.route, available: true });
+      const adapter = capability?.can_test ? integrationTestAdapters[capability.adapter] : null;
+      if (!adapter) return res.status(409).json({ error: "Este provedor está indisponível porque ainda não possui adapter de teste.", available: false });
+      try {
+        const result = await adapter(integration);
+        const ok = result?.ok === true;
+        await pool.query("update integrations set status=$1,last_sync_at=now(),last_error=$2,updated_at=now() where id=$3 and organization_id=$4", [ok ? "connected" : "error", ok ? null : `HTTP ${result?.status || "inválido"}`, req.params.id, org]);
+        return res.status(ok ? 200 : 502).json({ ok, status: result?.status || null, provider: integration.provider });
+      } catch (error) {
+        const message = error.name === "TimeoutError" ? "Tempo esgotado ao testar a integração." : error.message || "Não foi possível testar a integração.";
+        await pool.query("update integrations set status='error',last_sync_at=now(),last_error=$1,updated_at=now() where id=$2 and organization_id=$3", [message, req.params.id, org]).catch(() => {});
+        return res.status(error.status || 502).json({ error: message });
+      }
+    } catch (error) { fail(res, error, "Não foi possível testar a integração."); }
   });
 }
 
-export { AUTOMATION_ACTIONS, AUTOMATION_TRIGGERS, INTEGRATION_PROVIDERS, TEMPLATE_KINDS };
+export { AUTOMATION_ACTIONS, AUTOMATION_TRIGGERS, INTEGRATION_CAPABILITIES, INTEGRATION_PROVIDERS, TEMPLATE_KINDS, maskIntegration, mergeIntegrationConfig };
