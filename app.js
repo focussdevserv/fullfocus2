@@ -81,6 +81,36 @@ function enhanceNavGroups() {
   });
 }
 enhanceNavGroups();
+function bindSidebarNavSearch() {
+  const input = $("sidebar-nav-search");
+  if (!input) return;
+  const groups = [...document.querySelectorAll(".main-nav .nav-group")];
+  const normalize = (value) => String(value || "").trim().toLocaleLowerCase("pt-BR");
+  const restoreGroups = () => groups.forEach((group, index) => {
+    group.hidden = false;
+    group.querySelectorAll(":scope > .nav-item").forEach((item) => { item.hidden = false; });
+    if (index > 0 && !group.querySelector(".nav-group-toggle")) return;
+    let shouldCollapse = false;
+    try { shouldCollapse = index > 0 && localStorage.getItem(`focusdev_nav_${index}`) === "closed"; } catch { /* preferÃªncia indisponÃ­vel */ }
+    group.classList.toggle("is-collapsed", shouldCollapse);
+    group.querySelector(".nav-group-toggle")?.setAttribute("aria-expanded", String(!shouldCollapse));
+  });
+  input.addEventListener("input", () => {
+    const query = normalize(input.value);
+    if (!query) { restoreGroups(); return; }
+    groups.forEach((group) => {
+      const items = [...group.querySelectorAll(":scope > .nav-item")];
+      const matches = items.filter((item) => normalize(item.textContent).includes(query));
+      group.hidden = matches.length === 0;
+      items.forEach((item) => { item.hidden = !normalize(item.textContent).includes(query); });
+      if (matches.length) {
+        group.classList.remove("is-collapsed");
+        group.querySelector(".nav-group-toggle")?.setAttribute("aria-expanded", "true");
+      }
+    });
+  });
+}
+bindSidebarNavSearch();
 function syncNavGroupForRoute(hash) {
   const active = navItemsByHash.get(hash);
   const group = active?.closest?.(".nav-group");

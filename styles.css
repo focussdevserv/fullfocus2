@@ -654,6 +654,37 @@ svg {
   font-size: 11px;
 }
 
+.sidebar-nav-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 18px;
+  padding: 0 10px;
+  border: 1px solid rgb(112 145 196 / 28%);
+  border-radius: 9px;
+  background: rgb(13 27 51 / 72%);
+  color: #7f9bca;
+}
+.sidebar-nav-search:focus-within {
+  border-color: rgb(114 167 255 / 68%);
+  box-shadow: 0 0 0 3px rgb(114 167 255 / 12%);
+}
+.sidebar-nav-search input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #e7efff;
+  font: inherit;
+  font-size: 12px;
+}
+.sidebar-nav-search input::placeholder { color: #7890b6; }
+.sidebar-nav-search input::-webkit-search-cancel-button { filter: invert(1); }
+.main-nav .nav-group[hidden] { display: none; }
+.main-nav .nav-item[hidden] { display: none; }
+
 .main-nav {
   display: grid;
   gap: 18px;
