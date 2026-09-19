@@ -1,5 +1,4 @@
 /* Rotas específicas do domínio financeiro. */
-import { pixPayload, pixQrDataUrl } from "../pix.js";
 import { createCheckoutPreference, createPixOrder, getOrder, getPayment, mercadoPagoConfigured, mercadoPagoWebhookConfigured, newIdempotencyKey, paymentState, validateMercadoPagoWebhook } from "../mercadopago.js";
 
 async function processMercadoPagoPayment({ pool, dataId, type = "payment" }) {
@@ -56,6 +55,7 @@ export function register(app, ctx) {
     const org = tenant(req, res); if (!org) return;
     const amount = Number(req.body?.amount), method = asText(req.body?.method) || "manual";
     if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Informe um valor de pagamento válido." });
+    return res.status(409).json({ error: "As baixas de contas a receber são confirmadas exclusivamente pelo Mercado Pago." });
     const db = pool.connect ? await pool.connect() : pool;
     try {
       await db.query("begin");
@@ -112,12 +112,14 @@ export function register(app, ctx) {
   });
   app.post("/api/receivables/:id/create-charge", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
-    const channel = ["pix", "boleto", "card", "link", "transfer"].includes(req.body?.channel) ? req.body.channel : "link";
+    const channel = ["pix", "boleto", "card", "link"].includes(req.body?.channel) ? req.body.channel : "link";
     try {
       const receivable = await pool.query("select * from receivables where id=$1 and organization_id=$2", [req.params.id, org]);
       if (!receivable.rowCount) return res.status(404).json({ error: "Conta a receber não encontrada." });
       const source = receivable.rows[0];
       if (["paid", "cancelled"].includes(source.status)) return res.status(400).json({ error: "Esta conta não aceita novas cobranças." });
+      if (!mercadoPagoConfigured()) return res.status(503).json({ error: "Mercado Pago não está configurado. Configure o Access Token antes de gerar cobranças." });
+      if (req.body?.channel === "transfer" || req.body?.provider === "manual") return res.status(400).json({ error: "A Focussdev utiliza exclusivamente o Mercado Pago para cobranças." });
       const existing = await pool.query("select * from charges where receivable_id=$1 and organization_id=$2 and status in ('draft','generated','sent','pending') order by created_at desc limit 1", [source.id, org]);
       if (existing.rowCount) return res.json({ charge: existing.rows[0], created: false, provider_connected: existing.rows[0].provider === "mercado_pago", pix: existing.rows[0].pix_payload ? { payload: existing.rows[0].pix_payload, qr_data_url: existing.rows[0].pix_qr_data_url, document_kind: existing.rows[0].document_kind } : null });
       const amount = Number(source.updated_amount ?? source.amount);
@@ -141,21 +143,6 @@ export function register(app, ctx) {
         const charge = await pool.query("insert into charges (organization_id,receivable_id,client_id,project_id,provider,external_id,provider_status,provider_payload,idempotency_key,channel,status,amount,due_at,message,payment_url,pix_payload,pix_qr_data_url,document_kind) values ($1,$2,$3,$4,'mercado_pago',$5,$6,$7::jsonb,$8,$9,'pending',$10,$11,$12,$13,$14,$15,$16) returning *", [org, source.id, source.client_id, source.project_id, providerCharge.external_id, providerCharge.status, JSON.stringify(providerCharge.raw || {}), idempotencyKey, channel, amount, source.due_at, asText(req.body?.message) || `Cobrança Mercado Pago: ${source.description}`, providerCharge.payment_url, providerCharge.pix_payload, providerCharge.pix_qr_data_url, documentKind]);
         return res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: true, provider: "mercado_pago", payment_url: providerCharge.payment_url, pix: providerCharge.pix_payload ? { payload: providerCharge.pix_payload, qr_data_url: providerCharge.pix_qr_data_url, document_kind: documentKind } : null, notice: channel === "pix" ? "Cobrança Pix criada no Mercado Pago. Use o QR Code ou Pix copia e cola." : "Link de pagamento criado no Mercado Pago." });
       }
-      let pix = null;
-      if (["pix", "boleto"].includes(channel)) {
-        const organization = await pool.query("select name,settings from organizations where id=$1", [org]);
-        const settings = organization.rows[0]?.settings || {};
-        const key = asText(settings.pix_key);
-        if (!key) return res.status(400).json({ error: "Configure a chave Pix em Configurações → Financeiro antes de gerar esta cobrança." });
-        const payload = pixPayload({ key, amount, merchantName: organization.rows[0]?.name || "Focussdev", description: asText(req.body?.message) || source.description });
-        pix = { payload, qr_data_url: await pixQrDataUrl(payload), document_kind: channel === "boleto" ? "pix_boleto" : "pix" };
-      }
-      if (pix) {
-        const charge = await pool.query("insert into charges (organization_id,receivable_id,client_id,project_id,channel,status,amount,due_at,message,pix_payload,pix_qr_data_url,document_kind) values ($1,$2,$3,$4,$5,'generated',$6,$7,$8,$9,$10,$11) returning *", [org, source.id, source.client_id, source.project_id, channel, amount, source.due_at, asText(req.body?.message) || `Cobranca Pix: ${source.description}`, pix.payload, pix.qr_data_url, pix.document_kind]);
-        return res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: false, pix, notice: "Documento de cobranca Pix gerado. Nao possui codigo de barras; o pagamento deve ser feito pelo QR Code ou Pix copia e cola." });
-      }
-      const charge = await pool.query("insert into charges (organization_id,receivable_id,client_id,project_id,channel,status,amount,due_at,message) values ($1,$2,$3,$4,$5,'generated',$6,$7,$8) returning *", [org, source.id, source.client_id, source.project_id, channel, source.updated_amount ?? source.amount, source.due_at, asText(req.body?.message) || `Cobrança: ${source.description}`]);
-      res.status(201).json({ charge: charge.rows[0], created: true, provider_connected: false, notice: "Cobrança registrada no modo manual. Configure o Mercado Pago para gerar Pix, boleto ou link de pagamento." });
     } catch (e) { error(res, e, "Não foi possível gerar a cobrança."); }
   });
   app.post("/api/contracts/:id/create-receivables", async (req, res) => {
