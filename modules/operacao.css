@@ -53,4 +53,27 @@
 .portal-visibility-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem .8rem; margin: .8rem 0 1rem; }
 .portal-visibility-grid label { display: flex; align-items: flex-start; gap: .5rem; color: var(--text); font-size: .86rem; line-height: 1.35; }
 .portal-visibility-grid input { margin-top: .15rem; accent-color: var(--blue); }
+.project-view-switcher { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; padding: 0 1rem 1rem; border-bottom: 1px solid var(--line); }
+.project-view-switcher > span { color: var(--muted); font-size: .78rem; font-weight: 700; margin-right: .25rem; }
+.project-board { display: grid; grid-template-columns: repeat(7, minmax(190px, 1fr)); gap: .75rem; padding: 1rem; overflow-x: auto; }
+.project-board-column { min-height: 220px; padding: .7rem; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--paper) 70%, transparent); }
+.project-board-column header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .7rem; }
+.project-board-column h3 { margin: 0; font-size: .85rem; }
+.project-board-column header span { min-width: 1.4rem; padding: .15rem .4rem; border-radius: 99px; background: var(--line); color: var(--muted); text-align: center; font-size: .75rem; }
+.project-board-card { display: grid; gap: .42rem; padding: .75rem; margin-bottom: .65rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.project-board-card:last-child { margin-bottom: 0; }
+.project-board-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+.project-board-card strong, .project-timeline-main strong { overflow-wrap: anywhere; }
+.project-board-card small, .project-timeline-main small { color: var(--muted); font-size: .75rem; }
+.project-board-card .operations-progress { width: 100%; height: 6px; }
+.project-card-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .2rem; }
+.project-card-actions .compact-action { padding: .3rem .45rem; font-size: .72rem; }
+.project-blocked { margin: .1rem 0 0; color: var(--red); font-size: .75rem; }
+.project-timeline { display: grid; gap: .65rem; padding: 1rem; }
+.project-timeline-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding: .85rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.project-timeline-date { display: grid; gap: .2rem; color: var(--muted); font-size: .75rem; }
+.project-timeline-date strong { color: var(--text); }
+.project-timeline-main { display: grid; gap: .4rem; min-width: 0; }
+.project-timeline-main .operations-progress { width: 100%; height: 7px; }
+@media (max-width: 800px) { .project-timeline-row { grid-template-columns: 1fr; gap: .55rem; } .project-timeline-row .project-card-actions { justify-content: flex-start; } }
 @media (max-width: 600px) { .portal-visibility-grid { grid-template-columns: 1fr; } }

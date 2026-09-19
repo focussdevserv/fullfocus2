@@ -45,6 +45,46 @@ const globalSearch = $("global-search");
 const searchResults = $("search-results");
 const dashboardGrid = document.querySelector(".dashboard-grid");
 const initialDashboardMarkup = dashboardGrid?.innerHTML || "";
+// Menus extensos continuam completos, mas começam recolhidos para reduzir ruído visual.
+// O grupo que contém a rota atual permanece aberto e a preferência fica no navegador.
+function enhanceNavGroups() {
+  const groups = [...document.querySelectorAll(".main-nav .nav-group")];
+  groups.forEach((group, index) => {
+    if (index === 0 || group.querySelector(".nav-group-toggle")) return;
+    const title = group.querySelector("p");
+    if (!title) return;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "nav-group-toggle";
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.innerHTML = `<span>${title.textContent}</span><span aria-hidden="true">⌃</span>`;
+    title.replaceWith(toggle);
+    toggle.addEventListener("click", () => {
+      const collapsed = group.classList.toggle("is-collapsed");
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+      toggle.lastElementChild.textContent = collapsed ? "⌄" : "⌃";
+      try { localStorage.setItem(`focusdev_nav_${index}`, collapsed ? "closed" : "open"); } catch { /* preferência local */ }
+    });
+    try {
+      if (localStorage.getItem(`focusdev_nav_${index}`) === "closed") {
+        group.classList.add("is-collapsed");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.lastElementChild.textContent = "⌄";
+      }
+    } catch { /* armazenamento indisponível */ }
+  });
+}
+enhanceNavGroups();
+function syncNavGroupForRoute(hash) {
+  const active = navItemsByHash.get(hash);
+  const group = active?.closest?.(".nav-group");
+  if (!group) return;
+  const toggle = group.querySelector(".nav-group-toggle");
+  if (!toggle) return;
+  group.classList.remove("is-collapsed");
+  toggle.setAttribute("aria-expanded", "true");
+  if (toggle.lastElementChild) toggle.lastElementChild.textContent = "⌃";
+}
 document.addEventListener("change", async (event) => {
   const input = event.target.closest?.("[data-home-task]");
   if (!input) return;
@@ -651,7 +691,8 @@ function renderHashRoute(requestedHash = window.location.hash || "#inicio") {
   const label = navItemsByHash.has(hash) ? navItem.textContent.trim() : (routeMeta[key]?.title || key);
   document.title = `${key === "inicio" ? "Início" : label} · FocusDev`;
   appTitle.textContent = key === "inicio" ? homeGreeting : label;
-  document.querySelector(".eyebrow").textContent = navItem?.closest(".nav-group")?.querySelector("p")?.textContent || "Workspace";
+  syncNavGroupForRoute(hash);
+  document.querySelector(".eyebrow").textContent = navItem?.closest(".nav-group")?.querySelector(".nav-group-toggle span")?.textContent || "Workspace";
   document.querySelectorAll(".nav-item[aria-current]").forEach((item) => item.removeAttribute("aria-current"));
   navItem?.setAttribute("aria-current", "page");
   document.body.dataset.route = key;
