@@ -9,7 +9,7 @@ Escopo: aplicação web local em `C:\Users\focussdev\orca\fullfocus2`.
 |---|---|---|
 | `npm run check` | OK | 142 arquivos com sintaxe válida. |
 | `npm run build` | OK | 53 rotas do menu, referências locais e build estático validados. |
-| `npm test` | OK | 168 testes aprovados, 0 falhas. O teste de limite de upload registra um erro HTTP esperado e passa. |
+| `npm test` | OK | 169 testes aprovados, 0 falhas. O teste de limite de upload registra um erro HTTP esperado e passa. |
 | Navegação com banco/conta reais | PENDENTE | Ainda é necessário executar smoke test no ambiente com PostgreSQL e sessão autenticada. |
 | Integrações externas | PENDENTE | Mercado Pago, WhatsApp e e-mail precisam de teste controlado com credenciais reais e webhook configurado. |
 
@@ -25,7 +25,7 @@ Os testes automatizados comprovam sintaxe, contratos e regras cobertas pelos tes
 | Ficha 360 do cliente | PARCIAL | A ficha agrega projetos, contatos, propostas, contratos, cobranças, tarefas, tickets, arquivos, notas e infraestrutura. Falta validar todos os botões e edição a partir da ficha. |
 | Leads e CRM | PARCIAL | Existem leads, funil, oportunidades, atividades e conversão relacionada. Falta comprovar o ciclo completo lead → oportunidade → proposta → cliente. |
 | Propostas | PARCIAL | Há rotas, tela e relação com clientes/oportunidades. Envio e aceite dependem de validação real do destinatário e persistência do status. |
-| Projetos e workspace | PARCIAL | Projetos possuem overview, tarefas, arquivos, entregas, aprovações, alterações, infraestrutura, portal e visão lista/kanban/timeline. Falta smoke test dos vínculos e permissões de portal. |
+| Projetos e workspace | PARCIAL | Projetos possuem overview, tarefas, arquivos, entregas, aprovações, alterações, infraestrutura, portal e visão lista/kanban/timeline. O Kanban agora exibe todos os 13 status válidos e permite mover por arrastar com persistência real; ainda falta smoke test dos vínculos e permissões de portal. |
 | Tarefas | FUNCIONAL EM TESTES / PARCIAL EM PRODUÇÃO | API, filtros, subtarefas, status e drag/drop têm cobertura. Ainda falta validar UI com banco e concorrência. |
 | Financeiro e cobranças | PARCIAL | Receitas, despesas, contas a receber/pagar, cobranças, assinaturas, PIX e campos Mercado Pago existem. Falta validar idempotência, webhook, baixa automática e reflexão no dashboard. |
 | Contratos | PARCIAL | Há autofill a partir de proposta/projeto/cliente e CRUD. Falta validar assinatura, versão, envio e mudança de status com documento real. |
