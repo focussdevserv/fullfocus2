@@ -60,7 +60,12 @@
 .project-board-column header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .7rem; }
 .project-board-column h3 { margin: 0; font-size: .85rem; }
 .project-board-column header span { min-width: 1.4rem; padding: .15rem .4rem; border-radius: 99px; background: var(--line); color: var(--muted); text-align: center; font-size: .75rem; }
-.project-board-card { display: grid; gap: .42rem; padding: .75rem; margin-bottom: .65rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.project-board-card { display: grid; gap: .42rem; padding: .75rem; margin-bottom: .65rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); transition: opacity .15s ease, transform .15s ease, border-color .15s ease; }
+.project-board-card[draggable="true"] { cursor: grab; }
+.project-board-card[draggable="true"]:active { cursor: grabbing; }
+.project-board-card.is-dragging { opacity: .42; transform: scale(.98); }
+.project-board-card.is-saving { opacity: .62; pointer-events: none; }
+.project-board-column.is-drop-target { border-color: var(--accent, #e62429); background: color-mix(in srgb, var(--paper) 82%, var(--accent, #e62429)); }
 .project-board-card:last-child { margin-bottom: 0; }
 .project-board-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
 .project-board-card strong, .project-timeline-main strong { overflow-wrap: anywhere; }

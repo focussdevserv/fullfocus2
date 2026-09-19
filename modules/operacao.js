@@ -232,6 +232,46 @@ function projectActionMarkup(project) { return `<div class="project-card-actions
 function projectCardMarkup(project) { const value = Math.max(0, Math.min(100, Number(project.progress) || 0)); return `<article class="project-board-card"><div class="project-board-card-head"><strong>${esc(project.name)}</strong>${ui.badge(labels[project.status] || project.status || "—", projectTone(project.status))}</div><small>${esc(project.client_name || "Sem cliente")}${project.due_on ? ` · prazo ${date(project.due_on)}` : ""}</small><div class="operations-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value}" aria-label="Progresso: ${value}%"><span style="width:${value}%"></span></div><small>${value}% concluído${project.priority ? ` · ${esc(labels[project.priority] || project.priority)}` : ""}</small>${project.block_reason ? `<p class="project-blocked">Bloqueado: ${esc(project.block_reason)}</p>` : ""}${projectActionMarkup(project)}</article>`; }
 function projectBoardMarkup(rows) { return `<div class="project-board">${projectBoardGroups.map(([status, title]) => { const items = rows.filter((project) => project.status === status); return `<section class="project-board-column" data-project-column="${status}"><header><h3>${title}</h3><span>${items.length}</span></header>${items.length ? items.map(projectCardMarkup).join("") : `<p class="operations-column-empty">Nenhum projeto</p>`}</section>`; }).join("")}</div>`; }
 function projectTimelineMarkup(rows) { const sorted = [...rows].sort((a, b) => new Date(a.due_on || a.starts_on || "9999-12-31") - new Date(b.due_on || b.starts_on || "9999-12-31")); return `<div class="project-timeline">${sorted.length ? sorted.map((project) => { const value = Math.max(0, Math.min(100, Number(project.progress) || 0)); return `<article class="project-timeline-row"><div class="project-timeline-date"><strong>${date(project.starts_on)}</strong><span>até ${date(project.due_on)}</span></div><div class="project-timeline-main"><div class="project-board-card-head"><strong>${esc(project.name)}</strong>${ui.badge(labels[project.status] || project.status || "—", projectTone(project.status))}</div><small>${esc(project.client_name || "Sem cliente")} · ${value}% concluído</small><div class="operations-progress"><span style="width:${value}%"></span></div></div>${projectActionMarkup(project)}</article>`; }).join("") : `<p class="operations-column-empty">Nenhum projeto para exibir.</p>`}</div>`; }
+function bindProjectBoardDragAndDrop() {
+  const board = dashboardGrid.querySelector(".project-board");
+  if (!board || board.dataset.dndBound === "1") return;
+  board.dataset.dndBound = "1";
+  let draggedId = null;
+  board.querySelectorAll(".project-board-card").forEach((card) => {
+    const id = card.querySelector("[data-overview]")?.dataset.overview;
+    if (!id) return;
+    card.draggable = true;
+    card.setAttribute("aria-grabbed", "false");
+    card.addEventListener("dragstart", (event) => {
+      draggedId = id;
+      card.classList.add("is-dragging");
+      card.setAttribute("aria-grabbed", "true");
+      event.dataTransfer?.setData("text/plain", id);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    });
+    card.addEventListener("dragend", () => {
+      draggedId = null;
+      card.classList.remove("is-dragging");
+      card.setAttribute("aria-grabbed", "false");
+      board.querySelectorAll(".is-drop-target").forEach((column) => column.classList.remove("is-drop-target"));
+    });
+  });
+  board.querySelectorAll("[data-project-column]").forEach((column) => {
+    column.addEventListener("dragover", (event) => { if (!draggedId) return; event.preventDefault(); column.classList.add("is-drop-target"); if (event.dataTransfer) event.dataTransfer.dropEffect = "move"; });
+    column.addEventListener("dragleave", (event) => { if (!column.contains(event.relatedTarget)) column.classList.remove("is-drop-target"); });
+    column.addEventListener("drop", async (event) => {
+      event.preventDefault();
+      column.classList.remove("is-drop-target");
+      const id = event.dataTransfer?.getData("text/plain") || draggedId;
+      const status = column.dataset.projectColumn;
+      if (!id || !status) return;
+      const card = board.querySelector(`[data-overview="${CSS.escape(String(id))}"]`)?.closest(".project-board-card");
+      if (card) { card.setAttribute("aria-busy", "true"); card.classList.add("is-saving"); }
+      try { await api(`/api/projects/${id}`, { method: "PATCH", body: { status } }); ui.toast("Status do projeto atualizado.", "success"); await renderProjectsConnected(); }
+      catch (error) { ui.toast(error.message || "NÃ£o foi possÃ­vel mover o projeto.", "error"); if (card) { card.removeAttribute("aria-busy"); card.classList.remove("is-saving"); } }
+    });
+  });
+}
 async function renderProjectsConnected() {
   if (location.hash !== "#projetos") return;
   const title = "Projetos", description = "Acompanhe progresso, status, clientes e contratos.";
@@ -274,6 +314,7 @@ async function renderProjectsConnected() {
     dashboardGrid.innerHTML = intro(title, description, "projeto") + stats + `<section class="data-card operations-table">${toolbar}${viewToolbar}${content}</section>`;
     dashboardGrid.removeAttribute("aria-busy");
     bindCommon("projeto", rows, "/api/projects");
+    bindProjectBoardDragAndDrop();
     dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (event) => { projectState.query = event.target.value; clearTimeout(projectState.timer); projectState.timer = setTimeout(() => renderProjectsConnected().then(restoreFocus), 250); });
     dashboardGrid.querySelector("[data-filter=status]")?.addEventListener("change", (event) => { projectState.status = event.target.value; renderProjectsConnected(); });
     dashboardGrid.querySelector("[data-projects-csv]")?.addEventListener("click", () => ui.downloadCsv("projetos.csv", ["Projeto", "Cliente", "Contrato", "Progresso", "Status"], rows.map((x) => [x.name, x.client_name || "", x.contract_name || "", Number(x.progress) || 0, labels[x.status] || x.status || ""])));
