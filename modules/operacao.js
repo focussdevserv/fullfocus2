@@ -70,10 +70,29 @@ config.projeto.fields.push(
   { name: "observations", label: "Observações", required: false }
 );
 config.ticket.fields.splice(3, 0, { name: "project_id", label: "Projeto", type: "select", options: [["", "Sem projeto"]], required: false });
-async function setup(kind) { const c = config[kind]; if (c.fields.some((f) => f.name.endsWith("_id"))) { const [clientData, contractData, proposalData, projectData] = await Promise.all([api("/api/clients"), kind === "projeto" ? api("/api/contracts") : Promise.resolve({ contracts: [] }), kind === "contrato" ? api("/api/proposals") : Promise.resolve({ proposals: [] }), ["ticket", "arquivo"].includes(kind) ? api("/api/projects") : Promise.resolve({ projects: [] })]); clients = clientData.clients || []; c.fields.forEach((f) => { if (f.name === "client_id") f.options = [["", "Sem cliente"], ...clients.map((x) => [x.id, x.name])]; if (f.name === "contract_id" && f.type === "select") f.options = [["", "Sem contrato"], ...(contractData.contracts || []).map((x) => [x.id, x.name])]; if (f.name === "project_id" && f.type === "select") f.options = [["", "Sem projeto"], ...(projectData.projects || []).map((x) => [x.id, x.name])]; if (f.name === "proposal_id" && f.type === "select") { const proposals = (proposalData.proposals || []).filter((x) => x.status === "accepted"); f.options = [["", proposals.length ? "Selecione uma proposta aprovada" : "Nenhuma proposta aprovada"], ...proposals.map((x) => [x.id, `${x.title || "Proposta"} · ${money(x.amount)}`])]; } }); } openCreateDialog(kind); }
+const operationPageParams = ({ search = "", status = "", limit, offset }) => {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set("search", search.trim());
+  if (status) params.set("status", status);
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  return params;
+};
+async function fetchAllOperationRecords(endpoint, key, query = {}) {
+  const limit = 250, records = [];
+  for (let offset = 0; ; offset += limit) {
+    const params = operationPageParams({ ...query, limit, offset });
+    const data = await api(`${endpoint}?${params}`);
+    const page = data[key] || [];
+    records.push(...page);
+    const returned = Number(data.pagination?.returned ?? page.length);
+    if (returned < limit || page.length === 0) return records;
+  }
+}
+async function setup(kind) { const c = config[kind]; if (c.fields.some((f) => f.name.endsWith("_id"))) { const [clientRows, contractRows, proposalData, projectData] = await Promise.all([fetchAllOperationRecords("/api/clients", "clients"), kind === "projeto" ? fetchAllOperationRecords("/api/contracts", "contracts") : Promise.resolve([]), kind === "contrato" ? api("/api/proposals") : Promise.resolve({ proposals: [] }), ["ticket", "arquivo"].includes(kind) ? api("/api/projects") : Promise.resolve({ projects: [] })]); clients = clientRows; c.fields.forEach((f) => { if (f.name === "client_id") f.options = [["", "Sem cliente"], ...clients.map((x) => [x.id, x.name])]; if (f.name === "contract_id" && f.type === "select") f.options = [["", "Sem contrato"], ...contractRows.map((x) => [x.id, x.name])]; if (f.name === "project_id" && f.type === "select") f.options = [["", "Sem projeto"], ...(projectData.projects || []).map((x) => [x.id, x.name])]; if (f.name === "proposal_id" && f.type === "select") { const proposals = (proposalData.proposals || []).filter((x) => x.status === "accepted"); f.options = [["", proposals.length ? "Selecione uma proposta aprovada" : "Nenhuma proposta aprovada"], ...proposals.map((x) => [x.id, `${x.title || "Proposta"} · ${money(x.amount)}`])]; } }); } openCreateDialog(kind); }
 function intro(title, description, kind) { return `<section class="page-intro operations-intro"><div><p class="card-kicker">Operação</p><h2>${title}</h2><p>${description}</p></div><button class="button button-primary compact-action operations-new" data-create="${kind}" type="button">+ Novo</button></section>`; }
 function bindCommon(kind, rows, endpoint) { dashboardGrid.querySelector(".operations-new")?.addEventListener("click", () => { const routeAtStart = location.hash; setup(kind).catch((error) => { if (location.hash === routeAtStart) ui.toast(error.message, "error"); }); }); dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => ui.confirmInline(b, { text: "Excluir?", onConfirm: async () => { const originalLabel = b.textContent; b.disabled = true; b.setAttribute("aria-busy", "true"); b.textContent = "Excluindo…"; try { await api(`${endpoint}/${b.dataset.delete}`, { method: "DELETE" }); ui.toast("Registro excluído.", "success"); renderHashRoute(); } catch (error) { b.disabled = false; b.removeAttribute("aria-busy"); b.textContent = originalLabel; ui.toast(error.message, "error"); } } }))); dashboardGrid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { const item = rows.find((x) => String(x.id) === b.dataset.edit); if (!item) return; const routeAtStart = location.hash; setup(kind).then(() => { if (location.hash !== routeAtStart) return; openEditDialog(kind, item, `${endpoint}/${item.id}`); }).catch((error) => { if (location.hash === routeAtStart) ui.toast(error.message, "error"); }); })); }
-const contractsState = { search: "", status: "", request: 0 };
+const contractsState = { search: "", status: "", limit: 100, offset: 0, request: 0 };
 const contractTone = (status) => ({ active: "green", signed: "green", awaiting_signature: "orange", near_expiry: "orange", sent: "blue", viewed: "blue", in_review: "blue", draft: "gray", closed: "gray", cancelled: "red", expired: "red" }[status] || "gray");
 async function renderContracts() {
   if (location.hash !== "#contratos") return;
@@ -83,15 +102,14 @@ async function renderContracts() {
   dashboardGrid.setAttribute("aria-busy", "true");
   dashboardGrid.innerHTML = intro(title, description, "contrato") + state("loading", "Carregando contratos…");
   try {
-    const d = await api("/api/contracts"), rows = d.contracts || [];
+    const params = operationPageParams(contractsState);
+    const d = await api(`/api/contracts?${params}`), rows = d.contracts || [], pagination = d.pagination || {};
     if (request !== contractsState.request || location.hash !== "#contratos") return;
     const now = Date.now(), in30 = now + 30 * 864e5;
     const soon = (x) => x.ends_on && new Date(x.ends_on).getTime() >= now && new Date(x.ends_on).getTime() <= in30 && !["closed", "cancelled", "expired"].includes(x.status);
-    const term = contractsState.search.trim().toLowerCase();
-    const filtered = rows.filter((x) => (!contractsState.status || x.status === contractsState.status) && (!term || [x.name, x.client_name, x.contract_number, x.description].some((v) => String(v || "").toLowerCase().includes(term))));
     const active = rows.filter((x) => ["active", "signed"].includes(x.status));
     const stats = ui.stats([
-      { label: "Contratos", value: ui.number(rows.length), note: `${ui.number(filtered.length)} na lista` },
+      { label: "Contratos nesta página", value: ui.number(rows.length), note: `Página ${Math.floor(contractsState.offset / contractsState.limit) + 1}` },
       { label: "Ativos", value: ui.number(active.length), note: ui.money(active.reduce((sum, x) => sum + Number(x.value || 0), 0)), tone: "green" },
       { label: "Aguardando assinatura", value: ui.number(rows.filter((x) => ["sent", "viewed", "awaiting_signature"].includes(x.status)).length), tone: "orange" },
       { label: "Vencem em 30 dias", value: ui.number(rows.filter(soon).length), note: ui.money(rows.filter(soon).reduce((sum, x) => sum + Number(x.value || 0), 0)), tone: rows.some(soon) ? "red" : undefined },
@@ -107,28 +125,33 @@ async function renderContracts() {
         { key: "status", label: "Status", render: (x) => ui.badge(labels[x.status] || x.status || "—", contractTone(x.status)) },
         { key: "actions", label: "Ações", render: (x) => `<button class="compact-action" data-contract-details="${x.id}" type="button">Detalhes</button><button class="compact-action" data-edit="${x.id}" type="button">Editar</button><button class="compact-action" data-delete="${x.id}" type="button">Excluir</button>` },
       ],
-      rows: filtered,
+      rows,
       rowAttr: (x) => `data-contract-row="${esc(x.id)}"`,
       empty: rows.length ? "Nenhum contrato corresponde à busca." : "",
     });
-    dashboardGrid.innerHTML = intro(title, description, "contrato") + stats + `<section class="data-card operations-table">${toolbar}${rows.length ? table : state("empty", "Nenhum contrato", "Comece cadastrando o primeiro contrato.")}</section>`;
+    const returned = Number(pagination.returned ?? rows.length);
+    const page = Math.floor(contractsState.offset / contractsState.limit) + 1;
+    const paginationMarkup = `<div class="table-pagination" aria-label="Paginação de contratos"><button type="button" class="compact-action" data-contracts-prev ${contractsState.offset === 0 ? "disabled" : ""}>Anterior</button><span>Página ${page} · ${rows.length} contrato(s) nesta página${returned >= contractsState.limit ? " · há mais resultados" : ""}</span><button type="button" class="compact-action" data-contracts-next ${returned < contractsState.limit ? "disabled" : ""}>Próxima</button></div>`;
+    const emptyMessage = contractsState.search || contractsState.status ? state("empty", "Nenhum contrato", "Nenhum resultado corresponde aos filtros nesta página.") : state("empty", "Nenhum contrato", "Comece cadastrando o primeiro contrato.");
+    dashboardGrid.innerHTML = intro(title, description, "contrato") + stats + `<section class="data-card operations-table">${toolbar}${rows.length ? table : emptyMessage}${paginationMarkup}</section>`;
     dashboardGrid.removeAttribute("aria-busy");
-    dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (event) => { contractsState.search = event.target.value; clearTimeout(contractsState.timer); contractsState.timer = setTimeout(() => renderContracts().then(restoreFocus), 220); });
-    dashboardGrid.querySelector("[data-filter=status]")?.addEventListener("change", (event) => { contractsState.status = event.target.value; renderContracts(); });
-    dashboardGrid.querySelector("[data-contracts-csv]")?.addEventListener("click", () => ui.downloadCsv("contratos.csv", ["Contrato", "Cliente", "Valor", "Início", "Fim", "Status"], filtered.map((x) => [x.name, x.client_name || "", Number(x.value || 0).toFixed(2), x.starts_on || "", x.ends_on || "", labels[x.status] || x.status || ""])));
+    dashboardGrid.querySelector("[data-search]")?.addEventListener("input", (event) => { contractsState.search = event.target.value; contractsState.offset = 0; clearTimeout(contractsState.timer); contractsState.timer = setTimeout(() => renderContracts().then(restoreFocus), 220); });
+    dashboardGrid.querySelector("[data-filter=status]")?.addEventListener("change", (event) => { contractsState.status = event.target.value; contractsState.offset = 0; renderContracts(); });
+    dashboardGrid.querySelector("[data-contracts-prev]")?.addEventListener("click", () => { contractsState.offset = Math.max(0, contractsState.offset - contractsState.limit); renderContracts(); });
+    dashboardGrid.querySelector("[data-contracts-next]")?.addEventListener("click", () => { contractsState.offset += contractsState.limit; renderContracts(); });
+    dashboardGrid.querySelector("[data-contracts-csv]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget, originalLabel = button.textContent;
+      button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Exportando…";
+      try {
+        const exportRows = await fetchAllOperationRecords("/api/contracts", "contracts", { search: contractsState.search, status: contractsState.status });
+        ui.downloadCsv("contratos.csv", ["Contrato", "Cliente", "Valor", "Início", "Fim", "Status"], exportRows.map((x) => [x.name, x.client_name || "", Number(x.value || 0).toFixed(2), x.starts_on || "", x.ends_on || "", labels[x.status] || x.status || ""]));
+      } catch (error) { ui.toast(`Exportação cancelada: ${error.message || "não foi possível carregar todos os contratos"}. Nenhum arquivo foi gerado.`, "error"); }
+      finally { if (button.isConnected) { button.disabled = false; button.removeAttribute("aria-busy"); button.textContent = originalLabel; } }
+    });
     dashboardGrid.querySelectorAll("[data-contract-details]").forEach((button) => button.addEventListener("click", () => openContractDetails(rows.find((x) => String(x.id) === button.dataset.contractDetails))));
     bindCommon("contrato", rows, "/api/contracts");
   } catch (e) { if (location.hash !== "#contratos") return; dashboardGrid.removeAttribute("aria-busy"); dashboardGrid.innerHTML = intro(title, description, "contrato") + state("error", e.message); }
 }
-dashboardGrid.addEventListener("click", (event) => {
-  if (location.hash !== "#contratos") return;
-  const button = event.target.closest?.("[data-contracts-csv]");
-  if (!button) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  const rows = [...dashboardGrid.querySelectorAll(".operations-table tbody tr")].filter((row) => !row.hidden);
-  ui.downloadCsv("contratos.csv", ["Contrato", "Cliente", "Valor", "Vigência", "Status"], rows.map((row) => [...row.cells].slice(0, 5).map((cell) => cell.textContent.trim())));
-}, true);
 
 function openContractDetails(contract) {
   if (!contract) return;

@@ -10,7 +10,7 @@ const toast = (...args) => { if (["#caixa-de-entrada", "#conversas"].includes(lo
 const CHANNEL = { internal: ["Interno", "💬"], email: ["E-mail", "✉"], whatsapp: ["WhatsApp", "🟢"] };
 const FILTERS = [["all", "Todas"], ["unread", "Não lidas"], ["whatsapp", "WhatsApp"], ["email", "E-mail"], ["internal", "Internas"], ["archived", "Arquivadas"]];
 
-const box = { conversations: [], filter: "all", query: "", selected: null, messages: [], composing: false, byContact: false, routeKey: "caixa-de-entrada", contacts: null, clients: null, offset: 0, searchTimer: null, threadRequest: 0, loadRequest: 0 };
+const box = { conversations: [], filter: "all", query: "", selected: null, messages: [], composing: false, byContact: false, routeKey: "caixa-de-entrada", contacts: null, clients: null, offset: 0, searchTimer: null, searchController: null, threadRequest: 0, loadRequest: 0 };
 
 const esc = (v) => escapeHtml(v == null ? "" : String(v));
 const inboxTimeFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -32,13 +32,13 @@ function when(value) {
    Carregamento
    --------------------------------------------------------------------------- */
 
-async function load() {
+async function load({ signal } = {}) {
   const request = ++box.loadRequest;
   const routeKey = box.routeKey;
   const status = box.filter === "archived" ? "archived" : "all";
   const params = new URLSearchParams({ status, limit: "100", offset: String(box.offset) });
   if (box.query.trim()) params.set("search", box.query.trim()); if (["whatsapp", "email", "internal"].includes(box.filter)) params.set("channel", box.filter); if (box.filter === "unread") params.set("unread", "true");
-  const data = await api(`/api/conversations?${params}`);
+  const data = await api(`/api/conversations?${params}`, { signal });
   if (request !== box.loadRequest || location.hash !== `#${routeKey}`) return false;
   box.conversations = (data.conversations || []).filter((c) => box.filter === "archived" ? c.status === "archived" : c.status !== "archived");
   return true;
@@ -282,7 +282,21 @@ function bind() {
   const search = dashboardGrid.querySelector(".inbox-search");
   search?.setAttribute("name", "search");
   search?.setAttribute("autocomplete", "off");
-  search?.addEventListener("input", () => { box.query = search.value; const pos = search.selectionStart; draw(); const again = dashboardGrid.querySelector(".inbox-search"); again?.focus(); again?.setSelectionRange(pos, pos); clearTimeout(box.searchTimer); box.searchTimer = setTimeout(async () => { try { if (await load() === false) return; draw(); if (box.selected) openThread(box.selected, { silent: true }); } catch (error) { if (location.hash === `#${box.routeKey}`) toast(error.message, "error"); } }, 250); });
+  search?.addEventListener("input", () => {
+    box.query = search.value;
+    box.loadRequest += 1;
+    clearTimeout(box.searchTimer);
+    box.searchController?.abort();
+    box.searchController = null;
+    box.searchTimer = setTimeout(async () => {
+      box.searchTimer = null;
+      const controller = new AbortController();
+      box.searchController = controller;
+      try { if (await load({ signal: controller.signal }) === false) return; draw(); if (box.selected) openThread(box.selected, { silent: true }); }
+      catch (error) { if (error.name !== "AbortError" && location.hash === `#${box.routeKey}`) toast(error.message, "error"); }
+      finally { if (box.searchController === controller) box.searchController = null; }
+    }, 250);
+  });
   dashboardGrid.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => openThread(b.dataset.open)));
   if (box.composing) bindNewForm();
 }
@@ -363,6 +377,8 @@ window.addEventListener("hashchange", () => {
   box.threadRequest += 1;
   clearTimeout(box.searchTimer);
   box.searchTimer = null;
+  box.searchController?.abort();
+  box.searchController = null;
 });
 
 let inboxSearchSnapshot;

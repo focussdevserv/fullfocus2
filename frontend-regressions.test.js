@@ -38,6 +38,51 @@ test("módulos e estilos carregados sob demanda existem no build", () => {
   for (const name of new Set(styleNames)) assert.ok(existsSync(new URL(`modules/${name}.css`, import.meta.url)), `${name}.css precisa existir`);
 });
 
+test("central de configurações serializa saves e mescla cada seção no estado mais recente", () => {
+  const hub = source("modules/configuracoes-hub.js");
+  assert.match(hub, /let settingsSaveQueue = Promise\.resolve\(\)/);
+  assert.match(hub, /settingsSaveQueue\.catch\(\(\) => \{\}\)\.then\(async \(\) => \{/);
+  assert.match(hub, /const nextSettings = \{ \.\.\.settings, \.\.\.sectionSettings \}/);
+  assert.match(hub, /await api\("\/api\/organization", \{ method: "PATCH", body \}\)/);
+  assert.match(hub, /Object\.assign\(settings, nextSettings\)/);
+  assert.match(hub, /delete sectionSettings\.name/);
+  assert.match(hub, /if \(form\.dataset\.hubSaving === "true"\) return/);
+  assert.match(hub, /form\.setAttribute\("aria-busy", "true"\)/);
+  assert.match(hub, /const errorMessage = error\?\.message \|\| "Não foi possível salvar as alterações\."/);
+  assert.doesNotMatch(hub, /const next = \{ \.\.\.settings, \.\.\.values \}/);
+});
+
+test("loader limpa o timeout perdedor da corrida de importação", () => {
+  const loader = source("module-loader.js");
+  assert.match(loader, /let timeoutId/);
+  assert.match(loader, /Promise\.race\(\[importPromise, timeout\]\)\.finally\(\(\) => window\.clearTimeout\(timeoutId\)\)/);
+});
+
+test("polling do frontend evita sobreposição e cancela chamadas demoradas", () => {
+  const app = source("app.js");
+  assert.match(app, /if \(browserNotificationsController \|\| appShell\.hidden\) return/);
+  assert.match(app, /window\.setTimeout\(\(\) => controller\.abort\(\), 15000\)/);
+  assert.match(app, /window\.addEventListener\("pagehide", \(\) => browserNotificationsController\?\.abort\(\)\)/);
+  assert.match(app, /refreshInboxBadge\.pending/);
+  assert.match(app, /notificationPanelPollPending/);
+});
+
+test("listeners globais não são duplicados e busca da inbox só redesenha após debounce", () => {
+  const app = source("app.js");
+  const inbox = source("modules/inbox.js");
+  assert.equal((app.match(/querySelectorAll\("\[data-home-task\]"\).*addEventListener/g) || []).length, 0);
+  assert.equal((app.match(/querySelector\("\.dialog-close"\).*addEventListener/g) || []).length, 1);
+  assert.equal((app.match(/createDialog\.addEventListener\("keydown"/g) || []).length, 1);
+  assert.doesNotMatch(app, /dataset\.readBusy/);
+  const searchHandler = inbox.match(/search\?\.addEventListener\("input", \(\) => \{([\s\S]*?)\n  \}\);/)?.[1] || "";
+  assert.doesNotMatch(searchHandler.slice(0, searchHandler.indexOf("setTimeout")), /draw\(\)/);
+  assert.equal((searchHandler.match(/draw\(\)/g) || []).length, 1);
+  assert.match(searchHandler, /box\.loadRequest \+= 1/);
+  assert.match(searchHandler, /clearTimeout\(box\.searchTimer\)/);
+  assert.match(searchHandler, /box\.searchController\?\.abort\(\)/);
+  assert.match(searchHandler, /load\(\{ signal: controller\.signal \}\)/);
+});
+
 test("frontend envia sessão, mostra estados legíveis e não promove permissão por omissão", () => {
   const app = source("app.js");
   const permissions = source("server/permissions.js");

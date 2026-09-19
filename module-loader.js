@@ -26,10 +26,11 @@
   };
   const importWithTimeout = (file, timeoutMs = 12000) => {
     const importPromise = import(`./modules/${file}?v=4`);
+    let timeoutId;
     const timeout = new Promise((_, reject) => {
-      window.setTimeout(() => reject(new Error(`O módulo ${file} demorou mais que o esperado para carregar.`)), timeoutMs);
+      timeoutId = window.setTimeout(() => reject(new Error(`O módulo ${file} demorou mais que o esperado para carregar.`)), timeoutMs);
     });
-    return Promise.race([importPromise, timeout]);
+    return Promise.race([importPromise, timeout]).finally(() => window.clearTimeout(timeoutId));
   };
   const load = async (key) => {
     const files = groups[key] || [];

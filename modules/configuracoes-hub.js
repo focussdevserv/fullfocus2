@@ -2,7 +2,29 @@ const hubEsc = (value) => escapeHtml(value ?? "");
 const hubGroups = [["Essencial", [["hub-company", "Empresa e dados", "▦"], ["hub-finance", "Chave Pix e financeiro", "▣"], ["hub-appearance", "Marca, cores e tema", "◉"]]], ["Cobrança automática", [["hub-billing", "Bot de cobranças", "▣"], ["hub-messages", "Templates de mensagem", "□"], ["hub-default-message", "Mensagem padrão", "□"]]], ["Integrações", [["hub-whatsapp", "WhatsApp (Evolution)", "□"], ["hub-webhooks", "Webhooks / n8n", "♧"], ["hub-payments", "Mercado Pago", "▤"]]], ["Recursos", [["hub-portal", "Portal do cliente", "▦"], ["hub-contracts", "Modelo de contrato", "▤"]]], ["Conta e segurança", [["hub-account", "Minha conta", "♙"], ["hub-security", "Senha e segurança", "⬢"], ["hub-audit", "Auditoria", "◈"]]]];
 const hubOptions = (items, value) => items.map(([key, label]) => `<option value="${hubEsc(key)}" ${String(value || "") === key ? "selected" : ""}>${hubEsc(label)}</option>`).join("");
 const hubMenu = () => `<aside class="settings-hub-sidebar" aria-label="Menu de configurações"><div class="settings-hub-scroll">${hubGroups.map(([title, links]) => `<div class="settings-hub-group"><p>${title}</p>${links.map(([id, label, icon]) => `<button type="button" class="settings-hub-link" data-hub-section="${hubEsc(id)}"><span class="settings-hub-icon" aria-hidden="true">${icon}</span><span>${label}</span></button>`).join("")}</div>`).join("")}</div></aside>`;
-const hubSave = async (form, message, action) => { const button = form.querySelector("button[type=submit]"), feedback = form.querySelector("[data-hub-feedback]"); button.disabled = true; button.setAttribute("aria-busy", "true"); if (feedback) feedback.textContent = "Salvando…"; try { await action(); if (feedback) feedback.textContent = message; ui.toast(message, "success"); } catch (error) { if (feedback) feedback.textContent = error.message; ui.toast(error.message, "error"); } finally { button.disabled = false; button.removeAttribute("aria-busy"); } };
+const hubSave = async (form, message, action) => {
+  if (form.dataset.hubSaving === "true") return;
+  const button = form.querySelector("button[type=submit]"), feedback = form.querySelector("[data-hub-feedback]");
+  form.dataset.hubSaving = "true";
+  form.setAttribute("aria-busy", "true");
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  if (feedback) feedback.textContent = "Salvando…";
+  try {
+    await action();
+    if (feedback) feedback.textContent = message;
+    ui.toast(message, "success");
+  } catch (error) {
+    const errorMessage = error?.message || "Não foi possível salvar as alterações.";
+    if (feedback) feedback.textContent = errorMessage;
+    ui.toast(errorMessage, "error");
+  } finally {
+    delete form.dataset.hubSaving;
+    form.removeAttribute("aria-busy");
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+  }
+};
 async function renderSettingsHub() {
   if (location.hash !== "#configuracoes") return;
   dashboardGrid.setAttribute("aria-busy", "true");
@@ -13,7 +35,23 @@ async function renderSettingsHub() {
     dashboardGrid.removeAttribute("aria-busy");
     const hubRouteMap = { "hub-company": "hub-company", "hub-finance": "hub-finance", "hub-appearance": "hub-appearance", "hub-account": "hub-account", "hub-security": "hub-security", "hub-audit": "auditoria", "hub-whatsapp": "whatsapp", "hub-webhooks": "integracoes", "hub-payments": "cobrancas", "hub-billing": "cobrancas", "hub-messages": "templates", "hub-default-message": "templates", "hub-portal": "portal-do-cliente", "hub-contracts": "contratos" };
     dashboardGrid.querySelectorAll("[data-hub-section]").forEach((button) => button.addEventListener("click", () => { const target = hubRouteMap[button.dataset.hubSection]; const local = document.getElementById(target); if (local) { local.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth", block: "start" }); local.querySelector("input,select,textarea,button")?.focus({ preventScroll: true }); return; } if (target && target !== "configuracoes") location.hash = `#${target}`; }));
-    const saveSettings = async (form) => { const values = Object.fromEntries(new FormData(form)); const next = { ...settings, ...values }; await api("/api/organization", { method: "PATCH", body: { name: values.name || undefined, settings: next } }); Object.assign(settings, next); if (values.theme) document.body.classList.toggle("dark-mode", values.theme === "dark"); };
+    let settingsSaveQueue = Promise.resolve();
+    const saveSettings = (form) => {
+      const values = Object.fromEntries(new FormData(form));
+      const organizationName = form.matches("[data-hub-company]") ? values.name : undefined;
+      const sectionSettings = { ...values };
+      delete sectionSettings.name;
+      const save = settingsSaveQueue.catch(() => {}).then(async () => {
+        const nextSettings = { ...settings, ...sectionSettings };
+        const body = { settings: nextSettings };
+        if (organizationName !== undefined) body.name = organizationName;
+        await api("/api/organization", { method: "PATCH", body });
+        Object.assign(settings, nextSettings);
+        if (sectionSettings.theme) document.body.classList.toggle("dark-mode", sectionSettings.theme === "dark");
+      });
+      settingsSaveQueue = save;
+      return save;
+    };
     dashboardGrid.querySelector("[data-hub-company]")?.addEventListener("submit", (event) => { event.preventDefault(); hubSave(event.currentTarget, "Dados da empresa salvos.", () => saveSettings(event.currentTarget)); });
     dashboardGrid.querySelector("[data-hub-finance]")?.addEventListener("submit", (event) => { event.preventDefault(); hubSave(event.currentTarget, "Configuração financeira salva.", () => saveSettings(event.currentTarget)); });
     dashboardGrid.querySelector("[data-hub-appearance]")?.addEventListener("submit", (event) => { event.preventDefault(); hubSave(event.currentTarget, "Aparência salva.", () => saveSettings(event.currentTarget)); });

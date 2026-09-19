@@ -171,7 +171,7 @@ notificationPanel.setAttribute("aria-labelledby", "notification-panel-title");
 async function refreshInternalNotifications() {
   const list = notificationPanel.querySelector(".notification-list"); if (!list || appShell.hidden) return;
   const request = notificationRequest = (notificationRequest || 0) + 1;
-  try { const data = await api("/api/notifications?limit=30"); if (request !== notificationRequest || notificationPanel.hidden || appShell.hidden) return; list.innerHTML = data.notifications?.length ? data.notifications.map((item) => `<button type="button" class="notification-item ${item.read_at ? "is-read" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}"><strong>${item.read_at ? "Notificação" : "Nova notificação"}</strong><span>${escapeHtml(item.message)}</span><time>${escapeHtml(notificationTime(item.created_at))}</time></button>`).join("") : '<p class="notification-empty">Tudo em dia.</p>'; list.querySelectorAll("[data-notification-id]").forEach((item, index) => { const dataItem = data.notifications[index], href = dataItem?.automation_id ? "#automacoes" : dataItem?.entity_type === "tickets" ? "#tickets" : dataItem?.entity_type === "files" ? "#arquivos" : ""; if (href) { const link = document.createElement("a"); link.href = href; link.className = "notification-origin"; link.textContent = "Abrir registro"; link.addEventListener("click", (event) => event.stopPropagation()); item.append(link); } item.addEventListener("click", async () => { if (item.dataset.readBusy === "1") return; item.dataset.readBusy = "1"; try { await api(`/api/notifications/${item.dataset.notificationId}/read`, { method: "PATCH" }); if (!item.isConnected) return; item.classList.remove("is-unread"); item.classList.add("is-read"); await refreshInboxBadge(); } catch (error) { if (item.isConnected) ui.toast(error.message || "Não foi possível marcar a notificação como lida.", "error"); } finally { delete item.dataset.readBusy; } }); }); } catch (error) { list.innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`; }
+  try { const data = await api("/api/notifications?limit=30"); if (request !== notificationRequest || notificationPanel.hidden || appShell.hidden) return; list.innerHTML = data.notifications?.length ? data.notifications.map((item) => `<button type="button" class="notification-item ${item.read_at ? "is-read" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}"><strong>${item.read_at ? "Notificação" : "Nova notificação"}</strong><span>${escapeHtml(item.message)}</span><time>${escapeHtml(notificationTime(item.created_at))}</time></button>`).join("") : '<p class="notification-empty">Tudo em dia.</p>'; list.querySelectorAll("[data-notification-id]").forEach((item, index) => { const dataItem = data.notifications[index], href = dataItem?.automation_id ? "#automacoes" : dataItem?.entity_type === "tickets" ? "#tickets" : dataItem?.entity_type === "files" ? "#arquivos" : ""; if (href) { const link = document.createElement("a"); link.href = href; link.className = "notification-origin"; link.textContent = "Abrir registro"; link.addEventListener("click", (event) => event.stopPropagation()); item.append(link); } }); } catch (error) { list.innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`; }
 }
 notificationPanel.querySelector(".notification-read-all").addEventListener("click", async () => { try { await api("/api/notifications/read-all", { method: "POST" }); await refreshInternalNotifications(); await refreshInboxBadge(); } catch (error) { notificationPanel.querySelector(".notification-list").innerHTML = `<p class="notification-empty is-error">${escapeHtml(error.message)}</p>`; } });
 
@@ -200,17 +200,29 @@ function sendBrowserNotifications(tasks, events) {
   safeStorage.set("focusdev_browser_notifications", JSON.stringify(notified.slice(-100)));
 }
 
+let browserNotificationsController = null;
 async function pollBrowserNotifications() {
+  if (browserNotificationsController || appShell.hidden) return;
+  const controller = new AbortController();
+  browserNotificationsController = controller;
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
   try {
-    const [tasksResponse, eventsResponse] = await Promise.all([fetch("/api/tasks"), fetch("/api/events")]);
+    const options = { signal: controller.signal };
+    const [tasksResponse, eventsResponse] = await Promise.all([fetch("/api/tasks", options), fetch("/api/events", options)]);
     if (tasksResponse.ok && eventsResponse.ok) sendBrowserNotifications((await tasksResponse.json()).tasks || [], (await eventsResponse.json()).events || []);
   } catch { /* alertas são opcionais quando a API está indisponível */ }
+  finally {
+    window.clearTimeout(timeout);
+    if (browserNotificationsController === controller) browserNotificationsController = null;
+  }
 }
 window.setInterval(pollBrowserNotifications, 60000);
+window.addEventListener("pagehide", () => browserNotificationsController?.abort());
 
 /* Contador de mensagens não lidas (exposto por modules/inbox.js em window.FocusInbox). */
 async function refreshInboxBadge() {
-  if (!notificationButton || typeof window.FocusInbox?.unreadCount !== "function" || appShell.hidden) return;
+  if (!notificationButton || typeof window.FocusInbox?.unreadCount !== "function" || appShell.hidden || refreshInboxBadge.pending) return;
+  refreshInboxBadge.pending = true;
   try {
     const count = Number(await window.FocusInbox.unreadCount()) || 0;
     let badge = notificationButton.querySelector(".inbox-badge");
@@ -219,9 +231,16 @@ async function refreshInboxBadge() {
     badge.hidden = count === 0;
     notificationButton.classList.toggle("has-unread", count > 0);
   } catch { /* badge é opcional */ }
+  finally { refreshInboxBadge.pending = false; }
 }
 window.setInterval(refreshInboxBadge, 45000);
-window.setInterval(() => { if (!notificationPanel.hidden) refreshInternalNotifications(); }, 30000);
+let notificationPanelPollPending = false;
+window.setInterval(async () => {
+  if (notificationPanel.hidden || notificationPanelPollPending) return;
+  notificationPanelPollPending = true;
+  try { await refreshInternalNotifications(); }
+  finally { notificationPanelPollPending = false; }
+}, 30000);
 document.addEventListener("focus-inbox-changed", refreshInboxBadge);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -407,7 +426,6 @@ async function refreshHomePanels() {
     const tasks = tasksResponse.ok ? ((await tasksResponse.json()).tasks || []) : [], events = eventsResponse.ok ? ((await eventsResponse.json()).events || []) : [];
     const taskList = document.querySelector(".priorities-card .priority-list"), agendaList = document.querySelector(".agenda-card .agenda-list"), activityList = document.querySelector(".activity-card .activity-list");
     if (taskList) taskList.innerHTML = tasks.slice(0, 5).map((task) => `<label class="priority-item"><input type="checkbox" data-home-task="${task.id}" ${task.status === "done" ? "checked" : ""} /><span class="checkmark"></span><span class="priority-text"><strong>${escapeHtml(task.title)}</strong><small>${task.due_at ? new Date(task.due_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Sem prazo"}</small></span><em class="priority-${task.priority || "medium"}">${task.priority === "high" ? "Alta" : task.priority === "low" ? "Baixa" : "Média"}</em></label>`).join("") || '<p class="agenda-empty">Nenhuma tarefa cadastrada.</p>';
-    taskList?.querySelectorAll("[data-home-task]").forEach((input) => input.addEventListener("change", async () => { await fetch(`/api/tasks/${input.dataset.homeTask}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: input.checked ? "done" : "doing" }) }); refreshHomePanels(); }));
     if (agendaList) agendaList.innerHTML = events.filter((event) => new Date(event.starts_at).toDateString() === new Date().toDateString()).slice(0, 5).map((event) => { const date = new Date(event.starts_at); return `<article class="agenda-item"><time>${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time><div><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(event.description || "Compromisso da agenda")}</small></div></article>`; }).join("") || '<p class="agenda-empty">Nenhum evento para hoje.</p>';
     const openTasks = tasks.filter((task) => task.status !== "done").length, doneTasks = tasks.filter((task) => task.status === "done").length, taskCount = document.querySelector(".priorities-card .task-count"), taskProgress = document.querySelector(".priorities-card .task-progress strong"), taskProgressBar = document.querySelector(".priorities-card .task-progress i"), tasksMetric = document.querySelector(".metric-blue small");
     if (taskCount) taskCount.textContent = `${openTasks} tarefa${openTasks === 1 ? "" : "s"}`; if (taskProgress) taskProgress.textContent = `${doneTasks} de ${tasks.length} concluídas`; if (taskProgressBar) taskProgressBar.style.width = `${tasks.length ? (doneTasks / tasks.length) * 100 : 0}%`; if (tasksMetric) tasksMetric.textContent = `${openTasks} em aberto`;
@@ -696,7 +714,7 @@ const dialogAdvancedObserver = new MutationObserver(() => {
   dialogFields.append(details);
 });
 dialogAdvancedObserver.observe(dialogFields, { childList: true });
-dialogForm.querySelector(".dialog-close").addEventListener("click", closeCreateDialog); $("dialog-cancel").addEventListener("click", closeCreateDialog);
+dialogForm.querySelector(".dialog-close").addEventListener("click", () => closeCreateDialog()); $("dialog-cancel").addEventListener("click", () => closeCreateDialog());
 window.addEventListener("hashchange", () => { ui.closeOverlays?.(); if (!createDialog.hidden) closeCreateDialog(); });
 createDialog.addEventListener("keydown", (event) => {
   if (event.key === "Escape") { event.preventDefault(); closeCreateDialog(); return; }
@@ -871,9 +889,12 @@ window.addEventListener("load", () => {
 }, { once: true });
 
 /* Chamada de API autenticada (cookie same-origin) com erro legível em pt-BR. */
-async function api(path, { method = "GET", body, headers } = {}) {
+async function api(path, { method = "GET", body, headers, signal } = {}) {
   let response;
   const controller = new AbortController();
+  const cancelRequest = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", cancelRequest, { once: true });
   const timeout = window.setTimeout(() => controller.abort(), 15000);
   try {
     response = await fetch(path, {
@@ -883,7 +904,8 @@ async function api(path, { method = "GET", body, headers } = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
-  } catch {
+  } catch (requestError) {
+    if (signal?.aborted) throw requestError;
     // fetch() em si falhou (rede caiu, DNS, conexão recusada) — não chegou nem a ter resposta do servidor.
     // Mesmo tratamento do 5xx sem corpo: avisa e tenta de novo sozinho em telas de leitura.
     const error = new Error("Não foi possível conectar ao servidor. Verifique sua internet — tentando de novo em instantes…");
@@ -893,6 +915,7 @@ async function api(path, { method = "GET", body, headers } = {}) {
     throw error;
   } finally {
     window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", cancelRequest);
   }
   const data = response.status === 204 ? {} : await response.json().catch(() => null);
   if (!response.ok) {
@@ -1205,12 +1228,6 @@ closeCreateDialog = function closeCreateDialogWithFocus() {
   if (createDialogReturnFocus?.isConnected) createDialogReturnFocus.focus();
   createDialogReturnFocus = null;
 };
-dialogForm.querySelector(".dialog-close")?.addEventListener("click", () => closeCreateDialog());
-$("dialog-cancel")?.addEventListener("click", () => closeCreateDialog());
-createDialog.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !createDialog.hidden) closeCreateDialog();
-});
-
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && notificationPanel && !notificationPanel.hidden) {
     notificationPanel.hidden = true;
