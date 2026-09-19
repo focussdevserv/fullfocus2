@@ -550,10 +550,10 @@ async function renderProposals() {
   })());
 }
 
-async function proposalForm(p, after) {
+async function proposalForm(p, after, fromClientSheet = false) {
   const routeAtStart = location.hash;
   const [opps, leads, clients, projects] = await Promise.all([options("opportunities"), options("leads"), options("clients"), options("projects")]);
-  if (location.hash !== routeAtStart || !Object.values(crmRoutes).includes(routeAtStart)) return;
+  if (location.hash !== routeAtStart || (!fromClientSheet && !Object.values(crmRoutes).includes(routeAtStart))) return;
   form({ title: p?.id ? "Editar proposta" : "Nova proposta", subtitle: "CRM", submitLabel: p?.id ? "Salvar" : "Criar", values: p ? { ...p, opportunity_id: p.opportunity_id ? String(p.opportunity_id) : "", lead_id: p.lead_id ? String(p.lead_id) : "", client_id: p.client_id ? String(p.client_id) : "", project_id: p.project_id ? String(p.project_id) : "" } : {}, fields: [
     { name: "title", label: "Título" },
     { name: "opportunity_id", label: "Oportunidade", type: "select", required: false, options: [["", "Sem oportunidade"], ...opps.map((o) => [String(o.id), `${o.name} · ${money(o.amount)}`])], half: true },
@@ -571,6 +571,14 @@ async function proposalForm(p, after) {
     { name: "notes", label: "Condições / observações", type: "textarea", required: false, rows: 4 },
   ], onSubmit: async (values) => { if (values.amount === null) values.amount = 0; if (p?.id) await api(`/api/proposals/${p.id}`, { method: "PATCH", body: values }); else { const { proposal } = await api("/api/proposals", { method: "POST", body: values }); toast("Proposta criada. Adicione os itens.", "success"); after(); proposalDrawer(proposal.id, after); return; } toast("Proposta atualizada.", "success"); after(); } });
 }
+
+/* Permite abrir o editor completo de proposta sem abandonar a ficha do cliente. */
+window.FocusOpenProposalForClient = async function FocusOpenProposalForClient(clientId, clientName) {
+  await proposalForm({ client_id: String(clientId), title: `Proposta · ${clientName || "Cliente"}` }, () => {}, true);
+};
+window.FocusEditProposal = async function FocusEditProposal(proposal) {
+  await proposalForm(proposal, () => {}, true);
+};
 
 async function proposalDrawer(id, after) {
   const d = drawer({ title: "Proposta", subtitle: "Carregando…", html: stateBlock.loading("Carregando proposta…") });
