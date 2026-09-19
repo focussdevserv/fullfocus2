@@ -159,7 +159,7 @@ export function register(app, ctx) {
     const values = [org], where = ["p.organization_id=$1"];
     const add = (sql, value) => { values.push(value); where.push(sql.replace("$VALUE", `$${values.length}`)); };
     const search = asText(req.query.search || req.query.q);
-    if (search) { values.push(`%${search.slice(0, 100)}%`); const index = values.length; where.push(`(p.title ilike $${index} or coalesce(p.notes,'') ilike $${index})`); }
+    if (search) { values.push(`%${search.slice(0, 100)}%`); const index = values.length; where.push(`(p.title ilike $${index} or coalesce(p.notes,'') ilike $${index} or exists (select 1 from clients sc where sc.id=p.client_id and sc.organization_id=p.organization_id and sc.name ilike $${index}) or exists (select 1 from projects sp where sp.id=p.project_id and sp.organization_id=p.organization_id and sp.name ilike $${index}))`); }
     for (const field of ["client_id", "project_id", "opportunity_id", "lead_id", "status"]) if (req.query[field] !== undefined && req.query[field] !== "") add(`p.${field}=$VALUE`, String(req.query[field]));
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250), offset = Math.max(Number(req.query.offset) || 0, 0);
     values.push(limit, offset);
