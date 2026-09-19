@@ -1,10 +1,17 @@
 // Incrementar a versão invalida o shell antigo após cada publicação relevante.
-const CACHE = "focusdev-shell-v72";
-// As versões do núcleo vêm do index; módulos e estilos sob demanda usam o
-// mesmo ?v=4 empregado pelo module-loader.
+const CACHE = "focusdev-shell-v73";
+// O shell obrigatório espelha apenas as referências locais carregadas pelo index.
+// Se qualquer item daqui falhar, a instalação deve falhar para não publicar um
+// shell offline incompleto.
 const APP_SHELL = [
-  "/", "/index.html", "/module-loader.js?v=4", "/portal-actions.js?v=2",
-  "/styles.css?v=18", "/ui.css?v=9", "/design.css?v=4", "/app.js?v=21", "/ui.js?v=11",
+  "/", "/index.html", "/manifest.webmanifest",
+  "/styles.css?v=18", "/ui.css?v=9", "/design.css?v=4",
+  "/app.js?v=21", "/ui.js?v=11", "/module-loader.js?v=4"
+];
+// Módulos sob demanda e recursos decorativos melhoram a experiência offline,
+// mas uma indisponibilidade pontual não pode impedir a ativação do novo worker.
+const OPTIONAL_ASSETS = [
+  "/assets/focussdev-logo.png", "/assets/icon-192.svg", "/assets/icon-512.svg",
   "/modules/inicio.css?v=4", "/modules/tarefas.css?v=4", "/modules/agenda.css?v=4", "/modules/inbox.css?v=4",
   "/modules/crm.css?v=4", "/modules/contas.css?v=4", "/modules/operacao.css?v=4", "/modules/financeiro.css?v=4",
   "/modules/catalogo.css?v=4", "/modules/automacoes.css?v=4", "/modules/configuracoes.css?v=4",
@@ -19,9 +26,14 @@ const APP_SHELL = [
   "/modules/briefings.js?v=4", "/modules/contas-pagar.js?v=4", "/modules/notas-fiscais.js?v=4",
   "/modules/contas-bancarias.js?v=4", "/modules/relatorios-financeiros.js?v=4", "/modules/team-access.js?v=4",
   "/modules/auditoria.js?v=4", "/modules/infraestrutura.js?v=4", "/modules/gestao.js?v=4",
-  "/manifest.webmanifest", "/assets/icon-192.svg", "/assets/icon-512.svg"
+  "/modules/mercadopago-finance-ui.js?v=4"
 ];
-self.addEventListener("install", (event) => event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())));
+self.addEventListener("install", (event) => event.waitUntil((async () => {
+  const cache = await caches.open(CACHE);
+  await cache.addAll(APP_SHELL);
+  await Promise.allSettled(OPTIONAL_ASSETS.map((asset) => cache.add(asset)));
+  await self.skipWaiting();
+})()));
 self.addEventListener("activate", (event) => event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener("fetch", (event) => {
   const { request } = event;
