@@ -290,6 +290,17 @@ const portalAccessObserver = new MutationObserver(() => {
   });
 });
 portalAccessObserver.observe(dashboardGrid, { childList: true, subtree: true });
+const clientSheetQuickActionsObserver = new MutationObserver(() => {
+  document.querySelectorAll(".client-sheet-tools").forEach((tools) => {
+    if (tools.querySelector("[data-client-quick-actions]")) return;
+    const quick = document.createElement("span");
+    quick.dataset.clientQuickActions = "1";
+    quick.className = "client-sheet-quick-actions";
+    quick.innerHTML = `<a class="compact-action" href="#projetos" title="Abrir projetos">+ Projeto</a><a class="compact-action" href="#propostas" title="Abrir propostas">+ Proposta</a><a class="compact-action" href="#cobrancas" title="Abrir cobranças">+ Cobrança</a><a class="compact-action" href="#tarefas" title="Abrir tarefas">+ Tarefa</a>`;
+    tools.append(quick);
+  });
+});
+clientSheetQuickActionsObserver.observe(document.body, { childList: true, subtree: true });
 const contaDrawerAccessibilityObserver = new MutationObserver(() => {
   document.querySelectorAll(".conta-drawer").forEach((panel) => {
     panel.querySelector(".conta-close")?.setAttribute("aria-label", "Fechar painel");
@@ -317,6 +328,8 @@ window.addEventListener("hashchange", () => { document.querySelectorAll(".conta-
 createConfig.contato = { title: "Novo contato", endpoint: "/api/contacts", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone"), field("city", "Cidade"), field("state", "UF")] };
 createConfig.empresa = { title: "Nova empresa", endpoint: "/api/companies", fields: [field("name", "Nome", "text", { required: true }), field("document", "CNPJ")] };
 createConfig.cliente = { title: "Novo cliente", endpoint: "/api/clients/quick", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone"), field("whatsapp", "WhatsApp"), field("company_name", "Empresa (opcional)"), field("company_document", "CNPJ da empresa"), field("street", "EndereÃ§o"), field("street_number", "NÃºmero"), field("city", "Cidade"), field("state", "UF"), field("zip_code", "CEP")] };
+/* Fluxo inicial simples: cliente é independente; empresa e contato são opcionais. Os demais dados entram na ficha. */
+createConfig.cliente = { title: "Novo cliente", endpoint: "/api/clients/quick", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone/WhatsApp", "tel"), field("company_name", "Empresa (opcional)"), field("company_document", "CNPJ da empresa (opcional)"), field("status", "Situação", "select", { options: [["active", "Ativo"], ["inactive", "Inativo"], ["blocked", "Bloqueado"]] })] };
 window.prepareCreate = async function prepareQuickCreate(kind, shouldOpen = true) { if (shouldOpen && location.hash !== "#portal-do-cliente") openCreateDialog(kind); };
 
 dashboardGrid.addEventListener("click", async (event) => {

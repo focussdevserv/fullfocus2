@@ -27,6 +27,8 @@
 .conta-drawer-wide{width:min(860px,100%);padding:clamp(1rem,3vw,2rem)}
 .client-sheet-tools{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
 .client-sheet-tools a{text-decoration:none}
+.client-sheet-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;width:100%;padding-top:.35rem;border-top:1px solid var(--line)}
+.client-sheet-quick-actions a{font-size:.82rem}
 .client-sheet-tabs{display:flex;gap:.35rem;overflow:auto;margin:1.25rem 0;padding-bottom:.45rem;border-bottom:1px solid var(--line);scrollbar-width:thin}
 .client-sheet-tabs button{border:1px solid var(--line);border-radius:999px;background:transparent;color:inherit;padding:.55rem .8rem;white-space:nowrap;cursor:pointer}
 .client-sheet-tabs button.is-active{background:var(--accent,#e62429);border-color:var(--accent,#e62429);color:#fff}

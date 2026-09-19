@@ -69,6 +69,29 @@ export function register(app, ctx) {
   listEntity("contacts", ["name", "email", "phone", "document"], ["company_id", "is_primary"]);
   listEntity("companies", ["name", "trade_name", "document", "email", "phone"], ["status", "segment"]);
   listEntity("clients", ["name", "legal_name", "trade_name", "email", "phone", "whatsapp", "document"], ["status", "company_id", "contact_id", "financial_status"]);
+  app.post("/api/clients/quick", async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const body = req.body || {}, name = asText(body.name), email = asText(body.email) || null, phone = asText(body.phone || body.whatsapp) || null;
+    if (!name) return res.status(400).json({ error: "Informe o nome do cliente." });
+    try {
+      let companyId = body.company_id || null, contactId = body.contact_id || null;
+      if (companyId) { const company = await pool.query("select id from companies where id=$1 and organization_id=$2", [companyId, org]); if (!company.rowCount) return res.status(400).json({ error: "Empresa inválida para este workspace." }); }
+      if (!companyId && asText(body.company_name)) {
+        const company = await pool.query("select id from companies where organization_id=$1 and lower(trim(name))=lower(trim($2)) limit 1", [org, asText(body.company_name)]);
+        companyId = company.rows[0]?.id || (await pool.query("insert into companies (organization_id,name,document) values ($1,$2,$3) returning id", [org, asText(body.company_name), asText(body.company_document) || null])).rows[0].id;
+      }
+      if (contactId) { const contact = await pool.query("select id from contacts where id=$1 and organization_id=$2", [contactId, org]); if (!contact.rowCount) return res.status(400).json({ error: "Contato inválido para este workspace." }); }
+      if (!contactId && (email || phone)) {
+        const contact = await pool.query("select id from contacts where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(coalesce(phone,''),'\\D','','g')=regexp_replace($3,'\\D','','g'))) limit 1", [org, email || "", phone || ""]);
+        contactId = contact.rows[0]?.id || (await pool.query("insert into contacts (organization_id,name,email,phone,company_id) values ($1,$2,$3,$4,$5) returning id", [org, name, email, phone, companyId])).rows[0].id;
+      }
+      const existing = await pool.query("select id from clients where organization_id=$1 and (($2<>'' and lower(trim(email))=lower(trim($2))) or ($3<>'' and regexp_replace(coalesce(phone,''),'\\D','','g')=regexp_replace($3,'\\D','','g'))) limit 1", [org, email || "", phone || ""]);
+      if (existing.rowCount) return res.json({ client: existing.rows[0], created: false, notice: "Cliente já cadastrado; o cadastro existente foi reutilizado." });
+      const status = ["active", "inactive", "blocked"].includes(body.status) ? body.status : "active";
+      const client = await pool.query("insert into clients (organization_id,company_id,contact_id,name,document,email,phone,status) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *", [org, companyId, contactId, name, asText(body.document) || null, email, phone, status]);
+      res.status(201).json({ client: client.rows[0], created: true });
+    } catch (error) { const out = classifyDbError(error, "Não foi possível cadastrar o cliente."); res.status(out.status).json({ error: out.error }); }
+  });
   const relationOverview = async (req, res, table) => {
     const org = tenant(req, res); if (!org) return;
     const id = req.params.id;
