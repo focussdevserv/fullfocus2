@@ -16,3 +16,5 @@ async function request(target, path, options = {}) { await new Promise((resolve)
 
 test("lista notificações do usuário e retorna contador", async () => { const target = setup(); const response = await request(target, "/api/notifications"); assert.equal(response.status, 200); assert.deepEqual((await response.json()).unread_count, 1); assert.deepEqual(target.calls[0].params, [ORG, "user-1", "all", 30]); });
 test("marca notificação como lida respeitando o workspace", async () => { const target = setup(); const response = await request(target, "/api/notifications/1/read", { method: "PATCH" }); assert.equal(response.status, 200); assert.deepEqual(target.calls[0].params, ["1", ORG, "user-1"]); });
+
+test("contador de não lidas ignora notificações arquivadas", async () => { const target = setup(); const response = await request(target, "/api/notifications/unread-count"); assert.equal(response.status, 200); assert.match(target.calls[0].sql, /archived_at is null/); assert.deepEqual(target.calls[0].params, [ORG, "user-1"]); });
