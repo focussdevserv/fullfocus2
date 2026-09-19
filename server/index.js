@@ -123,7 +123,7 @@ app.post("/api/auth/logout", (_req, res) => { res.setHeader("Set-Cookie", sessio
 attachResetRoutes(app, { pool, hashPassword });
 app.get("/api/health", async (_req, res) => { try { const q = await pool.query("select now() as time"); res.json({ ok: true, database: "connected", time: q.rows[0].time }); } catch { res.status(503).json({ ok: false, database: "unavailable", error: "Database unavailable." }); } });
 /* Rotas públicas (sem sessão): autenticação, health, portal do cliente (token) e webhook do WhatsApp (token). */
-const PUBLIC_API_PREFIXES = ["/auth/", "/portal/", "/satisfaction/", "/whatsapp/webhook/", "/public/catalog/", "/forms/public/", "/contracts/public/", "/proposals/public/", "/deliveries/public/"];
+const PUBLIC_API_PREFIXES = ["/auth/", "/portal/", "/satisfaction/", "/whatsapp/webhook/", "/webhooks/mercadopago", "/public/catalog/", "/forms/public/", "/contracts/public/", "/proposals/public/", "/deliveries/public/"];
 registerContractPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
 registerProposalPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });
 registerDeliveryPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError });

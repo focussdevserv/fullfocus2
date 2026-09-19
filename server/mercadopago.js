@@ -1,0 +1,108 @@
+import crypto from "node:crypto";
+
+const apiUrl = () => String(process.env.MERCADOPAGO_API_URL || "https://api.mercadopago.com").replace(/\/$/, "");
+const appUrl = () => String(process.env.PUBLIC_APP_URL || "https://focussdev.space").replace(/\/$/, "");
+
+export function mercadoPagoConfigured() {
+  return Boolean(String(process.env.MERCADOPAGO_ACCESS_TOKEN || "").trim());
+}
+
+export function mercadoPagoWebhookConfigured() {
+  return Boolean(String(process.env.MERCADOPAGO_WEBHOOK_SECRET || "").trim());
+}
+
+export function newIdempotencyKey() {
+  return crypto.randomUUID();
+}
+
+async function requestMercadoPago(path, { method = "GET", body, idempotencyKey, fetchImpl = fetch } = {}) {
+  const token = String(process.env.MERCADOPAGO_ACCESS_TOKEN || "").trim();
+  if (!token) throw Object.assign(new Error("Mercado Pago não configurado."), { code: "not_configured" });
+  const response = await fetchImpl(`${apiUrl()}${path}`, {
+    method,
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      ...(idempotencyKey ? { "x-idempotency-key": idempotencyKey } : {})
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: typeof AbortSignal?.timeout === "function" ? AbortSignal.timeout(12000) : undefined
+  });
+  const text = await response.text();
+  let payload = null;
+  try { payload = text ? JSON.parse(text) : null; } catch { payload = { message: text.slice(0, 500) }; }
+  if (!response.ok) throw Object.assign(new Error(payload?.message || "Mercado Pago recusou a operação."), { code: "provider_error", status: response.status, details: payload });
+  return payload;
+}
+
+function payer(email, identification) {
+  const result = { email };
+  if (identification?.type && identification?.number) result.identification = { type: identification.type, number: identification.number };
+  return result;
+}
+
+export function normalizePayment(data) {
+  const transaction = data?.point_of_interaction?.transaction_data || {};
+  const qr = transaction.qr_code_base64 ? `data:image/png;base64,${transaction.qr_code_base64}` : null;
+  return {
+    id: data?.id == null ? null : String(data.id),
+    status: String(data?.status || "pending"),
+    external_id: data?.id == null ? null : String(data.id),
+    payment_url: transaction.ticket_url || data?.transaction_details?.external_resource_url || null,
+    pix_payload: transaction.qr_code || null,
+    pix_qr_data_url: qr,
+    raw: data
+  };
+}
+
+export async function createPixPayment({ amount, description, email, identification, externalReference, expirationDate, idempotencyKey, fetchImpl } = {}) {
+  const body = {
+    transaction_amount: Number(amount),
+    description: String(description || "Cobrança Focussdev"),
+    payment_method_id: "pix",
+    payer: payer(email, identification),
+    external_reference: externalReference
+  };
+  if (expirationDate) body.date_of_expiration = expirationDate;
+  return normalizePayment(await requestMercadoPago("/v1/payments", { method: "POST", body, idempotencyKey, fetchImpl }));
+}
+
+export async function createCheckoutPreference({ amount, title, email, externalReference, notificationUrl = `${appUrl()}/api/webhooks/mercadopago`, idempotencyKey, fetchImpl } = {}) {
+  const body = {
+    items: [{ title: String(title || "Serviço Focussdev"), quantity: 1, unit_price: Number(amount), currency_id: "BRL" }],
+    external_reference: externalReference,
+    notification_url: notificationUrl,
+    ...(email ? { payer: { email } } : {})
+  };
+  const data = await requestMercadoPago("/checkout/preferences", { method: "POST", body, idempotencyKey, fetchImpl });
+  return { id: data?.id == null ? null : String(data.id), status: "pending", external_id: data?.id == null ? null : String(data.id), payment_url: data?.init_point || data?.sandbox_init_point || null, pix_payload: null, pix_qr_data_url: null, raw: data };
+}
+
+export async function getPayment(paymentId, { fetchImpl } = {}) {
+  return normalizePayment(await requestMercadoPago(`/v1/payments/${encodeURIComponent(paymentId)}`, { fetchImpl }));
+}
+
+function timingSafeHexEqual(left, right) {
+  const a = Buffer.from(String(left || ""), "hex");
+  const b = Buffer.from(String(right || ""), "hex");
+  return a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+}
+
+export function validateMercadoPagoWebhook({ signature, requestId, dataId, secret = process.env.MERCADOPAGO_WEBHOOK_SECRET } = {}) {
+  const parts = Object.fromEntries(String(signature || "").split(",").map((part) => part.trim().split("=")).filter(([key, value]) => key && value));
+  if (!parts.ts || !parts.v1 || !requestId || !dataId || !secret) return false;
+  const manifest = `id:${dataId};request-id:${requestId};ts:${parts.ts};`;
+  const digest = crypto.createHmac("sha256", String(secret)).update(manifest).digest("hex");
+  return timingSafeHexEqual(digest, parts.v1);
+}
+
+export function paymentState(status) {
+  const value = String(status || "").toLowerCase();
+  if (value === "approved") return "paid";
+  if (["pending", "in_process", "action_required", "authorized"].includes(value)) return "pending";
+  if (["refunded", "charged_back"].includes(value)) return "refunded";
+  if (["rejected", "cancelled", "canceled", "expired"].includes(value)) return "cancelled";
+  return "pending";
+}
+
