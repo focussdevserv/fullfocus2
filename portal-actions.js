@@ -3,6 +3,25 @@
   const token = script?.dataset.token;
   if (!token) return;
   const apiPath = `/api/portal/${encodeURIComponent(token)}`;
+  const portalController = new AbortController();
+  window.addEventListener("pagehide", () => portalController.abort(), { once: true });
+  async function portalFetch(path, { signal = portalController.signal, ...options } = {}) {
+    const controller = new AbortController();
+    const cancelRequest = () => controller.abort();
+    if (signal?.aborted) controller.abort();
+    else signal?.addEventListener("abort", cancelRequest, { once: true });
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 15000);
+    try {
+      return await fetch(path, { ...options, signal: controller.signal });
+    } catch (error) {
+      if (timedOut) throw new Error("A solicitação demorou mais que o esperado. Tente novamente.");
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", cancelRequest);
+    }
+  }
   const labels = { proposal: "Aprovar proposta", delivery: "Aprovar entrega" };
   const card = document.createElement("section");
   card.className = "card portal-actions";
@@ -29,14 +48,14 @@
     form.addEventListener("submit", async (event) => {
       event.preventDefault(); submit.disabled = true; submit.setAttribute("aria-busy", "true"); status.textContent = "Registrando…";
       try {
-        const response = await fetch(`${apiPath}/${kind === "proposal" ? "proposals" : "deliveries"}/${item.id}/approve`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+        const response = await portalFetch(`${apiPath}/${kind === "proposal" ? "proposals" : "deliveries"}/${item.id}/approve`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
         const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível registrar a aprovação.");
         text(status, "Aprovação registrada."); article.replaceChildren(status); if (!list.children.length) card.hidden = true;
       } catch (error) { status.textContent = error.message; submit.disabled = false; submit.removeAttribute("aria-busy"); }
     });
     return article;
   };
-  fetch(apiPath, { headers: { accept: "application/json" } }).then(async (response) => {
+  portalFetch(apiPath, { headers: { accept: "application/json" } }).then(async (response) => {
     const data = await response.json(); if (!response.ok) throw new Error(data.error || "Portal indisponível.");
     const proposals = (data.proposals || []).filter((item) => ["sent", "viewed", "negotiation"].includes(item.status));
     const deliveries = (data.deliveries || []).filter((item) => !item.client_approved && ["ready", "published"].includes(item.status));
@@ -46,7 +65,7 @@
     projectDetails.className = "card portal-project-details";
     const projects = data.projects || [];
     const details = await Promise.all(projects.map(async (project) => {
-      try { const response = await fetch(`${apiPath}/projects/${encodeURIComponent(project.id)}/workspace`, { headers: { accept: "application/json" } }); return response.ok ? response.json() : null; } catch { return null; }
+      try { const response = await portalFetch(`${apiPath}/projects/${encodeURIComponent(project.id)}/workspace`, { headers: { accept: "application/json" } }); return response.ok ? response.json() : null; } catch { return null; }
     }));
     const rows = details.filter(Boolean).map(({ project, settings, tasks, files, deliveries, changes, infrastructure }) => {
       const section = (title, items, render) => settings[`show_${title}`] && items?.length ? `<h3>${title}</h3>${items.slice(0, 8).map(render).join("")}` : "";

@@ -257,8 +257,7 @@ registerForm.addEventListener("submit", async (event) => {
   if (registerForm.querySelector(".has-error")) return;
   setLoading(registerSubmit, true); setStatus(registerStatus, "");
   try {
-    const response = await fetch("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.value.trim(), email: email.value.trim(), password: password.value }) });
-    const data = await response.json(); if (!response.ok) throw new Error(data.error || "Não foi possível criar a conta.");
+    const data = await api("/api/auth/register", { method: "POST", body: { name: name.value.trim(), email: email.value.trim(), password: password.value } });
     setLoading(registerSubmit, false); setStatus(registerStatus, "Conta criada! Você já pode entrar."); loginScreen.hidden = false; registerScreen.hidden = true; emailInput.value = email.value; passwordInput.focus();
   } catch (error) { setLoading(registerSubmit, false); setStatus(registerStatus, error.message, "error"); }
 });
@@ -497,9 +496,7 @@ loginForm.addEventListener("submit", async (event) => {
   setStatus(loginStatus, "");
   setLoading(loginSubmit, true);
   try {
-    const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: emailInput.value.trim(), password: passwordInput.value }) });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Não foi possível entrar.");
+    const data = await api("/api/auth/login", { method: "POST", body: { email: emailInput.value.trim(), password: passwordInput.value } });
     setLoading(loginSubmit, false); clearForm(loginForm, loginStatus); passwordInput.type = "password"; passwordToggle.setAttribute("aria-pressed", "false"); passwordToggle.setAttribute("aria-label", "Mostrar senha"); authTransition += 1; saveSession(data.user); showApp(data.user);
   } catch (error) { setLoading(loginSubmit, false); setStatus(loginStatus, error.message, "error"); }
 });
