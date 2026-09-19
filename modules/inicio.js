@@ -140,6 +140,22 @@ function bindSkeleton() {
     const kind = quickKinds[index];
     if (!kind) return;
     button.dataset.create = kind;
+    button.addEventListener("click", async () => {
+      if (button.dataset.busy === "1") return;
+      button.dataset.busy = "1";
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        if (typeof window.FocusOpenGlobalCreate === "function") await window.FocusOpenGlobalCreate(kind);
+        else openCreateDialog(kind);
+      } catch (error) {
+        ui.toast(error?.message || "Não foi possível abrir este cadastro.", "error");
+      } finally {
+        delete button.dataset.busy;
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+      }
+    });
   });
   const select = dashboardGrid.querySelector("#dashboard-profile");
   if (select) {
