@@ -133,6 +133,68 @@ export function register(app, ctx) {
     const urlIssue = ["repository_url", "development_url", "staging_url", "production_url"].some((key) => b[key] !== undefined && b[key] !== "" && !/^https?:\/\//i.test(String(b[key]))) ? "Os links do projeto devem começar com http:// ou https://." : null;
     return statusIssue || priorityIssue || progressIssue || urlIssue || (!p && !asText(b.name) ? "Informe o nome do projeto." : null);
   });
+  const ensureContractProject = async (db, source, org) => {
+    if (source.project_id) {
+      const existing = await db.query("select * from projects where id=$1 and organization_id=$2", [source.project_id, org]);
+      if (existing.rowCount) return { project: existing.rows[0], created: false };
+    }
+    const linked = await db.query("select * from projects where contract_id=$1 and organization_id=$2 order by id limit 1", [source.id, org]);
+    if (linked.rowCount) {
+      await db.query("update contracts set project_id=$1,updated_at=now() where id=$2 and organization_id=$3", [linked.rows[0].id, source.id, org]);
+      return { project: linked.rows[0], created: false };
+    }
+    const code = `PROJ-${new Date().getFullYear()}-${String(source.id).padStart(6, "0")}`;
+    const project = await db.query("insert into projects (organization_id,contract_id,client_id,name,status,progress,internal_code,total_value,down_payment,payment_method,installments,installment_value,payment_due_dates,discount,maintenance_monthly_value,support_period,observations) values ($1,$2,$3,$4,'planning',0,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *", [org, source.id, source.client_id, source.name, code, source.total_value ?? source.value ?? 0, source.down_payment ?? 0, source.payment_method, source.installments ?? 1, source.installment_value ?? 0, source.payment_due_dates, source.discount ?? 0, source.maintenance_monthly ?? 0, source.support_period, "Projeto criado automaticamente a partir do contrato."]);
+    await db.query("update contracts set project_id=$1, updated_at=now() where id=$2 and organization_id=$3", [project.rows[0].id, source.id, org]);
+    return { project: project.rows[0], created: true };
+  };
+
+  const prepareContractReceivables = async (db, source, projectId, org) => {
+    const total = Number(source.total_value ?? source.value ?? 0), entry = Number(source.down_payment || 0), installments = Math.max(1, Number.parseInt(source.installments, 10) || 1);
+    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(entry) || entry < 0 || entry > total) {
+      const error = new Error("Valores do contrato invÃ¡lidos para gerar parcelas."); error.code = "invalid_receivables"; throw error;
+    }
+    const existing = await db.query("select * from receivables where contract_id=$1 and organization_id=$2 order by installment_number nulls last, id", [source.id, org]);
+    if (existing.rowCount) await db.query("update receivables set project_id=coalesce(project_id,$1),client_id=coalesce(client_id,$2),proposal_id=coalesce(proposal_id,$3) where contract_id=$4 and organization_id=$5", [projectId, source.client_id, source.proposal_id || null, source.id, org]);
+    const present = new Set(existing.rows.map((row) => row.installment_number == null ? null : Number(row.installment_number)));
+    const totalCents = Math.round(total * 100), entryCents = Math.round(entry * 100), balanceCents = totalCents - entryCents;
+    const suppliedDates = String(source.payment_due_dates || "").split(",").map((value) => value.trim()).filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+    const dueDate = (index) => suppliedDates[index] || new Date(Date.now() + (index + 1) * 30 * 864e5).toISOString().slice(0, 10);
+    const created = [];
+    const create = async (number, description, amount, dueAt) => {
+      if (present.has(number)) return;
+      const q = await db.query("insert into receivables (organization_id,client_id,project_id,contract_id,proposal_id,description,amount,original_amount,updated_amount,due_at,status,installment_number,payment_method) values ($1,$2,$3,$4,$5,$6,$7,$7,$7,$8,'pending',$9,$10) returning *", [org, source.client_id, projectId, source.id, source.proposal_id || null, description, amount, dueAt, number, source.payment_method || null]);
+      if (q.rowCount) { created.push(q.rows[0]); present.add(number); }
+    };
+    if (entryCents > 0) await create(0, `${source.name} · Entrada`, entryCents / 100, new Date().toISOString().slice(0, 10));
+    const installmentBase = Math.floor(balanceCents / installments), installmentRemainder = balanceCents % installments;
+    for (let index = 0; index < installments && balanceCents > 0; index += 1) {
+      const amountCents = installmentBase + (index < installmentRemainder ? 1 : 0);
+      if (amountCents > 0) await create(index + 1, `${source.name} · Parcela ${index + 1}/${installments}`, amountCents / 100, dueDate(index));
+    }
+    const all = await db.query("select * from receivables where contract_id=$1 and organization_id=$2 order by installment_number nulls last, id", [source.id, org]);
+    return { receivables: all.rows, created };
+  };
+
+  const completeContractOnboarding = async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    const db = pool.connect ? await pool.connect() : pool;
+    try {
+      await db.query("begin");
+      const contract = await db.query("select * from contracts where id=$1 and organization_id=$2 for update", [req.params.id, org]);
+      if (!contract.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Contrato nÃ£o encontrado." }); }
+      const source = contract.rows[0];
+      if (!["signed", "active"].includes(source.status)) { await db.query("rollback"); return res.status(400).json({ error: "O contrato precisa estar assinado ou ativo para concluir o onboarding." }); }
+      await validateLinks({ client_id: source.client_id, project_id: source.project_id, contract_id: source.id, proposal_id: source.proposal_id }, org, db);
+      const projectResult = await ensureContractProject(db, source, org);
+      const receivableResult = await prepareContractReceivables(db, source, projectResult.project.id, org);
+      await db.query("commit");
+      res.status(projectResult.created || receivableResult.created.length ? 201 : 200).json({ project: projectResult.project, receivables: receivableResult.receivables, project_created: projectResult.created, receivables_created: receivableResult.created.length, created: projectResult.created || receivableResult.created.length > 0, onboarding: { status: "ready", recoverable: true } });
+    } catch (e) { await db.query("rollback").catch(() => {}); if (e.code === "invalid_relation" || e.code === "invalid_receivables") return res.status(400).json({ error: e.message }); fail(res, e, "NÃ£o foi possÃ­vel concluir o onboarding do contrato."); }
+    finally { db.release?.(); }
+  };
+
+  app.post(["/api/contracts/:id/complete-onboarding", "/api/contracts/:id/prepare-onboarding"], completeContractOnboarding);
   app.post("/api/contracts/:id/create-project", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const db = pool.connect ? await pool.connect() : pool;

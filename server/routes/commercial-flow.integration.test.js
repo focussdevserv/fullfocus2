@@ -99,7 +99,7 @@ test("fluxo comercial ponta a ponta (fixture transacional, não PostgreSQL real)
   const context = { pool, tenant, asText, classifyDbError, validateRelations };
   const app = express(); app.use(express.json());
   registerAccounts(app, context); registerCrm(app, context); registerOperation(app, context); registerFinance(app, context);
-  registerContractPublicRoutes(app, { ...context, requireAuth: (_req, _res, next) => next() });
+  registerContractPublicRoutes(app, { ...context, requireAuth: (req, _res, next) => { req.user = { id: "user-1", role: "owner", organization_id: ORG }; next(); } });
   const server = createServer(app); await new Promise((resolve) => server.listen(0, resolve)); t.after(() => server.close());
 
   const client = await request(server, "/api/clients/quick", { method: "POST", body: { name: "Cliente E2E" } });
