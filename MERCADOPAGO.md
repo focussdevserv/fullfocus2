@@ -8,6 +8,7 @@ A integração usa o token somente no servidor e mantém o fluxo manual como fal
 MERCADOPAGO_ACCESS_TOKEN=APP_USR-...
 MERCADOPAGO_WEBHOOK_SECRET=...
 MERCADOPAGO_API_URL=https://api.mercadopago.com
+MERCADOPAGO_WEBHOOK_TOLERANCE_SECONDS=300
 PUBLIC_APP_URL=https://focussdev.space
 ```
 
@@ -43,3 +44,9 @@ O cliente precisa autorizar a recorrência pelo link do Mercado Pago; o app não
 Para o evento recomendado, selecione `Order (Mercado Pago)`. A URL deve terminar em `/api/webhooks/mercadopago` e o servidor precisa estar acessível publicamente em HTTPS.
 
 O sistema usa uma chave de idempotência por cobrança para evitar duplicidades quando a API ou a rede repetir uma requisição.
+
+## Segurança do webhook e correlação
+
+- O `x-signature` é validado por HMAC e o timestamp `ts` precisa estar dentro de `MERCADOPAGO_WEBHOOK_TOLERANCE_SECONDS` (padrão: 300 segundos).
+- A cobrança é localizada pelo ID da Order, pelo ID do Payment embutido no payload ou pelo `external_reference` da conta a receber. Isso cobre notificações de Order e Payment fora de ordem.
+- Notificações repetidas continuam protegidas por eventos auditados e idempotência antes da baixa financeira.

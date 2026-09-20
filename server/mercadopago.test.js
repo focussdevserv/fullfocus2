@@ -15,16 +15,18 @@ test("Pix usa endpoint correto e envia idempotência", async () => {
   assert.equal(calls[0].url, "https://api.mercadopago.com/v1/payments");
   assert.equal(calls[0].options.headers["x-idempotency-key"], "idem-1");
   assert.equal(JSON.parse(calls[0].options.body).payment_method_id, "pix");
-  assert.deepEqual(result, { id: "123", status: "pending", external_id: "123", payment_url: "https://mp.test/pix", pix_payload: "000201", pix_qr_data_url: "data:image/png;base64,aGk=", raw: { id: 123, status: "pending", point_of_interaction: { transaction_data: { qr_code: "000201", qr_code_base64: "aGk=", ticket_url: "https://mp.test/pix" } } } });
+  assert.deepEqual(result, { id: "123", status: "pending", external_id: "123", external_reference: null, payment_url: "https://mp.test/pix", pix_payload: "000201", pix_qr_data_url: "data:image/png;base64,aGk=", raw: { id: 123, status: "pending", point_of_interaction: { transaction_data: { qr_code: "000201", qr_code_base64: "aGk=", ticket_url: "https://mp.test/pix" } } } });
 });
 
 test("assinatura do webhook Mercado Pago é validada", () => {
   const secret = "secret-test";
+  const now = 1700000000 * 1000;
   const manifest = "id:123;request-id:req-1;ts:1700000000;";
   const digest = crypto.createHmac("sha256", secret).update(manifest).digest("hex");
   const input = { signature: `ts=1700000000,v1=${digest}`, requestId: "req-1", dataId: "123", secret };
-  assert.equal(validateMercadoPagoWebhook(input), true);
-  assert.equal(validateMercadoPagoWebhook({ ...input, dataId: "124" }), false);
+  assert.equal(validateMercadoPagoWebhook({ ...input, now }), true);
+  assert.equal(validateMercadoPagoWebhook({ ...input, now: now + 301000 }), false);
+  assert.equal(validateMercadoPagoWebhook({ ...input, dataId: "124", now }), false);
 });
 
 test("estados externos viram estados financeiros internos", () => {
@@ -86,4 +88,9 @@ test("Checkout de cartão e boleto também usa Orders", async () => {
   if (previousToken === undefined) delete process.env.MERCADOPAGO_ACCESS_TOKEN; else process.env.MERCADOPAGO_ACCESS_TOKEN = previousToken;
   assert.equal(result.external_id, "ORD-CHECKOUT");
   assert.equal(result.payment_url, "https://mp.test/checkout");
+});
+
+test("normaliza external_reference para correlacionar Order e Payment", () => {
+  assert.equal(normalizePayment({ id: "PAY-1", external_reference: "focussdev:org:receivable:7" }).external_reference, "focussdev:org:receivable:7");
+  assert.equal(normalizeOrder({ id: "ORD-1", external_reference: "focussdev:org:receivable:7" }).external_reference, "focussdev:org:receivable:7");
 });

@@ -49,6 +49,7 @@ export function normalizePayment(data) {
     id: data?.id == null ? null : String(data.id),
     status: String(data?.status || "pending"),
     external_id: data?.id == null ? null : String(data.id),
+    external_reference: data?.external_reference == null ? null : String(data.external_reference),
     payment_url: transaction.ticket_url || data?.transaction_details?.external_resource_url || null,
     pix_payload: transaction.qr_code || null,
     pix_qr_data_url: qr,
@@ -68,6 +69,7 @@ export function normalizeOrder(data) {
     id: data?.id == null ? null : String(data.id),
     status: String(payment.status || data?.status || "pending"),
     external_id: data?.id == null ? null : String(data.id),
+    external_reference: data?.external_reference == null ? null : String(data.external_reference),
     payment_id: payment.id == null ? null : String(payment.id),
     payment_url: method.ticket_url || data?.checkout_url || null,
     pix_payload: method.qr_code || null,
@@ -168,9 +170,13 @@ function timingSafeHexEqual(left, right) {
   return a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
 }
 
-export function validateMercadoPagoWebhook({ signature, requestId, dataId, secret = process.env.MERCADOPAGO_WEBHOOK_SECRET } = {}) {
+export function validateMercadoPagoWebhook({ signature, requestId, dataId, secret = process.env.MERCADOPAGO_WEBHOOK_SECRET, now = Date.now(), maxAgeSeconds = Number(process.env.MERCADOPAGO_WEBHOOK_TOLERANCE_SECONDS || 300) } = {}) {
   const parts = Object.fromEntries(String(signature || "").split(",").map((part) => part.trim().split("=")).filter(([key, value]) => key && value));
   if (!parts.ts || !parts.v1 || !requestId || !dataId || !secret) return false;
+  const timestamp = Number(parts.ts);
+  const tolerance = Number(maxAgeSeconds);
+  const current = Number(now) / 1000;
+  if (!Number.isFinite(timestamp) || !Number.isFinite(tolerance) || tolerance < 0 || !Number.isFinite(current) || Math.abs(current - timestamp) > tolerance) return false;
   const manifest = `id:${dataId};request-id:${requestId};ts:${parts.ts};`;
   const digest = crypto.createHmac("sha256", String(secret)).update(manifest).digest("hex");
   return timingSafeHexEqual(digest, parts.v1);

@@ -143,8 +143,7 @@ test("webhook repetido persiste um unico pagamento e uma unica receita", async (
   assert.ok(calls.filter((call) => /update (charges|receivables)/.test(call.sql)).every((call) => call.sql.includes("organization_id")));
 });
 
-function webhookHeaders(dataId, requestId = "req-1") {
-  const timestamp = "1700000000";
+function webhookHeaders(dataId, requestId = "req-1", timestamp = String(Math.floor(Date.now() / 1000))) {
   const digest = crypto.createHmac("sha256", process.env.MERCADOPAGO_WEBHOOK_SECRET).update(`id:${dataId};request-id:${requestId};ts:${timestamp};`).digest("hex");
   return { "x-request-id": requestId, "x-signature": `ts=${timestamp},v1=${digest}` };
 }
@@ -165,4 +164,22 @@ test("webhook aguarda persistencia antes do ack e devolve erro para retry", asyn
   } finally {
     if (previousSecret === undefined) delete process.env.MERCADOPAGO_WEBHOOK_SECRET; else process.env.MERCADOPAGO_WEBHOOK_SECRET = previousSecret;
   }
+});
+
+test("webhook correlaciona Payment pelo external_reference quando o id recebido nao e o Order", async () => {
+  const calls = [];
+  const db = { release() {}, query: async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql.startsWith("select * from charges")) return { rowCount: 1, rows: [{ id: 8, organization_id: ORG, receivable_id: 7, amount: "100" }] };
+    if (sql.startsWith("select id from audit_events")) return { rowCount: 0, rows: [] };
+    if (sql.startsWith("select id from payments")) return { rowCount: 0, rows: [] };
+    if (sql.startsWith("select * from receivables")) return { rowCount: 1, rows: [{ id: 7, amount: "100", description: "Parcela", client_id: 3, project_id: 4, contract_id: 5 }] };
+    if (sql.startsWith("select coalesce(sum(amount)")) return { rowCount: 1, rows: [{ total: 0 }] };
+    return { rowCount: 1, rows: [] };
+  } };
+  const pool = { connect: async () => db };
+  await processMercadoPagoPayment({ pool, dataId: "PAY-1", getPaymentImpl: async () => ({ external_id: "PAY-1", external_reference: "focussdev:org:receivable:7", status: "pending", amount: 100, raw: { id: "PAY-1", external_reference: "focussdev:org:receivable:7" } }) });
+  const lookup = calls.find((call) => call.sql.startsWith("select * from charges"));
+  assert.match(lookup.sql, /provider_payload->>'external_reference'/);
+  assert.deepEqual(lookup.params, ["PAY-1", "focussdev:org:receivable:7"]);
 });

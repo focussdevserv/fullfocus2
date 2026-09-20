@@ -7,7 +7,8 @@ export async function processMercadoPagoPayment({ pool, dataId, type = "payment"
   const db = pool.connect ? await pool.connect() : pool;
   try {
     await db.query("begin");
-    const chargeResult = await db.query("select * from charges where provider='mercado_pago' and external_id=$1 for update", [payment.external_id]);
+    const externalReference = payment.external_reference || payment.raw?.external_reference || null;
+    const chargeResult = await db.query("select * from charges where provider='mercado_pago' and (external_id=$1 or provider_payload->>'external_reference'=$2 or provider_payload->>'id'=$1 or provider_payload #>> '{transactions,payments,0,id}'=$1 or provider_payload #>> '{transaction,payments,0,id}'=$1) order by case when external_id=$1 then 0 when provider_payload #>> '{transactions,payments,0,id}'=$1 then 1 when provider_payload #>> '{transaction,payments,0,id}'=$1 then 2 else 3 end, id desc limit 1 for update", [payment.external_id, externalReference]);
     if (!chargeResult.rowCount) { await db.query("rollback"); throw new Error("Cobrança do webhook não encontrada."); }
     const charge = chargeResult.rows[0];
     const state = paymentState(payment.status);
@@ -145,7 +146,7 @@ export function register(app, ctx) {
     if (!mercadoPagoWebhookConfigured()) return res.status(503).json({ error: "Webhook do Mercado Pago ainda não foi configurado." });
     const dataId = asText(req.query?.["data.id"] || req.body?.data?.id);
     const type = asText(req.query?.type || req.body?.type || req.body?.topic) || "payment";
-    if (!validateMercadoPagoWebhook({ signature: req.get("x-signature"), requestId: req.get("x-request-id"), dataId })) return res.status(401).json({ error: "Assinatura do webhook inválida." });
+    if (!validateMercadoPagoWebhook({ signature: req.get("x-signature"), requestId: req.get("x-request-id"), dataId, now: Date.now() })) return res.status(401).json({ error: "Assinatura do webhook inválida ou expirada." });
     try {
       await (type === "subscription_preapproval" || type === "preapproval"
         ? processSubscriptionWebhook({ pool, dataId })
