@@ -478,34 +478,13 @@ window.addEventListener("hashchange", () => { document.querySelectorAll(".conta-
 // Cadastro rÃ¡pido: detalhes comerciais continuam disponÃ­veis na ficha do cliente.
 createConfig.contato = { title: "Novo contato", endpoint: "/api/contacts", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone"), field("city", "Cidade"), field("state", "UF")] };
 createConfig.empresa = { title: "Nova empresa", endpoint: "/api/companies", fields: [field("name", "Nome", "text", { required: true }), field("document", "CNPJ")] };
-createConfig.cliente = { title: "Novo cliente", endpoint: "/api/clients/quick", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone"), field("whatsapp", "WhatsApp"), field("company_name", "Empresa (opcional)"), field("company_document", "CNPJ da empresa"), field("street", "EndereÃ§o"), field("street_number", "NÃºmero"), field("city", "Cidade"), field("state", "UF"), field("zip_code", "CEP")] };
 /* Fluxo inicial simples: cliente é independente; empresa e contato são opcionais. Os demais dados entram na ficha. */
-createConfig.cliente = { title: "Novo cliente", endpoint: "/api/clients/quick", fields: [field("name", "Nome", "text", { required: true }), field("document", "CPF/CNPJ"), field("email", "E-mail", "email"), field("phone", "Telefone/WhatsApp", "tel"), field("company_name", "Empresa (opcional)"), field("company_document", "CNPJ da empresa (opcional)"), field("status", "Situação", "select", { options: [["active", "Ativo"], ["inactive", "Inativo"], ["blocked", "Bloqueado"]] })] };
 createConfig.cliente.onCreated = (data, payload) => {
   if (location.hash !== "#clientes" || !data?.client?.id) return;
   // O endpoint rápido já devolve o ID canônico, inclusive quando encontra um
   // cadastro existente. Isso torna a abertura da ficha imediata e inequívoca.
   window.FocusOpenClientDetails?.({ ...payload, ...data.client });
 };
-// Criação e edição de cliente compartilham a ficha completa. O POST continua
-// usando /api/clients/quick para preservar a API existente; campos extras são
-// ignorados pelo cadastro rápido e ficam disponíveis na edição canônica.
-createConfig.cliente = { title: "Novo cliente", endpoint: "/api/clients/quick", fields: [
-  field("name", "Nome", "text", { required: true }),
-  field("company_id", "Empresa", "select", { options: [] }),
-  field("contact_id", "Contato", "select", { options: [] }),
-  field("company_name", "Empresa (opcional)"), field("company_document", "CNPJ da empresa (opcional)"),
-  field("email", "E-mail", "email"), field("phone", "Telefone"),
-  field("status", "Status", "select", { options: [["active", "Ativo"], ["inactive", "Inativo"], ["churned", "Cancelado"], ["blocked", "Bloqueado"]] }),
-  field("legal_name", "Razão social"), field("trade_name", "Nome fantasia"),
-  field("person_type", "Pessoa física ou jurídica", "select", { options: [["person", "Pessoa física"], ["company", "Pessoa jurídica"]] }),
-  field("document", "CPF/CNPJ"), field("responsible_name", "Responsável"), field("responsible_role", "Cargo"),
-  field("whatsapp", "WhatsApp", "tel"), field("secondary_phone", "Telefone secundário"), field("website", "Site", "url"),
-  field("instagram", "Instagram"), field("linkedin", "LinkedIn", "url"), field("preferred_channel", "Canal preferido"),
-  field("zip_code", "CEP", "text", { cepLookup: true }), field("street", "Rua"), field("street_number", "Número"), field("complement", "Complemento"), field("neighborhood", "Bairro"), field("city", "Cidade"), field("state", "Estado"), field("country", "País"),
-  field("segment", "Segmento"), field("services_interest", "Serviços de interesse"), field("main_need", "Necessidade principal"), field("sales_owner", "Responsável comercial"),
-  field("lead_temperature", "Temperatura", "select", { options: [["cold", "Frio"], ["warm", "Morno"], ["hot", "Quente"]] }), field("last_contact_at", "Último contato", "datetime-local"), field("next_contact_at", "Próximo contato", "datetime-local"), field("next_action", "Próxima ação"), field("estimated_budget", "Orçamento estimado", "number"), field("monthly_fee", "Mensalidade", "number"), field("financial_status", "Situação financeira"), field("internal_notes", "Observações internas")
-] };
 createConfig.cliente.onCreated = (data, payload) => {
   if (location.hash === "#clientes" && data?.client?.id) window.FocusOpenClientDetails?.({ ...payload, ...data.client });
 };

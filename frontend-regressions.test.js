@@ -167,6 +167,14 @@ test("ficha do cliente usa cadastro unificado, vínculos opcionais e ações rel
   }
   assert.match(contas, /clientField\.options = \[\["", "Sem cliente"\]/);
 });
+
+test("ficha mantém uma única configuração de cliente e bloqueia duplo envio das ações", () => {
+  const contas = source("modules/contas.js");
+  assert.equal((contas.match(/createConfig\.cliente\s*=/g) || []).length, 1);
+  assert.match(contas, /button\.disabled = true; button\.textContent = "Abrindo/);
+  assert.match(contas, /if \(!kind \|\| !clientId \|\| button\.disabled\) return/);
+  assert.match(contas, /finally \{ button\.disabled = false; button\.textContent = original; \}/);
+});
 test("ficha 360 evita requisicoes operacionais imediatas", () => {
   const contas = source("modules/contas.js");
   assert.doesNotMatch(contas, /hydrateClientOperationSections\(overview, record, data, \{ money, label, rows \}\)\.catch\(\(\) => \{\}\);/);
