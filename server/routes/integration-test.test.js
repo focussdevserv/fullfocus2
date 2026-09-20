@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createServer } from "node:http";
-import { maskIntegration, mergeIntegrationConfig, register } from "./automacoes.js";
+import { maskIntegration, mergeIntegrationConfig, register, resolveIntegrationCapabilities } from "./automacoes.js";
 
 async function setup(t, integration, adapter) {
   const calls = [];
@@ -48,6 +48,8 @@ test("catálogo encaminha Mercado Pago para cobranças sem oferecer conexão gen
   assert.equal(response.status, 200);
   const capability = (await response.json()).providers.mercado_pago;
   assert.deepEqual({ route: capability.route, configuration: capability.configuration, can_test: capability.can_test }, { route: "cobrancas", configuration: "dedicated", can_test: false });
+  const query = h.calls.find(({ sql }) => sql.startsWith("select provider,status,config,last_sync_at from integrations"));
+  assert.deepEqual(query.params, ["org"]);
 });
 
 test("adapter de webhook registra sucesso confirmado", async (t) => {
@@ -79,4 +81,20 @@ test("respostas mascaram segredos sem revelar sufixos", () => {
   const masked = maskIntegration({ config: { apiKey: "abcd-secret", nested: { client_secret: "client-secret" }, visible: "ok" } });
   assert.deepEqual(masked.config, { apiKey: "••••", nested: { client_secret: "••••" }, visible: "ok" });
   assert.doesNotMatch(JSON.stringify(masked), /abcd-secret|client-secret/);
+});
+
+test("capacidades usam estados explícitos sem expor segredos", () => {
+  const rows = [
+    { provider: "whatsapp", status: "connected", config: { apiKey: "wa-secret", baseUrl: "https://example.com" }, last_sync_at: "2026-09-19T10:00:00Z" },
+    { provider: "webhook", status: "disconnected", config: { url: "https://example.com/hook", token: "hook-secret" } },
+    { provider: "n8n", status: "error", config: { url: "https://example.com/n8n", apiKey: "n8n-secret" } },
+  ];
+  const providers = resolveIntegrationCapabilities(rows, { OPENAI_API_KEY: "ai-secret", RESEND_API_KEY: "", EVOLUTION_API_KEY: "", MERCADOPAGO_ACCESS_TOKEN: "mp-token", MERCADOPAGO_WEBHOOK_SECRET: "mp-hook" });
+  assert.equal(providers.openai.state, "ready");
+  assert.equal(providers.email.state, "missing_secret");
+  assert.equal(providers.whatsapp.state, "ready");
+  assert.equal(providers.webhook.state, "unverified");
+  assert.equal(providers.n8n.state, "error");
+  assert.equal(providers.github.state, "disabled");
+  assert.doesNotMatch(JSON.stringify(providers), /ai-secret|wa-secret|hook-secret|n8n-secret|mp-token|mp-hook/);
 });

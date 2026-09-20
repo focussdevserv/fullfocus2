@@ -29,11 +29,12 @@ const INTEGRATION_PROVIDERS = [
 ];
 
 const INTEGRATION_CAPABILITIES = {
+  openai: { label: "IA do agente", available: true, configuration: "environment", can_test: false, adapter: "openai" },
   whatsapp: { label: "WhatsApp / Evolution API", available: true, configuration: "dedicated", route: "whatsapp", can_test: false, adapter: "evolution" },
   mercado_pago: { label: "Mercado Pago", available: true, configuration: "dedicated", route: "cobrancas", can_test: false, adapter: "mercado_pago" },
   webhook: { label: "Webhook", available: true, configuration: "inline", can_test: true, adapter: "webhook" },
   n8n: { label: "n8n", available: true, configuration: "inline", can_test: true, adapter: "webhook" },
-  email: { label: "E-mail transacional", available: false, configuration: "environment", can_test: false, adapter: "resend" },
+  email: { label: "E-mail transacional", available: true, configuration: "environment", can_test: false, adapter: "resend" },
   smtp: { label: "SMTP", available: false, configuration: "unavailable", can_test: false, adapter: null },
   google_calendar: { label: "Google Calendar", available: false, configuration: "unavailable", can_test: false, adapter: null },
   google_drive: { label: "Google Drive", available: false, configuration: "unavailable", can_test: false, adapter: null },
@@ -46,6 +47,49 @@ const INTEGRATION_CAPABILITIES = {
   esign: { label: "Assinatura eletrônica", available: false, configuration: "unavailable", can_test: false, adapter: null },
   api: { label: "API própria", available: false, configuration: "unavailable", can_test: false, adapter: null },
 };
+
+const capabilityMessage = Object.freeze({
+  disabled: "Integração não habilitada neste app.",
+  missing_secret: "Falta configuração ou credencial obrigatória.",
+  unverified: "Configuração presente, mas ainda não verificada.",
+  ready: "Integração pronta para uso.",
+  error: "A última verificação falhou.",
+});
+
+const requiredConfigurationPresent = (provider, row, env) => {
+  const config = row?.config && typeof row.config === "object" ? row.config : {};
+  if (provider === "openai") return Boolean(String(env.OPENAI_API_KEY || "").trim());
+  if (provider === "email") return Boolean(String(env.RESEND_API_KEY || "").trim());
+  if (provider === "whatsapp") return Boolean(String(config.apiKey || env.EVOLUTION_API_KEY || "").trim());
+  if (provider === "mercado_pago") return Boolean(String(env.MERCADOPAGO_ACCESS_TOKEN || "").trim() && String(env.MERCADOPAGO_WEBHOOK_SECRET || "").trim());
+  if (["webhook", "n8n"].includes(provider)) return Boolean(text(config.webhookUrl || config.url));
+  return false;
+};
+
+export function resolveIntegrationCapabilities(rows = [], env = process.env) {
+  const byProvider = new Map(rows.map((row) => [String(row.provider || ""), row]));
+  return Object.fromEntries(Object.entries(INTEGRATION_CAPABILITIES).map(([provider, capability]) => {
+    const row = byProvider.get(provider), configured = requiredConfigurationPresent(provider, row, env);
+    let state = "disabled";
+    if (capability.available) {
+      if (!configured) state = "missing_secret";
+      else if (row?.status === "error") state = "error";
+      else if (["openai", "email", "mercado_pago"].includes(provider) || row?.status === "connected") state = "ready";
+      else state = "unverified";
+    }
+    return [provider, {
+      label: capability.label,
+      available: capability.available,
+      configuration: capability.configuration,
+      ...(capability.route ? { route: capability.route } : {}),
+      can_test: capability.can_test,
+      state,
+      configured,
+      message: capabilityMessage[state],
+      last_checked_at: row?.last_sync_at || null,
+    }];
+  }));
+}
 
 const SECRET_KEYS = new Set(["apikey", "token", "secret", "password", "clientsecret", "authorization"]);
 const isSecretKey = (key) => SECRET_KEYS.has(String(key).replace(/[-_]/g, "").toLowerCase());
@@ -81,6 +125,7 @@ const jsonValue = (value, fallback) => value === undefined ? fallback : value;
 
 export function register(app, ctx) {
   const { pool, tenant, asText, classifyDbError } = ctx;
+  const integrationEnv = ctx.integrationEnv || process.env;
   const integrationTestAdapters = {
     webhook: async (integration) => {
       const target = await assertSafeOutboundUrl(integration.config?.webhookUrl || integration.config?.url);
@@ -117,9 +162,12 @@ export function register(app, ctx) {
     const limit = Math.min(Math.max(Number.parseInt(req.query?.limit, 10) || 250, 1), 250), offset = Math.max(Number.parseInt(req.query?.offset, 10) || 0, 0); params.push(limit, offset);
     try { const q = await pool.query(`select * from automations where ${where.join(" and ")} order by created_at desc limit $${params.length - 1} offset $${params.length}`, params); return res.json({ automations: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (error) { return fail(res, error, "Nao foi possivel carregar as automacoes."); }
   });
-  app.get("/api/integrations/capabilities", (req, res) => {
+  app.get("/api/integrations/capabilities", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
-    res.json({ providers: INTEGRATION_CAPABILITIES });
+    try {
+      const q = await pool.query("select provider,status,config,last_sync_at from integrations where organization_id=$1", [org]);
+      res.json({ providers: resolveIntegrationCapabilities(q.rows, integrationEnv) });
+    } catch (error) { fail(res, error, "Não foi possível carregar as capacidades das integrações."); }
   });
 
   app.use("/api/integrations", async (req, res, next) => {

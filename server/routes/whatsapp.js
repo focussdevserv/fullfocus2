@@ -10,7 +10,7 @@
 import crypto from "node:crypto";
 import { assertSafeOutboundUrl, parseOutboundUrl } from "../outbound-url.js";
 import { callFocussAgent, DEFAULT_AGENT_PROMPT } from "../focuss-agent.js";
-import { executeAgentAction } from "../agent-actions.js";
+import { availableAgentActions, evaluateAgentAction, executeAgentAction } from "../agent-actions.js";
 
 const DEFAULT_BASE_URL = process.env.EVOLUTION_API_URL || "https://evolutions-evolution-api.fcoipz.easypanel.host";
 const TIMEOUT_MS = 15000;
@@ -41,6 +41,8 @@ export async function sendWhatsappText(pool, org, number, text, channel = "suppo
 
 export function register(app, ctx) {
   const { pool, tenant, classifyDbError } = ctx;
+  const callAgent = ctx.callFocussAgent || callFocussAgent;
+  const executeAction = ctx.executeAgentAction || executeAgentAction;
   const fail = (res, status, error) => res.status(status).json({ error });
 
   async function loadConfig(org) {
@@ -80,6 +82,12 @@ export function register(app, ctx) {
   async function roleOf(req, org) {
     const q = await pool.query("select role from users where id=$1 and organization_id=$2", [req.user?.id, org]);
     return q.rows[0]?.role || "member";
+  }
+
+  async function assistantActor(org, number) {
+    const q = await pool.query("select u.id,u.role,tr.permissions from users u left join team_roles tr on tr.id=u.team_role_id and tr.organization_id=u.organization_id where u.organization_id=$1 and coalesce(u.access_status,'active') not in ('inactive','blocked') and (u.access_expires_on is null or u.access_expires_on>=current_date) and (regexp_replace(coalesce(u.whatsapp,''), '\\D', '', 'g')=$2 or regexp_replace(coalesce(u.phone,''), '\\D', '', 'g')=$2)", [org, number]);
+    if (q.rows.length !== 1) return { id: null, role: "member", permissions: null };
+    return { id: q.rows[0].id, role: q.rows[0].role || "member", permissions: q.rows[0].permissions || null };
   }
 
   async function instanceState(cfg, name) {
@@ -265,13 +273,25 @@ export function register(app, ctx) {
       if (channel === "assistant") {
         const allowed = String(process.env.ASSISTANT_WHATSAPP_NUMBER || "").replace(/\D/g, "");
         if (!allowed || allowed !== number) return res.status(204).end();
-        const agent = (await pool.query("select enabled,model,system_prompt from agent_configs where organization_id=$1", [org])).rows[0];
+        const agent = (await pool.query("select enabled,model,system_prompt,autonomy_level from agent_configs where organization_id=$1", [org])).rows[0];
         if (agent?.enabled && process.env.OPENAI_API_KEY) {
+          const actor = await assistantActor(org, number);
           const history = (await pool.query("select direction,body from messages where conversation_id=$1 and organization_id=$2 order by created_at desc limit 20", [conv.id, org])).rows.reverse();
           const catalog = (await pool.query("select id,name,kind,price,unit,category,short_description,recurrence,billing_type from catalog_items where organization_id=$1 and active=true and public_visible=true order by highlighted desc,created_at desc limit 100", [org])).rows;
-          const result = await callFocussAgent({ model: agent.model, prompt: agent.system_prompt || DEFAULT_AGENT_PROMPT, messages: history.slice(0, -1), currentMessage: String(body).slice(0, 4000), context: { company: "Focussdev", channel: "assistant", user_role: "admin", catalog } });
-          const actionResult = await executeAgentAction({ pool, action: result.action, payload: result.action_payload, org, userId: null, authorized: true });
-          if (result.action && result.action !== "none" && !actionResult.executed) result.reply = "Não consegui executar essa ação automaticamente agora. A solicitação foi preservada para acompanhamento.";
+          const allowedActions = availableAgentActions({ autonomyLevel: agent.autonomy_level, role: actor.role, permissions: actor.permissions });
+          const result = await callAgent({ model: agent.model, prompt: agent.system_prompt || DEFAULT_AGENT_PROMPT, messages: history.slice(0, -1), currentMessage: String(body).slice(0, 4000), context: { company: "Focussdev", channel: "assistant", user_role: actor.role, catalog, agent_policy: { autonomy_level: Number(agent.autonomy_level), allowed_actions: allowedActions, user_role: actor.role } } });
+          const decision = evaluateAgentAction({ action: result.action, autonomyLevel: agent.autonomy_level, role: actor.role, permissions: actor.permissions });
+          if (decision.attempted && !decision.allowed) {
+            result.reply = "A ação solicitada não foi executada porque a autonomia ou as permissões do agente não permitem essa alteração.";
+          } else if (decision.allowed) {
+            let actionResult;
+            try {
+              actionResult = await executeAction({ pool, action: decision.action, payload: result.action_payload, org, userId: actor.id, authorized: true });
+            } catch {
+              actionResult = { executed: false, reason: "execution_error" };
+            }
+            if (!actionResult.executed) result.reply = "A ação solicitada falhou e não foi confirmada. A mensagem foi preservada para acompanhamento.";
+          }
           const cfg = await loadConfig(org);
           const sent = await evo(cfg, "POST", `/message/sendText/${encodeURIComponent(instanceNameFor(org, channel))}`, { number, text: result.reply });
           await pool.query("insert into messages (organization_id, conversation_id, direction, body, read_at) values ($1,$2,'out',$3,now())", [org, conv.id, result.reply]);

@@ -921,6 +921,7 @@ async function api(path, { method = "GET", body, headers, signal } = {}) {
     const error = new Error(data?.error || (response.status === 401 ? "Sua sessão expirou. Entre novamente." : transient ? "O servidor está indisponível no momento (pode estar sendo atualizado). Tentando novamente em instantes…" : "Não foi possível concluir a operação."));
     error.status = response.status;
     error.transient = transient;
+    error.data = data || {};
     if (transient && method === "GET") scheduleTransientRetry();
     throw error;
   }
