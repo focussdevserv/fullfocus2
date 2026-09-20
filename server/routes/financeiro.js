@@ -57,7 +57,8 @@ export async function processMercadoPagoSubscription({ pool, dataId, getSubscrip
 }
 
 export function register(app, ctx) {
-  const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
+  const { pool, tenant, asText, classifyDbError, validateRelations, validateCoherentRelations } = ctx;
+  const validateLinks = async (values, org, db = pool) => { await validateRelations?.(values, org); await validateCoherentRelations?.(values, org, { db }); };
   const processPaymentWebhook = ctx.processMercadoPagoPayment || processMercadoPagoPayment;
   const processSubscriptionWebhook = ctx.processMercadoPagoSubscription || processMercadoPagoSubscription;
   const createPixCharge = ctx.createPixOrder || createPixOrder;
@@ -93,6 +94,7 @@ export function register(app, ctx) {
       const receivable = await db.query("select * from receivables where id=$1 and organization_id=$2 for update", [req.params.id, org]);
       if (!receivable.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Conta a receber não encontrada." }); }
       const source = receivable.rows[0];
+      await validateLinks({ client_id: source.client_id, project_id: source.project_id, contract_id: source.contract_id }, org, db);
       const externalId = idempotencyKey ? `manual:${org}:${source.id}:${idempotencyKey}` : null;
       if (externalId) {
         const duplicate = await db.query("select * from payments where organization_id=$1 and receivable_id=$2 and external_id=$3 limit 1", [org, source.id, externalId]);
@@ -121,6 +123,7 @@ export function register(app, ctx) {
       const source = await db.query("select * from payables where id=$1 and organization_id=$2 for update", [req.params.id, org]);
       if (!source.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Conta a pagar não encontrada." }); }
       const payable = source.rows[0];
+      await validateLinks({ client_id: payable.client_id, project_id: payable.project_id }, org, db);
       if (["paid", "cancelled"].includes(payable.status)) { await db.query("rollback"); return res.status(400).json({ error: "Esta conta não aceita nova baixa." }); }
       const expense = await db.query("insert into expenses (organization_id,description,project_id,client_id,amount,supplier,status,due_at,paid_at) values ($1,$2,$3,$4,$5,$6,'paid',$7,now()) returning *", [org, payable.description, payable.project_id, payable.client_id, payable.amount, payable.supplier, payable.due_at]);
       const updated = await db.query("update payables set status='paid',paid_at=now(),updated_at=now() where id=$1 and organization_id=$2 returning *", [payable.id, org]);
@@ -249,6 +252,7 @@ export function register(app, ctx) {
       const contract = await db.query("select * from contracts where id=$1 and organization_id=$2 for update", [req.params.id, org]);
       if (!contract.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Contrato não encontrado." }); }
       const source = contract.rows[0];
+      await validateLinks({ client_id: source.client_id, project_id: source.project_id, contract_id: source.id, proposal_id: source.proposal_id }, org, db);
       if (!["signed", "active"].includes(source.status)) { await db.query("rollback"); return res.status(400).json({ error: "O contrato precisa estar assinado ou ativo para gerar parcelas." }); }
       const existing = await db.query("select id from receivables where contract_id=$1 and organization_id=$2 order by installment_number nulls last, id", [source.id, org]);
       if (existing.rowCount) { await db.query("commit"); return res.json({ receivables: existing.rows, created: false }); }

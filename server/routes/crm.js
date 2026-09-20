@@ -12,7 +12,8 @@ const toNumber = (value, fallback = null) => { if (value === undefined || value 
 const dateOrNull = (value) => (value ? (Number.isNaN(Date.parse(value)) ? NaN : value) : null);
 
 export function register(app, ctx) {
-  const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
+  const { pool, tenant, asText, classifyDbError, validateRelations, validateCoherentRelations } = ctx;
+  const validateLinks = async (values, org, db = pool) => { await validateRelations?.(values, org); await validateCoherentRelations?.(values, org, { db }); };
   const fail = (res, e, msg) => { const out = classifyDbError(e, msg); res.status(out.status).json({ error: out.error }); };
   const bad = (res, msg) => res.status(400).json({ error: msg });
 
@@ -177,6 +178,9 @@ export function register(app, ctx) {
     const org = tenant(req, res); if (!org) return;
     const title = asText(req.body?.title), amount = toNumber(req.body?.amount, 0), oid = req.body?.opportunity_id || null, lid = req.body?.lead_id || null, cid = req.body?.client_id || null, pid = req.body?.project_id || null;
     const downPayment = toNumber(req.body?.down_payment, 0), installments = toNumber(req.body?.installments, 1);
+    const coherentProposalLinks = { opportunity_id: oid, lead_id: lid, client_id: cid, project_id: pid };
+    // Validação conjunta impede combinar entidades do mesmo workspace de clientes diferentes.
+    try { await validateCoherentRelations?.(coherentProposalLinks, org); } catch (e) { return bad(res, e.message); }
     if (!title || Number.isNaN(amount) || amount < 0 || !Number.isFinite(downPayment) || downPayment < 0 || downPayment > amount || !Number.isInteger(installments) || installments < 1) return bad(res, "Informe título, valor, entrada e parcelas válidos.");
     const valid = dateOrNull(req.body?.valid_until); if (Number.isNaN(valid)) return bad(res, "Validade inválida.");
     try { if (oid) await validateRelations({ opportunity_id: oid }, org); if (lid) await validateRelations({ lead_id: lid }, org); if (cid) await validateRelations({ client_id: cid }, org); if (pid) await validateRelations({ project_id: pid }, org); const q = await pool.query("insert into proposals (organization_id,opportunity_id,lead_id,client_id,project_id,title,amount,valid_until,payment_method,down_payment,installments,service_type,scope_included,proposal_terms,notes) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *", [org, oid, lid, cid, pid, title, amount, valid, asText(req.body?.payment_method) || null, downPayment, installments, asText(req.body?.service_type) || null, asText(req.body?.scope_included) || null, asText(req.body?.proposal_terms) || null, asText(req.body?.notes) || null]); res.status(201).json({ proposal: q.rows[0] }); }

@@ -10,6 +10,7 @@ import { singular, classifyDbError, isValidAmount, TABLES_WITH_UPDATED_AT, norma
 import { attachResetRoutes } from "./auth-reset.js";
 import { runMigrations } from "./migrate.js";
 import { registerDomainRoutes } from "./routes/index.js";
+import { validateCoherentRelations } from "./relationship-validation.js";
 import { registerContractPublicRoutes } from "./routes/contract-public.js";
 import { registerProposalPublicRoutes } from "./routes/proposal-public.js";
 import { registerDeliveryPublicRoutes } from "./routes/delivery-public.js";
@@ -322,7 +323,7 @@ app.use("/api/tasks", async (req, res, next) => {
   res.on("finish", () => { if (res.statusCode >= 200 && res.statusCode < 300) for (const projectId of projectIds) refreshProjectProgress(projectId, org).catch(() => {}); });
   return next();
 });
-registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
+registerDomainRoutes(app, { pool, tenant, requireAuth, asText, classifyDbError, singular, validateRelations, validateCoherentRelations: (values, org, options = {}) => validateCoherentRelations(options.db || pool, values, org), normalize, entities, hashPassword, verifyPassword, signSession, sessionCookie });
 registerEventRoutes(app, { pool, tenant, classifyDbError, validateRelations });
 app.get("/api/tasks", async (req, res) => {
   const org = tenant(req, res); if (!org) return;

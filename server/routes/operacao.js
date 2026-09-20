@@ -1,6 +1,7 @@
 /* Rotas específicas da operação: contratos, projetos, arquivos e tickets. */
 export function register(app, ctx) {
-  const { pool, tenant, asText, classifyDbError, validateRelations } = ctx;
+  const { pool, tenant, asText, classifyDbError, validateRelations, validateCoherentRelations } = ctx;
+  const validateLinks = async (values, org, db = pool) => { await validateRelations?.(values, org); await validateCoherentRelations?.(values, org, { db }); };
   const fail = (res, err, fallback) => { const out = classifyDbError(err, fallback); res.status(out.status).json({ error: out.error }); };
   const fileUrlIssue = (body) => {
     const url = asText(body?.url);
@@ -23,7 +24,7 @@ export function register(app, ctx) {
     app.post(`/api/${table}`, async (req, res) => { const org = tenant(req, res); if (!org) return; const issue = validate(req.body || {}); if (issue) return res.status(400).json({ error: issue }); try {
       if (table === "contracts") await validateContractLinks(req.body || {}, org);
       if (table === "contracts" && req.body.proposal_id) { const existing = await pool.query("select * from contracts where proposal_id=$1 and organization_id=$2", [req.body.proposal_id, org]); if (existing.rowCount) return res.json({ contract: existing.rows[0], created: false }); }
-      await validateRelations?.(Object.fromEntries(fields.filter((f) => f.endsWith("_id")).map((f) => [f, req.body[f] || null])), org);
+      await validateLinks(Object.fromEntries(fields.filter((f) => f.endsWith("_id")).map((f) => [f, req.body[f] || null])), org);
       const defaults = table === "contracts" ? { status: "draft" } : table === "projects" ? { status: "active", progress: 0 } : table === "tickets" ? { priority: "medium", status: "open" } : {};
       if (table === "contracts" && !req.body.contract_number) { const seq = await pool.query("select count(*)::int total from contracts where organization_id=$1 and extract(year from created_at)=extract(year from current_date)", [org]); defaults.contract_number = `CONT-${new Date().getFullYear()}-${String(Number(seq.rows[0]?.total || 0) + 1).padStart(3, "0")}`; }
       const vals = fields.map((f) => req.body[f] === undefined || req.body[f] === "" ? (defaults[f] ?? null) : req.body[f]); const q = await pool.query(`insert into ${table} (organization_id,${fields.join(",")}) values ($1,${fields.map((_, i) => `$${i + 2}`).join(",")}) returning *`, [org, ...vals]); res.status(201).json({ [singular]: q.rows[0], created: true });
