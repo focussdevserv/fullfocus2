@@ -212,6 +212,22 @@ test("ficha 360 oferece abas acessíveis, retry e indicação de listas limitada
   assert.match(css, /aria-selected="true"/);
 });
 
+test("ficha 360 prepara onboarding do contrato sem recarregar o drawer", () => {
+  const contas = source("modules/contas.js");
+  const css = source("modules/contas.css");
+  assert.match(contas, /data-client-onboarding/);
+  assert.match(contas, /complete-onboarding/);
+  assert.match(contas, /Preparar projeto e parcelas/);
+  assert.match(contas, /Criando projeto e verificando parcelas/);
+  assert.match(contas, /Tentar novamente/);
+  assert.match(contas, /updateClientOnboardingView/);
+  assert.match(contas, /data-client-stat.*projects-active/);
+  assert.match(contas, /data-client-stat.*receivables-open/);
+  assert.doesNotMatch(contas.slice(contas.indexOf("const bindClientOnboardingActions"), contas.indexOf("async function hydrateClientOperationSections")), /renderHashRoute\(\)/);
+  assert.match(css, /client-onboarding-action/);
+  assert.match(css, /client-onboarding-feedback\.is-error/);
+});
+
 test("ficha 360 isola respostas obsoletas e mantém layout móvel", () => {
   const contas = source("modules/contas.js");
   const css = source("modules/contas.css");

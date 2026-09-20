@@ -261,6 +261,68 @@ async function openClientDetails(record) {
 /* Ficha 360: transforma o resumo em uma área de trabalho completa sem alterar o cadastro simples. */
 /* Cada bloco operacional tem ciclo de vida próprio: um erro em arquivos não bloqueia tarefas. */
 let contaClientSheetEpoch = 0;
+const clientContractOnboardingReady = (contract, data) => {
+  if (!contract || !["signed", "active"].includes(contract.status)) return false;
+  const hasProject = Boolean(contract.project_id) || (data.projects || []).some((item) => String(item.contract_id || "") === String(contract.id));
+  const hasReceivables = (data.receivables || []).some((item) => String(item.contract_id || "") === String(contract.id));
+  return hasProject && hasReceivables;
+};
+const clientContractOnboardingAction = (contract, data) => {
+  if (!contract || !["signed", "active"].includes(contract.status)) return "";
+  const ready = clientContractOnboardingReady(contract, data);
+  return `<div class="client-onboarding-action"><button type="button" class="compact-action client-onboarding-button" data-client-onboarding="${contaEsc(contract.id)}" ${ready ? "disabled" : ""}>${ready ? "Projeto e parcelas prontos" : "Preparar projeto e parcelas"}</button><span class="client-onboarding-feedback" data-client-onboarding-feedback="${contaEsc(contract.id)}" role="status" aria-live="polite"></span></div>`;
+};
+const clientOnboardingProjectRow = (project) => `<div class="client-related-row" data-client-onboarding-project="${contaEsc(project.id)}"><strong>${contaEsc(project.name || "Projeto do contrato")}</strong><span>${contaEsc(contaStatus[project.status] || project.status || "Planejamento")} · ${Number(project.progress || 0)}%</span><small>${project.due_on ? `Prazo ${contaFieldValue("due_on", project.due_on)}` : "Sem prazo definido"}</small></div>`;
+const clientOnboardingReceivableRow = (item) => `<div class="client-related-row" data-client-onboarding-receivable="${contaEsc(item.id)}"><strong>${contaEsc(item.description || "Parcela")}</strong><span>${contaEsc(contaStatus[item.status] || item.status || "Pendente")}</span><small>${contaMoney(item.amount)} · vencimento ${contaFieldValue("due_at", item.due_at)}</small></div>`;
+const updateClientOnboardingView = (overview, data, contract, result) => {
+  const project = result.project;
+  if (project) {
+    data.projects = [...(data.projects || []).filter((item) => String(item.id) !== String(project.id)), project];
+    const target = overview.querySelector('[data-client-panel="sheet-projects"] .client-sheet-grid article:first-child');
+    if (target && !target.querySelector(`[data-client-onboarding-project="${CSS.escape(String(project.id))}"]`)) target.insertAdjacentHTML("beforeend", clientOnboardingProjectRow(project));
+  }
+  if (Array.isArray(result.receivables)) {
+    const current = new Map((data.receivables || []).map((item) => [String(item.id), item]));
+    result.receivables.forEach((item) => current.set(String(item.id), item));
+    data.receivables = [...current.values()];
+    const target = overview.querySelector('[data-client-panel="sheet-finance"] .client-sheet-grid article:first-child');
+    if (target) result.receivables.forEach((item) => { if (!target.querySelector(`[data-client-onboarding-receivable="${CSS.escape(String(item.id))}"]`)) target.insertAdjacentHTML("beforeend", clientOnboardingReceivableRow(item)); });
+  }
+  const projectStat = overview.querySelector('[data-client-stat="projects-active"]');
+  if (projectStat) projectStat.textContent = String((data.projects || []).filter((item) => !["done", "published", "cancelled"].includes(item.status)).length);
+  const openAmount = (data.receivables || []).filter((item) => !item.paid_at && item.status !== "cancelled").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const receivableStat = overview.querySelector('[data-client-stat="receivables-open"]');
+  if (receivableStat) receivableStat.textContent = contaMoney(openAmount);
+  overview.querySelectorAll(`[data-client-onboarding="${CSS.escape(String(contract.id))}"]`).forEach((button) => { button.disabled = true; button.textContent = "Projeto e parcelas prontos"; button.removeAttribute("aria-busy"); });
+};
+const bindClientOnboardingActions = (overview, record, data) => {
+  if (!overview || overview.dataset.onboardingActionsBound === "1") return;
+  overview.dataset.onboardingActionsBound = "1";
+  overview.addEventListener("click", async (event) => {
+    const button = event.target.closest?.("[data-client-onboarding]");
+    if (!button || button.disabled) return;
+    const contractId = button.dataset.clientOnboarding;
+    const contract = (data.contracts || []).find((item) => String(item.id) === String(contractId));
+    if (!contract) return;
+    const original = button.textContent;
+    const feedback = overview.querySelector(`[data-client-onboarding-feedback="${CSS.escape(String(contractId))}"]`);
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.textContent = "Preparando…";
+    if (feedback) { feedback.classList.remove("is-error", "is-success"); feedback.textContent = "Criando projeto e verificando parcelas…"; }
+    try {
+      const result = await api(`/api/contracts/${encodeURIComponent(contractId)}/complete-onboarding`, { method: "POST", body: {} });
+      updateClientOnboardingView(overview, data, contract, result);
+      const created = [result.project_created ? "projeto criado" : "projeto já existente", result.receivables_created ? `${result.receivables_created} parcela(s) preparada(s)` : "parcelas já existentes"].join(" · ");
+      overview.querySelectorAll(`[data-client-onboarding-feedback="${CSS.escape(String(contractId))}"]`).forEach((node) => { node.textContent = `Pronto: ${created}.`; node.classList.add("is-success"); });
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = original;
+      button.removeAttribute("aria-busy");
+      if (feedback) { feedback.classList.add("is-error"); feedback.innerHTML = `${contaEsc(error.message || "Não foi possível preparar o onboarding.")} <button type="button" class="client-onboarding-retry" data-client-onboarding="${contaEsc(contractId)}">Tentar novamente</button>`; }
+    }
+  });
+};
 async function hydrateClientOperationSections(overview, record, data, helpers) {
   const panel = overview.querySelector('[data-client-panel="sheet-projects"]');
   if (!panel) return;
@@ -268,6 +330,7 @@ async function hydrateClientOperationSections(overview, record, data, helpers) {
   const projectArticle = grids[0]?.firstElementChild;
   const staticArticle = document.createElement("article");
   staticArticle.innerHTML = `<h3>Tarefas, contratos e suporte</h3>${helpers.rows(data.contracts, (item) => `<div class="client-related-row"><strong>${contaEsc(item.name)}</strong><span>${contaEsc(helpers.label(item.status))}</span><small>${helpers.money(item.value)}${item.ends_on ? ` · até ${contaFieldValue("ends_on", item.ends_on)}` : ""}</small></div>`, "Nenhum contrato registrado.")}${helpers.rows(data.tickets, (item) => `<div class="client-related-row"><strong>${contaEsc(item.title)}</strong><span>${contaEsc(helpers.label(item.status))} · ${contaEsc(helpers.label(item.priority))}</span><small>${item.due_at ? `Prazo ${contaFieldValue("due_at", item.due_at)}` : "Sem prazo"}</small></div>`, "Nenhum ticket registrado.")}`;
+  [...staticArticle.querySelectorAll(".client-related-row")].slice(0, data.contracts.length).forEach((row, index) => row.insertAdjacentHTML("beforeend", clientContractOnboardingAction(data.contracts[index], data)));
   if (grids[0]) grids[0].replaceChildren(projectArticle || document.createElement("article"), staticArticle);
   grids.slice(1).forEach((grid) => grid.remove());
   const liveGrid = document.createElement("div"); liveGrid.className = "client-sheet-grid client-live-sections";
@@ -335,6 +398,11 @@ openClientDetails = async function openCompleteClientSheet(record) {
     const openAmount = (data.receivables || []).filter((item) => !item.paid_at).reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const facts = contaFacts(data.client || record, 80);
     overview.innerHTML = `<nav class="client-sheet-tabs" aria-label="Seções da ficha"><button type="button" class="is-active" aria-selected="true" data-client-tab="sheet-overview">Resumo</button><button type="button" aria-selected="false" data-client-tab="sheet-profile">Dados e contatos</button><button type="button" aria-selected="false" data-client-tab="sheet-commercial">Comercial</button><button type="button" aria-selected="false" data-client-tab="sheet-projects">Projetos e operação</button><button type="button" aria-selected="false" data-client-tab="sheet-finance">Financeiro</button><button type="button" aria-selected="false" data-client-tab="sheet-history">Histórico</button></nav><section data-client-panel="sheet-overview"><div class="conta-overview-stats"><div><small>Conversas</small><strong>${data.conversations.length}</strong></div><div><small>Projetos ativos</small><strong>${data.summary.active_projects}</strong></div><div><small>Tarefas abertas</small><strong>${data.tasks.filter((item) => !["done", "completed"].includes(item.status)).length}</strong></div><div><small>Em aberto</small><strong>${money(openAmount)}</strong></div><div><small>Tickets abertos</small><strong>${data.summary.open_tickets}</strong></div><div><small>Alterações pendentes</small><strong>${data.summary.pending_changes}</strong></div></div><div class="client-sheet-grid"><article><h3>Próximas ações</h3>${rows([...data.tasks.filter((item) => !["done", "completed"].includes(item.status)).slice(0, 5).map((item) => ({ text: item.title, meta: label(item.status), href: "#tarefas" })), ...data.receivables.filter((item) => !item.paid_at).slice(0, 3).map((item) => ({ text: item.description, meta: money(item.amount), href: "#cobrancas" })), ...data.tickets.filter((item) => !["done", "closed", "cancelled"].includes(item.status)).slice(0, 2).map((item) => ({ text: item.title, meta: `Ticket · ${label(item.priority)}`, href: "#tickets" }))], (item) => `<a class="client-next-action" href="${item.href}">${contaEsc(item.text)} <span>${contaEsc(item.meta)}</span></a>`, "Nenhuma pendência para este cliente.")}</article><article><h3>Resumo cadastral</h3>${facts}</article></div></section><section data-client-panel="sheet-profile" hidden><div class="client-sheet-grid"><article><h3>Dados completos</h3>${facts}</article><article><h3>Contatos relacionados</h3>${rows(data.contacts, (item) => `<div class="client-related-row"><strong>${contaEsc(item.name)}</strong><span>${contaEsc(item.role || "Contato")}</span><small>${contaEsc(item.email || item.phone || "Sem canal informado")}</small>${editRelated("contato", item, `/api/contacts/${item.id}`)}</div>`, "Nenhum contato vinculado.")}</article></div></section><section data-client-panel="sheet-commercial" hidden><div class="client-sheet-grid"><article><h3>Propostas</h3>${rows(data.proposals, (item) => `<div class="client-related-row"><strong>${contaEsc(item.title)}</strong><span>${contaEsc(label(item.status))}</span><small>${money(item.amount)} · validade ${contaFieldValue("valid_until", item.valid_until)}</small>${editRelated("proposta", item, `/api/proposals/${item.id}`)}</div>`, "Nenhuma proposta registrada.")}</article><article><h3>Conversas</h3>${rows(data.conversations, (item) => `<div class="client-related-row"><strong>${contaEsc(item.subject)}</strong><span>${contaEsc(item.channel || "interno")} · ${contaEsc(label(item.status))}</span><small>${contaEsc(item.last_message || "Sem mensagens")}</small></div>`, "Nenhuma conversa vinculada.")}</article></div></section><section data-client-panel="sheet-projects" hidden><div class="client-sheet-grid"><article><h3>Projetos</h3>${rows(data.projects, (item) => `<div class="client-related-row"><strong>${contaEsc(item.name)}</strong><span>${contaEsc(label(item.status))} · ${Number(item.progress || 0)}%</span><small>${item.due_on ? `Prazo ${contaFieldValue("due_on", item.due_on)}` : "Sem prazo definido"}${item.production_url ? ` · <a href="${contaEsc(item.production_url)}" target="_blank" rel="noopener noreferrer">Abrir</a>` : ""}</small>${editRelated("projeto", item, `/api/projects/${item.id}`)}</div>`, "Nenhum projeto vinculado.")}</article><article><h3>Tarefas, contratos e suporte</h3>${rows(data.tasks, (item) => `<div class="client-related-row"><strong>${contaEsc(item.title)}</strong><span>${contaEsc(label(item.status))}</span><small>${item.due_at ? `Prazo ${contaFieldValue("due_at", item.due_at)}` : "Sem prazo"}</small>${editRelated("tarefa", item, `/api/tasks/${item.id}`)}</div>`, "Nenhuma tarefa registrada.")}${rows(data.contracts, (item) => `<div class="client-related-row"><strong>${contaEsc(item.name)}</strong><span>${contaEsc(label(item.status))}</span><small>${money(item.value)}${item.ends_on ? ` · até ${contaFieldValue("ends_on", item.ends_on)}` : ""}</small>${editRelated("contrato", item, `/api/contracts/${item.id}`)}</div>`, "Nenhum contrato registrado.")}${rows(data.tickets, (item) => `<div class="client-related-row"><strong>${contaEsc(item.title)}</strong><span>${contaEsc(label(item.status))} · ${contaEsc(label(item.priority))}</span><small>${item.due_at ? `Prazo ${contaFieldValue("due_at", item.due_at)}` : "Sem prazo"}</small>${editRelated("ticket", item, `/api/tickets/${item.id}`)}</div>`, "Nenhum ticket registrado.")}</article></div><div class="client-sheet-grid"><article><h3>Arquivos e briefings</h3>${rows(data.files, (item) => `<div class="client-related-row"><strong>${contaEsc(item.name)}</strong><span>${contaEsc(item.kind || "Arquivo")}</span><small>${item.url ? `<a href="${contaEsc(item.url)}" target="_blank" rel="noopener noreferrer">Abrir arquivo</a>` : "Sem link"}</small></div>`, "Nenhum arquivo vinculado.")}${rows(data.briefings, (item) => `<div class="client-related-row"><strong>${contaEsc(item.name)}</strong><span>${contaEsc(label(item.status))}</span><small>Briefing do projeto</small></div>`, "Nenhum briefing registrado.")}</article><article><h3>Alterações e infraestrutura</h3>${rows(data.change_requests, (item) => `<div class="client-related-row"><strong>${contaEsc(item.title)}</strong><span>${contaEsc(label(item.status))}</span><small>${item.additional_cost ? `Adicional ${money(item.additional_cost)}` : "Sem adicional informado"}</small></div>`, "Nenhuma alteração registrada.")}${rows(data.infrastructure, (item) => `<div class="client-related-row"><strong>${contaEsc(item.name)}</strong><span>${contaEsc(item.provider || item.kind || "Recurso")}</span><small>${item.expires_on ? `Vencimento ${contaFieldValue("expires_on", item.expires_on)}` : "Sem vencimento"}</small></div>`, "Nenhum recurso de infraestrutura.")}</article></div></section><section data-client-panel="sheet-finance" hidden><div class="client-sheet-grid"><article><h3>Contas a receber</h3>${rows(data.receivables, (item) => `<div class="client-related-row"><strong>${contaEsc(item.description)}</strong><span>${contaEsc(label(item.status))}</span><small>${money(item.amount)} · vencimento ${contaFieldValue("due_at", item.due_at)}${item.paid_at ? ` · pago em ${contaFieldValue("paid_at", item.paid_at)}` : ""}</small>${editRelated("recebivel", item, `/api/receivables/${item.id}`)}</div>`, "Nenhum lançamento financeiro.")}</article><article><h3>Resumo financeiro</h3>${ui.facts([["Em aberto", money(openAmount)], ["Projetos concluídos", data.summary.completed_projects], ["Mensalidade", money(data.summary.recurring_monthly)], ["Tickets abertos", data.summary.open_tickets]])}<a class="client-next-action" href="#cobrancas">Abrir cobranças <span>→</span></a></article></div></section><section data-client-panel="sheet-history" hidden><article><h3>Histórico de atividades</h3>${rows(data.activities, (item) => `<div class="client-related-row"><strong>${contaEsc(item.action)}</strong><span>${contaEsc(item.entity_type || "registro")}</span><small>${contaFieldValue("created_at", item.created_at)}</small></div>`, "Nenhuma atividade registrada.")}</article></section>`;
+    overview.querySelector('.conta-overview-stats div:nth-child(2) strong')?.setAttribute("data-client-stat", "projects-active");
+    overview.querySelector('.conta-overview-stats div:nth-child(4) strong')?.setAttribute("data-client-stat", "receivables-open");
+    const operationRows = [...overview.querySelectorAll('[data-client-panel="sheet-projects"] .client-sheet-grid article:nth-child(2) .client-related-row')];
+    operationRows.slice(data.tasks.length, data.tasks.length + data.contracts.length).forEach((row, index) => row.insertAdjacentHTML("beforeend", clientContractOnboardingAction(data.contracts[index], data)));
+    bindClientOnboardingActions(overview, record, data);
     const opportunityCount = Number(data.summary?.opportunities_total ?? data.opportunities?.length ?? 0);
     const overviewStats = overview.querySelector(".conta-overview-stats");
     overviewStats?.firstElementChild?.insertAdjacentHTML("afterend", `<div><small>Oportunidades</small><strong>${opportunityCount}</strong></div>`);
