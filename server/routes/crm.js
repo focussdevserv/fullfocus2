@@ -35,10 +35,10 @@ export function register(app, ctx) {
     const search = asText(req.query.search || req.query.q);
     if (search) { values.push(`%${search.slice(0, 100)}%`); const index = values.length; where.push(`(o.name ilike $${index} or coalesce(o.notes,'') ilike $${index})`); }
     if (req.query.stage === "open") where.push("o.stage not in ('won','lost')");
-    for (const field of ["stage", "owner_id", "lead_id", "company_id", "contact_id"]) if (req.query[field] !== undefined && req.query[field] !== "" && !(field === "stage" && req.query.stage === "open")) add(`o.${field}=$VALUE`, String(req.query[field]));
+    for (const field of ["stage", "owner_id", "lead_id", "company_id", "contact_id", "client_id"]) if (req.query[field] !== undefined && req.query[field] !== "" && !(field === "stage" && req.query.stage === "open")) add(`o.${field}=$VALUE`, String(req.query[field]));
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 250), offset = Math.max(Number(req.query.offset) || 0, 0);
     values.push(limit, offset);
-    try { const q = await pool.query(`select o.*, l.name lead_name, co.name company_name from opportunities o left join leads l on l.id=o.lead_id and l.organization_id=o.organization_id left join companies co on co.id=o.company_id and co.organization_id=o.organization_id where ${where.join(" and ")} order by o.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ opportunities: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "Não foi possível carregar as oportunidades."); }
+    try { const q = await pool.query(`select o.*, l.name lead_name, co.name company_name, c.name client_name from opportunities o left join leads l on l.id=o.lead_id and l.organization_id=o.organization_id left join companies co on co.id=o.company_id and co.organization_id=o.organization_id left join clients c on c.id=o.client_id and c.organization_id=o.organization_id where ${where.join(" and ")} order by o.created_at desc limit $${values.length - 1} offset $${values.length}`, values); res.json({ opportunities: q.rows, pagination: { limit, offset, returned: q.rows.length } }); } catch (e) { fail(res, e, "Não foi possível carregar as oportunidades."); }
   });
 
   /* ---------------------------------------------------------------- resumo */

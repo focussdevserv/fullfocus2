@@ -409,11 +409,12 @@ function drawOpportunities(opps) {
   dashboardGrid.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => confirmInline(b, { onConfirm: async () => { await api(`/api/opportunities/${b.dataset.delete}`, { method: "DELETE" }); toast("Oportunidade excluída."); renderOpportunities(); } })));
 }
 
-async function opportunityForm(opp, after) {
+async function opportunityForm(opp, after, clientContext = null) {
   const routeAtStart = location.hash;
+  const boundClientId = clientContext?.clientId ? String(clientContext.clientId) : "";
   const leads = await options("leads");
-  if (location.hash !== routeAtStart || !Object.values(crmRoutes).includes(routeAtStart)) return;
-  form({ title: opp ? "Editar oportunidade" : "Nova oportunidade", subtitle: "CRM", submitLabel: opp ? "Salvar" : "Criar", values: opp ? { ...opp, lead_id: opp.lead_id ? String(opp.lead_id) : "" } : { stage: "prospecting", probability: 50 }, fields: [
+  if (location.hash !== routeAtStart || (!boundClientId && !Object.values(crmRoutes).includes(routeAtStart))) return;
+  form({ title: opp ? "Editar oportunidade" : "Nova oportunidade", subtitle: boundClientId ? `CRM · ${clientContext.clientName || "Cliente atual"}` : "CRM", submitLabel: opp ? "Salvar" : "Criar", values: opp ? { ...opp, lead_id: opp.lead_id ? String(opp.lead_id) : "" } : { stage: "prospecting", probability: 50 }, fields: [
     { name: "name", label: "Nome" },
     { name: "amount", label: "Valor (R$)", type: "number", half: true },
     { name: "probability", label: "Probabilidade (%)", type: "number", step: 1, min: 0, max: 100, required: false, half: true },
@@ -421,9 +422,13 @@ async function opportunityForm(opp, after) {
     { name: "expected_close", label: "Previsão de fechamento", type: "date", required: false, half: true },
     { name: "lead_id", label: "Lead de origem", type: "select", required: false, options: [["", "Sem lead"], ...leads.map((l) => [String(l.id), l.name])] },
     { name: "notes", label: "Observações", type: "textarea", required: false },
-  ], onSubmit: async (values) => { if (values.lead_id === null) values.lead_id = null; if (opp) await api(`/api/opportunities/${opp.id}`, { method: "PATCH", body: values }); else await api("/api/opportunities", { method: "POST", body: values }); invalidate(); toast(opp ? "Oportunidade atualizada." : "Oportunidade criada.", "success"); after(); },
+  ], onSubmit: async (values) => { if (values.lead_id === null) values.lead_id = null; if (boundClientId) values.client_id = boundClientId; if (opp) await api(`/api/opportunities/${opp.id}`, { method: "PATCH", body: values }); else await api("/api/opportunities", { method: "POST", body: values }); invalidate(); (boundClientId ? uiToast : toast)(opp ? "Oportunidade atualizada." : "Oportunidade criada e vinculada ao cliente.", "success"); after(); },
   danger: opp ? { label: "Excluir", onClick: async () => { await api(`/api/opportunities/${opp.id}`, { method: "DELETE" }); invalidate(); toast("Excluída."); after(); } } : null });
 }
+
+window.FocusOpenOpportunityForClient = async function FocusOpenOpportunityForClient(clientId, clientName, after = () => {}) {
+  return opportunityForm(null, after, { clientId, clientName });
+};
 
 function opportunityDrawer(opp, after) {
   if (!opp) return;

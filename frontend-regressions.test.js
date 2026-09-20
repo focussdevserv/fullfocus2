@@ -110,3 +110,17 @@ test("ficha do cliente mantém o vínculo e salva itens e recálculo da proposta
   assert.match(drawerFlow, /save\.disabled = false/);
   assert.match(drawerFlow, /button\.disabled = false/);
 });
+
+test("ficha do cliente cria e lista oportunidades reais vinculadas", () => {
+  const crm = source("modules/crm.js");
+  const contas = source("modules/contas.js");
+  assert.match(contas, /data-client-create="oportunidade"/);
+  assert.match(contas, /oportunidade: "oportunidades"/);
+  assert.match(contas, /FocusOpenOpportunityForClient\(clientId, tools\.dataset\.clientName/);
+  assert.match(contas, /data\.summary\?\.opportunities_total/);
+  assert.match(contas, /rows\(data\.opportunities/);
+  assert.match(contas, /Nenhuma oportunidade vinculada\./);
+  assert.match(crm, /window\.FocusOpenOpportunityForClient/);
+  assert.match(crm, /if \(boundClientId\) values\.client_id = boundClientId/);
+  assert.match(crm, /Oportunidade criada e vinculada ao cliente\./);
+});
