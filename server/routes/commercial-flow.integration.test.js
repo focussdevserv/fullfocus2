@@ -97,7 +97,7 @@ test("fluxo comercial ponta a ponta (fixture transacional, não PostgreSQL real)
   const classifyDbError = (_error, fallback) => ({ status: 503, error: fallback });
   const validateRelations = async (links, org) => { for (const [key, value] of Object.entries(links)) { if (!value) continue; const collection = { client_id: "clients", proposal_id: "proposals", project_id: "projects" }[key]; if (collection && !fixture.state[collection].some((row) => String(row.id) === String(value) && row.organization_id === org)) { const error = new Error(`${key} não pertence a este workspace.`); error.code = "invalid_relation"; throw error; } } };
   const context = { pool, tenant, asText, classifyDbError, validateRelations };
-  const app = express(); app.use(express.json());
+  const app = express(); app.use(express.json()); app.use((req, _res, next) => { req.user = { id: "owner", organization_id: ORG, role: "owner" }; next(); });
   registerAccounts(app, context); registerCrm(app, context); registerOperation(app, context); registerFinance(app, context);
   registerContractPublicRoutes(app, { ...context, requireAuth: (req, _res, next) => { req.user = { id: "user-1", role: "owner", organization_id: ORG }; next(); } });
   const server = createServer(app); await new Promise((resolve) => server.listen(0, resolve)); t.after(() => server.close());

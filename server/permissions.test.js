@@ -58,6 +58,14 @@ test("create-receivables exige finance/receivables.create", async (t) => {
   assert.equal((await request(allowed, "/api/contracts/9/create-receivables", { method: "POST", body: {} })).status, 200);
 });
 
+test("links públicos usam capacidades sensíveis separadas", () => {
+  assert.deepEqual(permissionTarget("/contracts/9/public-link", "POST"), { domain: "operation", table: "contracts", action: "public_link.create" });
+  assert.deepEqual(permissionTarget("/contracts/9/public-link", "DELETE"), { domain: "operation", table: "contracts", action: "public_link.revoke" });
+  assert.deepEqual(permissionTarget("/proposals/9/public-link", "POST"), { domain: "crm", table: "proposals", action: "public_link.create" });
+  assert.equal(permissionAllows({ contracts: { "public_link.create": true } }, "operation", "contracts", "public_link.create"), true);
+  assert.equal(permissionAllows({ contracts: ["create"] }, "operation", "contracts", "public_link.create"), false);
+});
+
 test("somente webhooks públicos explícitos atravessam sem capacidade", async (t) => {
   assert.equal(isExplicitPublicApiRoute("/webhooks/mercadopago", "POST"), true);
   assert.equal(isExplicitPublicApiRoute("/whatsapp/webhook/token", "POST"), true);

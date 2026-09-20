@@ -35,7 +35,7 @@ function setup() {
       return result;
     }, release() { unlock?.(); } };
   } };
-  const app = express(); app.use(express.json()); app.use((req, _res, next) => { req.user = { id: 1, organization_id: org }; next(); });
+  const app = express(); app.use(express.json()); app.use((req, _res, next) => { req.user = { id: 1, organization_id: org, role: "owner" }; next(); });
   registerContractPublicRoutes(app, { pool, tenant: () => org, requireAuth: (_req, _res, next) => next(), classifyDbError: (_error, fallback) => ({ status: 500, error: fallback }) });
   return { app, calls };
 }
