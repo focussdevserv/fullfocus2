@@ -189,14 +189,15 @@ export function register(app, ctx) {
   app.patch("/api/proposals/:id", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     const set = [], params = []; const push = (col, val) => { params.push(val); set.push(`${col}=$${params.length}`); };
+    const relationFields = ["client_id", "project_id", "opportunity_id", "lead_id"];
+    const relationPatch = {};
     if (req.body?.title !== undefined) { const v = asText(req.body.title); if (!v) return bad(res, "Título inválido."); push("title", v); }
     if (req.body?.amount !== undefined) { const v = toNumber(req.body.amount, 0); if (Number.isNaN(v) || v < 0) return bad(res, "Valor inválido."); push("amount", v); }
     if (req.body?.valid_until !== undefined) { const v = dateOrNull(req.body.valid_until); if (Number.isNaN(v)) return bad(res, "Validade inválida."); push("valid_until", v); }
     if (req.body?.notes !== undefined) push("notes", asText(req.body.notes) || null);
-    for (const [input, column] of [["client_id", "client_id"], ["project_id", "project_id"], ["lead_id", "lead_id"]]) if (req.body?.[input] !== undefined) { const value = req.body[input] || null; if (value) { try { await validateRelations({ [input]: value }, org); } catch (e) { return bad(res, e.message); } } push(column, value); }
+    for (const input of relationFields) if (req.body?.[input] !== undefined) { const value = req.body[input] || null; relationPatch[input] = value; push(input, value); }
     for (const [input, column] of [["payment_method", "payment_method"], ["service_type", "service_type"], ["scope_included", "scope_included"], ["proposal_terms", "proposal_terms"]]) if (req.body?.[input] !== undefined) push(column, asText(req.body[input]) || null);
     for (const [input, column] of [["down_payment", "down_payment"], ["installments", "installments"]]) if (req.body?.[input] !== undefined) { const value = toNumber(req.body[input]); if (!Number.isFinite(value) || value < 0 || (column === "installments" && (!Number.isInteger(value) || value < 1))) return bad(res, "Entrada e parcelas inválidas."); push(column, value); }
-    if (req.body?.opportunity_id !== undefined) { const v = req.body.opportunity_id || null; if (v) { try { await validateRelations({ opportunity_id: v }, org); } catch (e) { return bad(res, e.message); } } push("opportunity_id", v); }
     const status = req.body?.status;
     if (status !== undefined) { if (!PROPOSAL_STATUSES.includes(status)) return bad(res, "Situação inválida."); push("status", status); if (status === "sent") set.push("sent_at=coalesce(sent_at, now())"); if (status === "accepted" || status === "rejected") set.push("decided_at=now()"); }
     if (!set.length) return bad(res, "Nenhum campo válido informado.");
@@ -209,8 +210,17 @@ export function register(app, ctx) {
         await db.query("begin");
         const current = await db.query("select * from proposals where id=$1 and organization_id=$2 for update", [req.params.id, org]);
         if (!current.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Proposta não encontrada." }); }
+        if (Object.keys(relationPatch).length) {
+          try { await validateLinks({ ...Object.fromEntries(relationFields.map(field => [field, current.rows[0][field] ?? null])), ...relationPatch }, org, db); }
+          catch (e) { await db.query("rollback"); return bad(res, e.message); }
+        }
         if (current.rows[0].status === status) { await db.query("commit"); return res.json({ proposal: current.rows[0], replayed: true }); }
         if (["accepted", "rejected"].includes(current.rows[0].status)) { await db.query("rollback"); return res.status(409).json({ error: "A proposta já possui uma decisão definitiva." }); }
+      } else if (Object.keys(relationPatch).length) {
+        const current = await db.query("select client_id,project_id,opportunity_id,lead_id from proposals where id=$1 and organization_id=$2", [req.params.id, org]);
+        if (!current.rowCount) return res.status(404).json({ error: "Proposta não encontrada." });
+        try { await validateLinks({ ...current.rows[0], ...relationPatch }, org, db); }
+        catch (e) { return bad(res, e.message); }
       }
       const q = await db.query(`update proposals set ${set.join(",")}, updated_at=now() where id=$${params.length - 1} and organization_id=$${params.length} returning *`, params);
       if (!q.rowCount) { if (decision) await db.query("rollback"); return res.status(404).json({ error: "Proposta não encontrada." }); }

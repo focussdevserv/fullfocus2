@@ -5,9 +5,10 @@ import { createServer } from "node:http";
 import { register } from "./crm.js";
 
 const ORG = "00000000-0000-0000-0000-000000000001";
-function setup() {
+function setup(options = {}) {
   const calls = [];
   const pool = { query: async (sql, params) => { calls.push({ sql, params });
+    if (sql.startsWith("select client_id,project_id,opportunity_id,lead_id from proposals")) return { rowCount: 1, rows: [options.proposal || { client_id: "client-a", project_id: "project-a", opportunity_id: "opportunity-a", lead_id: "lead-a" }] };
     if (sql.startsWith("select * from campaigns")) return { rows: [{ id: 1, organization_id: ORG, name: "C", status: "draft" }] };
     if (sql.startsWith("select p.*")) return { rows: [{ id: 2, organization_id: ORG, title: "P", status: "sent", opportunity_id: 9 }] };
     if (sql.startsWith("update proposals")) return { rowCount: 1, rows: [{ id: 2, opportunity_id: 9, status: params[0] }] };
@@ -18,7 +19,7 @@ function setup() {
     return { rowCount: 1, rows: [{ id: 9 }] };
   }, release: () => {} };
   const app = express(); app.use(express.json());
-  register(app, { pool, tenant: (_req, res) => { res.locals.org = ORG; return ORG; }, asText: v => typeof v === "string" ? v.trim() : "", classifyDbError: (_e, error) => ({ status: 503, error }), validateRelations: async () => {} });
+  register(app, { pool, tenant: (_req, res) => { res.locals.org = ORG; return ORG; }, asText: v => typeof v === "string" ? v.trim() : "", classifyDbError: (_e, error) => ({ status: 503, error }), validateRelations: async () => {}, validateCoherentRelations: options.validateCoherentRelations });
   const server = createServer(app); return { server, calls };
 }
 function setupConversion({ converted = false, missing = false } = {}) {
@@ -55,6 +56,38 @@ test("proposals lista filtrada por organização", async () => { const t = setup
 test("proposal válida responde 201 e inválida 400", async () => { const good = await request(setup(), "/api/proposals", { method: "POST", body: { title: "P", amount: 20 } }); assert.equal(good.status, 201); const bad = await request(setup(), "/api/proposals", { method: "POST", body: { title: "", amount: -2 } }); assert.equal(bad.status, 400); });
 test("followups lista e criação filtram organização", async () => { const t = setup(); assert.equal((await request(t, "/api/followups")).status, 200); assert.equal(t.calls[0].params[0], ORG); const r = await request(setup(), "/api/followups", { method: "POST", body: { lead_id: 7, due_at: "2026-09-15T10:00:00Z" } }); assert.equal(r.status, 201); });
 test("aceitar proposta atualiza oportunidade para won", async () => { const t = setup(); const r = await request(t, "/api/proposals/2", { method: "PATCH", body: { status: "accepted" } }); assert.equal(r.status, 200); assert.ok(t.calls.some(x => x.sql.includes("stage='won'") && x.params[1] === ORG)); });
+test("atualização de vínculo valida o conjunto completo da proposta", async () => {
+  let received;
+  const t = setup({
+    validateCoherentRelations: async (values) => {
+      received = values;
+      if (values.client_id === "client-a" && values.project_id === "project-b") {
+        const error = new Error("project_id pertence a outro cliente.");
+        error.code = "invalid_relation";
+        throw error;
+      }
+    },
+  });
+  const r = await request(t, "/api/proposals/2", { method: "PATCH", body: { project_id: "project-b" } });
+  assert.equal(r.status, 400);
+  assert.deepEqual(received, {
+    client_id: "client-a",
+    project_id: "project-b",
+    opportunity_id: "opportunity-a",
+    lead_id: "lead-a",
+  });
+  assert.equal(t.calls.some(x => x.sql.startsWith("update proposals")), false);
+});
+test("atualização parcial de vínculo coerente preserva os demais IDs", async () => {
+  let received;
+  const t = setup({ validateCoherentRelations: async (values) => { received = values; } });
+  const r = await request(t, "/api/proposals/2", { method: "PATCH", body: { project_id: "project-c" } });
+  assert.equal(r.status, 200);
+  assert.equal(received.client_id, "client-a");
+  assert.equal(received.project_id, "project-c");
+  assert.equal(received.opportunity_id, "opportunity-a");
+  assert.equal(received.lead_id, "lead-a");
+});
 test("converte lead em cliente, contato e empresa sem sair do workspace", async () => { const t = setupConversion(); const r = await request(t, "/api/leads/7/convert-to-client", { method: "POST", body: {} }); assert.equal(r.status, 201); const body = await r.json(); assert.equal(body.client.id, 22); assert.equal(body.converted, false); assert.ok(t.calls.every(x => x.sql === "begin" || x.sql === "commit" || x.sql === "rollback" || x.sql.includes("organization_id"))); });
 test("conversão repetida retorna o mesmo cliente sem inserir novamente", async () => { const t = setupConversion({ converted: true }); const r = await request(t, "/api/leads/7/convert-to-client", { method: "POST", body: {} }); assert.equal(r.status, 200); const body = await r.json(); assert.equal(body.client.id, 22); assert.equal(body.converted, true); assert.equal(t.calls.some(x => x.sql.startsWith("insert into clients")), false); });
 test("lead de outro workspace não é convertido", async () => { const t = setupConversion({ missing: true }); const r = await request(t, "/api/leads/7/convert-to-client", { method: "POST", body: {} }); assert.equal(r.status, 404); });
