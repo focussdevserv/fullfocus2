@@ -96,10 +96,10 @@ export function register(app, ctx) {
       const source = receivable.rows[0];
       await validateLinks({ client_id: source.client_id, project_id: source.project_id, contract_id: source.contract_id }, org, db);
       const externalId = idempotencyKey ? `manual:${org}:${source.id}:${idempotencyKey}` : null;
-      if (externalId) {
-        const duplicate = await db.query("select * from payments where organization_id=$1 and receivable_id=$2 and external_id=$3 limit 1", [org, source.id, externalId]);
-        if (duplicate.rowCount) { const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [source.id, org]); await db.query("commit"); return res.json({ payment: duplicate.rows[0], receivable: source, revenue: null, remaining: Math.max(0, Number(source.amount || 0) - Number(prior.rows[0]?.total || 0)), replayed: true }); }
-      }
+      const duplicate = externalId
+        ? await db.query("select * from payments where organization_id=$1 and receivable_id=$2 and external_id=$3 limit 1", [org, source.id, externalId])
+        : await db.query("select * from payments where organization_id=$1 and receivable_id=$2 and amount=$3 and coalesce(method,'manual')=$4 and paid_at >= now() - interval '60 seconds' order by paid_at desc, id desc limit 1", [org, source.id, amount, method]);
+      if (duplicate.rowCount) { const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [source.id, org]); await db.query("commit"); return res.json({ payment: duplicate.rows[0], receivable: source, revenue: null, remaining: Math.max(0, Number(source.amount || 0) - Number(prior.rows[0]?.total || 0)), replayed: true }); }
       if (["paid", "cancelled"].includes(source.status)) { await db.query("rollback"); return res.status(400).json({ error: "Esta conta não aceita novos pagamentos." }); }
       const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [source.id, org]);
       const remaining = Math.max(0, Number(source.amount || 0) - Number(prior.rows[0]?.total || 0));

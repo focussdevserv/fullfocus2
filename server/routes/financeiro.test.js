@@ -8,14 +8,19 @@ import { processMercadoPagoPayment, register } from "./financeiro.js";
 const ORG = "00000000-0000-0000-0000-000000000001";
 function setup(options = {}) {
   const calls = [];
+  let manualPayments = 0;
   const pool = {
     query: async (sql, params) => { calls.push({ sql, params }); if (sql.includes("generate_series")) return { rows: [{ month: "2026-08", revenue: "10", expense: "3", result: "7" }] }; if (sql.startsWith("select s.*")) return { rows: [{ id: 1, organization_id: ORG, plan: "Pro", amount: "20", status: "active" }] }; if (sql.startsWith("insert into subscriptions")) return { rows: [{ id: 2, organization_id: ORG, plan: "Pro", amount: "20" }] }; if (sql.startsWith("select * from bank_account_transactions")) return { rows: [{ id: 20, bank_account_id: 8, kind: "credit", amount: "100" }] }; return { rows: [] }; },
     connect: async () => ({ query: async (sql, params) => {
       calls.push({ sql, params });
       if (sql.startsWith("select * from contracts where")) return { rowCount: 1, rows: [{ id: 9, organization_id: ORG, client_id: 7, status: "active", name: "Site", value: "2700", down_payment: "300", installments: 2, installment_value: "1200", payment_method: "pix" }] };
       if (sql.startsWith("select * from receivables where")) return options.missingReceivable ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ id: 7, organization_id: ORG, client_id: 3, project_id: 4, contract_id: 5, description: "Parcela", amount: "100", status: "pending" }] };
-      if (sql.startsWith("select coalesce(sum(amount)")) return { rowCount: 1, rows: [{ total: 0 }] };
-      if (sql.startsWith("insert into payments")) return { rowCount: 1, rows: [{ id: 31, amount: params[2], method: params[3] }] };
+      if (sql.startsWith("select * from payments where organization_id=$1 and receivable_id=$2 and amount=$3")) {
+        if (options.replayManual && manualPayments > 0) return { rowCount: 1, rows: [{ id: 31, amount: params[2], method: params[3], external_id: null }] };
+        return { rowCount: 0, rows: [] };
+      }
+      if (sql.startsWith("select coalesce(sum(amount)")) return { rowCount: 1, rows: [{ total: manualPayments * 40 }] };
+      if (sql.startsWith("insert into payments")) { manualPayments += 1; return { rowCount: 1, rows: [{ id: 30 + manualPayments, amount: params[2], method: params[3] }] }; }
       if (sql.startsWith("update receivables")) return { rowCount: 1, rows: [{ id: 7, status: params[0] }] };
       if (sql.startsWith("insert into revenues")) { if (options.failRevenue) throw new Error("falha simulada"); return { rowCount: 1, rows: [{ id: 32, status: "confirmed" }] }; }
       if (sql.startsWith("select * from payables where")) return { rowCount: 1, rows: [{ id: 11, organization_id: ORG, description: "Servidor", amount: "120", supplier: "Cloud", status: "pending", due_at: "2026-09-20" }] };
@@ -37,6 +42,18 @@ async function request(t, path, options = {}) { await new Promise((resolve) => t
 
 test("pagamento rejeita valor inválido antes da baixa", async () => { const t = setup(); const response = await request(t, "/api/receivables/7/record-payment", { method: "POST", body: { amount: 0 } }); assert.equal(response.status, 400); });
 test("baixa manual segue a politica configurada e confirma receita", async () => { const t = setup(); const response = await request(t, "/api/receivables/7/record-payment", { method: "POST", body: { amount: 40, method: "pix" } }); assert.equal(response.status, 201); const body = await response.json(); assert.equal(body.payment.method, "pix"); assert.equal(body.receivable.status, "partially_paid"); assert.equal(body.revenue.status, "confirmed"); assert.equal(t.calls.some((call) => call.sql === "commit"), true); });
+test("retry sem chave de idempotencia reaproveita a baixa manual recente", async () => {
+  const t = setup({ replayManual: true });
+  const first = await request(t, "/api/receivables/7/record-payment", { method: "POST", body: { amount: 40, method: "pix" } });
+  assert.equal(first.status, 201);
+  const second = await request(t, "/api/receivables/7/record-payment", { method: "POST", body: { amount: 40, method: "pix" } });
+  assert.equal(second.status, 200);
+  const body = await second.json();
+  assert.equal(body.replayed, true);
+  assert.equal(body.payment.id, 31);
+  assert.equal(t.calls.filter((call) => call.sql.startsWith("insert into payments")).length, 1);
+  assert.equal(t.calls.filter((call) => call.sql.startsWith("insert into revenues")).length, 1);
+});
 test("erro na baixa manual faz rollback e nao confirma sucesso", async () => { const t = setup({ failRevenue: true }); const response = await request(t, "/api/receivables/7/record-payment", { method: "POST", body: { amount: 40, method: "pix" } }); assert.equal(response.status, 503); assert.equal(t.calls.some((call) => call.sql === "rollback"), true); assert.equal(t.calls.some((call) => call.sql === "commit"), false); });
 test("baixa conta a pagar cria despesa paga", async () => { const t = setup(); const response = await request(t, "/api/payables/11/record-payment", { method: "POST", body: {} }); assert.equal(response.status, 201); assert.equal((await response.json()).expense.status, "paid"); assert.equal(t.calls.some((call) => call.sql.startsWith("insert into expenses")), true); });
 test("movimentação bancária atualiza o saldo", async () => { const t = setup(); const response = await request(t, "/api/bank_accounts/8/transactions", { method: "POST", body: { kind: "credit", amount: 100, description: "Recebimento" } }); assert.equal(response.status, 201); assert.equal((await response.json()).bank_account.current_balance, "600"); });
