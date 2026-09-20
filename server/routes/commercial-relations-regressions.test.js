@@ -59,6 +59,7 @@ test("cadeia comercial aceita vínculos do tenant e preserva cada ID", async (t)
       if (sql.startsWith("select id,client_id from projects")) return { rowCount: 1, rows: [{ id: 30, client_id: 10 }] };
       if (sql.startsWith("select id,client_id from proposals")) return { rowCount: 1, rows: [{ id: 20, client_id: 10 }] };
       if (sql.startsWith("select id,client_id from contracts")) return { rowCount: 1, rows: [{ id: 40, client_id: 10 }] };
+      if (sql.startsWith("select id,client_id,proposal_id,project_id from contracts")) return { rowCount: 1, rows: [{ id: 40, client_id: 10, proposal_id: 20, project_id: null }] };
       if (sql.startsWith("select * from contracts where proposal_id")) return { rowCount: 0, rows: [] };
       if (sql.startsWith("select count(*)")) return { rowCount: 1, rows: [{ total: 0 }] };
       if (sql.startsWith("insert into proposals")) return { rowCount: 1, rows: [{ id: 20, client_id: 10, project_id: 30, title: "Proposta" }] };
