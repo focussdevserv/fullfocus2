@@ -493,8 +493,30 @@ createConfig.cliente.onCreated = (data, payload) => {
   // cadastro existente. Isso torna a abertura da ficha imediata e inequívoca.
   window.FocusOpenClientDetails?.({ ...payload, ...data.client });
 };
-createConfig.cliente.onCreated = (data, payload) => {
-  if (location.hash === "#clientes" && data?.client?.id) window.FocusOpenClientDetails?.({ ...payload, ...data.client });
+// VÃ­nculos sÃ£o opcionais: uma falha de catÃ¡logo nÃ£o deve bloquear o cadastro bÃ¡sico.
+prepareCreate = async function prepareCreateResilient(kind, shouldOpen = true) {
+  const routeAtStart = location.hash;
+  let lookupWarnings = [];
+  if (kind === "contato" || kind === "cliente") {
+    const results = await Promise.allSettled([
+      records("/api/companies", "companies"),
+      kind === "cliente" ? records("/api/contacts", "contacts") : Promise.resolve([]),
+    ]);
+    const companies = results[0].status === "fulfilled" ? results[0].value : [];
+    const contacts = results[1].status === "fulfilled" ? results[1].value : [];
+    if (results[0].status === "rejected") lookupWarnings.push("empresas");
+    if (results[1].status === "rejected") lookupWarnings.push("contatos");
+    if (location.hash !== routeAtStart) return;
+    const config = createConfig[kind];
+    const companyField = config?.fields?.find((x) => x.name === "company_id");
+    const contactField = config?.fields?.find((x) => x.name === "contact_id");
+    if (companyField) companyField.options = [["", "Sem empresa"], ...companies.map((x) => [x.id, x.name])];
+    if (contactField) contactField.options = [["", "Sem contato"], ...contacts.map((x) => [x.id, x.name])];
+  }
+  if (shouldOpen && location.hash === routeAtStart) {
+    openCreateDialog(kind);
+    if (lookupWarnings.length) dialogStatus.textContent = `O cadastro pode continuar. NÃ£o foi possÃ­vel carregar ${lookupWarnings.join(" e ")}; esses vÃ­nculos podem ser adicionados depois.`;
+  }
 };
 window.prepareCreate = async function prepareClientCreate(kind, shouldOpen = true) {
   await prepareCreate(kind, shouldOpen && location.hash !== "#portal-do-cliente");

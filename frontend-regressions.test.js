@@ -39,7 +39,8 @@ test("criação de cliente reabre a ficha pelo id canônico e respeita a rota", 
   const app = source("app.js");
   const contas = source("modules/contas.js");
   assert.match(app, /renderHashRoute\(window\.location\.hash\); if \(method === "POST" && typeof config\.onCreated === "function"\) await config\.onCreated\(data, payload\)/);
-  assert.match(contas, /if \(location\.hash === "#clientes" && data\?\.client\?\.id\) window\.FocusOpenClientDetails\?\.\(\{ \.\.\.payload, \.\.\.data\.client \}\)/);
+  assert.match(contas, /if \(location\.hash !== "#clientes" \|\| !data\?\.client\?\.id\) return/);
+  assert.match(contas, /window\.FocusOpenClientDetails\?\.\(\{ \.\.\.payload, \.\.\.data\.client \}\)/);
 });
 
 test("tarefas carrega clientes e preserva as opções de projetos", () => {
@@ -171,11 +172,19 @@ test("ficha do cliente usa cadastro unificado, vínculos opcionais e ações rel
 test("ficha mantém uma única configuração de cliente e bloqueia duplo envio das ações", () => {
   const contas = source("modules/contas.js");
   assert.equal((contas.match(/createConfig\.cliente\s*=/g) || []).length, 1);
+  assert.equal((contas.match(/createConfig\.cliente\.onCreated\s*=/g) || []).length, 1);
   assert.match(contas, /field\("status", "Status", "select"/);
   assert.doesNotMatch(contas, /createConfig\.cliente\.fields\[5\]\.options/);
   assert.match(contas, /button\.disabled = true; button\.textContent = "Abrindo/);
   assert.match(contas, /if \(!kind \|\| !clientId \|\| button\.disabled\) return/);
   assert.match(contas, /finally \{ button\.disabled = false; button\.textContent = original; \}/);
+});
+test("cadastro unificado continua abrindo quando vÃ­nculos opcionais falham", () => {
+  const contas = source("modules/contas.js");
+  assert.match(contas, /Promise\.allSettled\(\[\s*records\("\/api\/companies"/);
+  assert.match(contas, /status === "fulfilled" \? results\[0\]\.value : \[\]/);
+  assert.match(contas, /status === "rejected"\) lookupWarnings\.push/);
+  assert.match(contas, /O cadastro pode continuar/);
 });
 test("ficha 360 evita requisicoes operacionais imediatas", () => {
   const contas = source("modules/contas.js");
