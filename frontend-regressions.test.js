@@ -167,3 +167,12 @@ test("ficha do cliente usa cadastro unificado, vínculos opcionais e ações rel
   }
   assert.match(contas, /clientField\.options = \[\["", "Sem cliente"\]/);
 });
+test("ficha 360 evita requisicoes operacionais imediatas", () => {
+  const contas = source("modules/contas.js");
+  assert.doesNotMatch(contas, /hydrateClientOperationSections\(overview, record, data, \{ money, label, rows \}\)\.catch\(\(\) => \{\}\);/);
+  assert.match(contas, /selected === "sheet-projects" && overview\.dataset\.operationSectionsLoaded !== "1"/);
+  assert.match(contas, /overview\.dataset\.operationSectionsLoaded = "1"; hydrateClientOperationSections\(overview, record, data, \{ money, label, rows \}\)/);
+  assert.match(contas, /overview\.dataset\.operationSectionsLoaded = "0"/);
+  assert.match(contas, /api\/clients\/\$\{record\.id\}\/overview\/section\/\$\{key\}/);
+  for (const section of ["tasks", "files", "briefings", "change_requests", "infrastructure"]) assert.match(contas, new RegExp(`\\["${section}"`));
+});
