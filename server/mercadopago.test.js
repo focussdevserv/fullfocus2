@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { cancelOrder, createCheckoutPreference, createPixOrder, createPixPayment, createSubscription, normalizeOrder, normalizePayment, paymentState, refundOrder, validateMercadoPagoWebhook } from "./mercadopago.js";
+import { cancelOrder, createCheckoutPreference, createPixOrder, createPixPayment, createSubscription, normalizeOrder, normalizePayment, paymentState, refundOrder, updateSubscription, validateMercadoPagoWebhook } from "./mercadopago.js";
 
 test("Pix usa endpoint correto e envia idempotência", async () => {
   const calls = [];
@@ -75,6 +75,24 @@ test("assinatura e operações de ciclo de vida usam endpoints do Mercado Pago",
   assert.equal(calls[1].url, "https://api.mercadopago.com/v1/orders/ORD-1/cancel");
   assert.equal(calls[2].url, "https://api.mercadopago.com/v1/orders/ORD-1/refund");
   assert.deepEqual(JSON.parse(calls[2].options.body), { amount: 10, payment_id: "PAY-1" });
+});
+
+test("operações de assinatura reutilizam a chave de idempotência derivada", async () => {
+  const previousToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  process.env.MERCADOPAGO_ACCESS_TOKEN = "test-token";
+  const calls = [];
+  const fetchImpl = async (url, options) => { calls.push({ url, options }); return new Response(JSON.stringify({ id: "SUB-1", status: "authorized" }), { status: 201 }); };
+  try {
+    await createSubscription({ reason: "Pro", email: "cliente@example.com", amount: 99, externalReference: "focussdev:org:subscription:8", fetchImpl });
+    await createSubscription({ reason: "Pro", email: "cliente@example.com", amount: 99, externalReference: "focussdev:org:subscription:8", fetchImpl });
+    await updateSubscription("SUB-1", { status: "cancelled" }, { fetchImpl });
+    await updateSubscription("SUB-1", { status: "cancelled" }, { fetchImpl });
+    assert.equal(calls[0].options.headers["x-idempotency-key"], calls[1].options.headers["x-idempotency-key"]);
+    assert.equal(calls[2].options.headers["x-idempotency-key"], calls[3].options.headers["x-idempotency-key"]);
+    assert.notEqual(calls[0].options.headers["x-idempotency-key"], calls[2].options.headers["x-idempotency-key"]);
+  } finally {
+    if (previousToken === undefined) delete process.env.MERCADOPAGO_ACCESS_TOKEN; else process.env.MERCADOPAGO_ACCESS_TOKEN = previousToken;
+  }
 });
 
 test("Checkout de cartão e boleto também usa Orders", async () => {

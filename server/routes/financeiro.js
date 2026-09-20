@@ -1,6 +1,37 @@
 /* Rotas específicas do domínio financeiro. */
 import { cancelOrder, createCheckoutPreference, createPixOrder, createSubscription, getOrder, getPayment, getSubscription, mercadoPagoConfigured, mercadoPagoWebhookConfigured, newIdempotencyKey, paymentState, refundOrder, updateSubscription, validateMercadoPagoWebhook } from "../mercadopago.js";
 
+function cents(value) { return Math.round(Number(value || 0) * 100); }
+function operationKey(prefix, org, id, requestKey = "") {
+  const suffix = String(requestKey || "").trim().replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80);
+  return `focussdev:${org}:${prefix}:${id}${suffix ? `:${suffix}` : ""}`;
+}
+
+async function reconcileRefund({ db, organizationId, charge, amount }) {
+  let remaining = Number(amount || 0);
+  const paymentResult = await db.query("select * from payments where organization_id=$1 and charge_id=$2 order by id for update", [organizationId, charge.id]);
+  for (const payment of paymentResult.rows || []) {
+    if (remaining <= 0) break;
+    const alreadyRefunded = Number(payment.refunded_amount || 0);
+    const available = Math.max(0, Number(payment.amount || 0) - alreadyRefunded);
+    const allocation = Math.min(available, remaining);
+    if (allocation <= 0) continue;
+    const refunded = alreadyRefunded + allocation;
+    await db.query("update payments set refunded_amount=$1,provider_status=$2 where id=$3 and organization_id=$4", [refunded, refunded >= Number(payment.amount || 0) - 0.005 ? "refunded" : "partially_refunded", payment.id, organizationId]);
+    await db.query("update revenues set refunded_amount=$1,net_amount=greatest(0,coalesce(amount,0)-$1),status=$2 where organization_id=$3 and payment_id=$4", [refunded, refunded >= Number(payment.amount || 0) - 0.005 ? "refunded" : "partially_refunded", organizationId, payment.id]);
+    remaining -= allocation;
+  }
+  if (remaining > 0 && charge.receivable_id) {
+    await db.query("update revenues set refunded_amount=least(coalesce(amount,0),coalesce(refunded_amount,0)+$1),net_amount=greatest(0,coalesce(amount,0)-least(coalesce(amount,0),coalesce(refunded_amount,0)+$1)),status=case when coalesce(refunded_amount,0)+$1 >= coalesce(amount,0)-0.005 then 'refunded' else 'partially_refunded' end where organization_id=$2 and receivable_id=$3 and coalesce(payment_id,0)=0", [remaining, organizationId, charge.receivable_id]);
+  }
+  const refundTotal = Number(charge.refunded_amount || 0) + Number(amount || 0) - Math.max(0, remaining);
+  if (charge.receivable_id) {
+    const receivableStatus = refundTotal >= Number(charge.amount || 0) - 0.005 ? "refunded" : "partially_refunded";
+    await db.query("update receivables set status=$1,updated_at=now() where id=$2 and organization_id=$3 and status <> 'cancelled'", [receivableStatus, charge.receivable_id, organizationId]);
+  }
+  return { applied: Number(amount || 0) - Math.max(0, remaining), refundedTotal: refundTotal };
+}
+
 export async function processMercadoPagoPayment({ pool, dataId, type = "payment", getOrderImpl = getOrder, getPaymentImpl = getPayment }) {
   const payment = type === "order" ? await getOrderImpl(dataId) : await getPaymentImpl(dataId);
   if (!payment.external_id) throw new Error("O Mercado Pago não retornou um identificador para o pagamento.");
@@ -21,13 +52,13 @@ export async function processMercadoPagoPayment({ pool, dataId, type = "payment"
       const duplicate = await db.query("select id from payments where organization_id=$1 and external_id=$2 limit 1", [charge.organization_id, paymentExternalId]);
       if (!duplicate.rowCount) {
       const amount = Number(payment.amount || payment.raw?.transaction_amount || charge.amount || 0);
-        await db.query("insert into payments (organization_id,receivable_id,charge_id,amount,paid_at,method,external_id,provider_status) values ($1,$2,$3,$4,now(),'mercado_pago',$5,$6) returning *", [charge.organization_id, charge.receivable_id, charge.id, amount, paymentExternalId, payment.status]);
+        const insertedPayment = await db.query("insert into payments (organization_id,receivable_id,charge_id,amount,paid_at,method,external_id,provider_status) values ($1,$2,$3,$4,now(),'mercado_pago',$5,$6) returning *", [charge.organization_id, charge.receivable_id, charge.id, amount, paymentExternalId, payment.status]);
         const receivable = await db.query("select * from receivables where id=$1 and organization_id=$2 for update", [charge.receivable_id, charge.organization_id]);
         if (receivable.rowCount) {
           const prior = await db.query("select coalesce(sum(amount),0)::float8 total from payments where receivable_id=$1 and organization_id=$2", [charge.receivable_id, charge.organization_id]);
           const paid = Number(prior.rows[0]?.total || 0) >= Number(receivable.rows[0].amount || 0) - 0.005;
           await db.query("update receivables set status=$1,paid_at=case when $1='paid' then now() else paid_at end,updated_at=now() where id=$2 and organization_id=$3", [paid ? "paid" : "partially_paid", charge.receivable_id, charge.organization_id]);
-          await db.query("insert into revenues (organization_id,description,client_id,project_id,contract_id,amount,net_amount,payment_method,paid_at,status) values ($1,$2,$3,$4,$5,$6,$6,'mercado_pago',now(),'confirmed')", [charge.organization_id, receivable.rows[0].description, receivable.rows[0].client_id, receivable.rows[0].project_id, receivable.rows[0].contract_id, amount]);
+          await db.query("insert into revenues (organization_id,description,client_id,project_id,contract_id,amount,net_amount,payment_method,paid_at,status,payment_id,receivable_id) values ($1,$2,$3,$4,$5,$6,$6,'mercado_pago',now(),'confirmed',$7,$8)", [charge.organization_id, receivable.rows[0].description, receivable.rows[0].client_id, receivable.rows[0].project_id, receivable.rows[0].contract_id, amount, insertedPayment.rows[0]?.id || null, charge.receivable_id]);
         }
       }
     }
@@ -65,6 +96,8 @@ export function register(app, ctx) {
   const createPixCharge = ctx.createPixOrder || createPixOrder;
   const createCheckoutCharge = ctx.createCheckoutPreference || createCheckoutPreference;
   const createIdempotencyKey = ctx.newIdempotencyKey || newIdempotencyKey;
+  const cancelProviderOrder = ctx.cancelOrder || cancelOrder;
+  const refundProviderOrder = ctx.refundOrder || refundOrder;
   const error = (res, e, fallback) => { const out = classifyDbError(e, fallback); res.status(out.status).json({ error: out.error }); };
   app.get("/api/bank_accounts", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
@@ -109,7 +142,7 @@ export function register(app, ctx) {
       const totalPaid = Number(prior.rows[0]?.total || 0) + amount;
       const paid = totalPaid >= Number(source.amount || 0) - 0.005;
       const updated = await db.query("update receivables set status=$1,paid_at=case when $1='paid' then now() else paid_at end,updated_at=now() where id=$2 and organization_id=$3 returning *", [paid ? "paid" : "partially_paid", source.id, org]);
-      const revenue = await db.query("insert into revenues (organization_id,description,client_id,project_id,contract_id,amount,net_amount,payment_method,paid_at,status) values ($1,$2,$3,$4,$5,$6,$6,$7,now(),'confirmed') returning *", [org, source.description, source.client_id, source.project_id, source.contract_id, amount, method]);
+      const revenue = await db.query("insert into revenues (organization_id,description,client_id,project_id,contract_id,amount,net_amount,payment_method,paid_at,status,payment_id,receivable_id) values ($1,$2,$3,$4,$5,$6,$6,$7,now(),'confirmed',$8,$9) returning *", [org, source.description, source.client_id, source.project_id, source.contract_id, amount, method, payment.rows[0]?.id || null, source.id]);
       await db.query("commit");
       res.status(201).json({ payment: payment.rows[0], receivable: updated.rows[0], revenue: revenue.rows[0], remaining: Math.max(0, Number(source.amount || 0) - totalPaid), replayed: false });
     } catch (e) { await db.query("rollback").catch(() => {}); error(res, e, "Não foi possível registrar o pagamento."); }
@@ -221,29 +254,67 @@ export function register(app, ctx) {
   app.post("/api/charges/:id/cancel", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     if (!mercadoPagoConfigured()) return res.status(503).json({ error: "Mercado Pago não está configurado." });
+    const db = pool.connect ? await pool.connect() : pool;
     try {
-      const q = await pool.query("select * from charges where id=$1 and organization_id=$2 and provider='mercado_pago'", [req.params.id, org]);
-      if (!q.rowCount) return res.status(404).json({ error: "Cobrança Mercado Pago não encontrada." });
+      await db.query("begin");
+      const q = await db.query("select * from charges where id=$1 and organization_id=$2 and provider='mercado_pago' for update", [req.params.id, org]);
+      if (!q.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Cobrança Mercado Pago não encontrada." }); }
       const charge = q.rows[0];
-      const result = await cancelOrder(charge.external_id);
+      if (charge.status === "cancelled") { await db.query("commit"); return res.json({ charge, provider: null, replayed: true }); }
+      if (!charge.external_id) { await db.query("rollback"); return res.status(400).json({ error: "A cobrança ainda não possui identificador no Mercado Pago." }); }
+      const requestKey = asText(req.get("idempotency-key") || req.body?.idempotency_key);
+      const idempotencyKey = charge.cancel_idempotency_key || operationKey("charge-cancel", org, charge.id, requestKey || "default");
+      await db.query("update charges set cancel_idempotency_key=$1,provider_status='cancelling' where id=$2 and organization_id=$3", [idempotencyKey, charge.id, org]);
+      await db.query("commit");
+      const result = await cancelProviderOrder(charge.external_id, { idempotencyKey });
       const updated = await pool.query("update charges set status='cancelled',provider_status=$1,provider_payload=$2::jsonb where id=$3 and organization_id=$4 returning *", [result?.status || "cancelled", JSON.stringify(result || {}), charge.id, org]);
-      return res.json({ charge: updated.rows[0], provider: result });
-    } catch (e) { return error(res, e, "Não foi possível cancelar a cobrança no Mercado Pago."); }
+      await pool.query("update receivables set status='cancelled',updated_at=now() where id=$1 and organization_id=$2 and status not in ('paid','refunded')", [charge.receivable_id, org]);
+      return res.json({ charge: updated.rows[0], provider: result, replayed: false });
+    } catch (e) { await db.query("rollback").catch(() => {}); return error(res, e, "Não foi possível cancelar a cobrança no Mercado Pago."); } finally { db.release?.(); }
   });
   app.post("/api/charges/:id/refund", async (req, res) => {
     const org = tenant(req, res); if (!org) return;
     if (!mercadoPagoConfigured()) return res.status(503).json({ error: "Mercado Pago não está configurado." });
+    const db = pool.connect ? await pool.connect() : pool;
     try {
-      const q = await pool.query("select * from charges where id=$1 and organization_id=$2 and provider='mercado_pago'", [req.params.id, org]);
-      if (!q.rowCount) return res.status(404).json({ error: "Cobrança Mercado Pago não encontrada." });
+      await db.query("begin");
+      const q = await db.query("select * from charges where id=$1 and organization_id=$2 and provider='mercado_pago' for update", [req.params.id, org]);
+      if (!q.rowCount) { await db.query("rollback"); return res.status(404).json({ error: "Cobrança Mercado Pago não encontrada." }); }
       const charge = q.rows[0], payload = charge.provider_payload || {};
+      const operations = Array.isArray(charge.refund_operations) ? charge.refund_operations : [];
+      const requestKey = asText(req.get("idempotency-key") || req.body?.idempotency_key);
+      const completed = requestKey && operations.find((item) => item.request_key === requestKey && item.status === "completed");
+      if (completed) { await db.query("commit"); return res.json({ charge, provider: null, replayed: true, refunded_amount: completed.amount }); }
+      if (charge.status === "refunded") { await db.query("commit"); return res.json({ charge, provider: null, replayed: true }); }
       const paymentId = payload?.transactions?.payments?.[0]?.id || payload?.transaction?.payments?.[0]?.id;
-      const amount = req.body?.amount == null ? undefined : Number(req.body.amount);
-      if (amount !== undefined && (!Number.isFinite(amount) || amount <= 0 || amount > Number(charge.amount) + 0.005)) return res.status(400).json({ error: "Valor de reembolso inválido." });
-      const result = await refundOrder(charge.external_id, { amount, paymentId });
-      const updated = await pool.query("update charges set status='refunded',provider_status=$1,provider_payload=$2::jsonb where id=$3 and organization_id=$4 returning *", [result?.status || "refunded", JSON.stringify(result || {}), charge.id, org]);
-      return res.json({ charge: updated.rows[0], provider: result });
-    } catch (e) { return error(res, e, "Não foi possível reembolsar a cobrança no Mercado Pago."); }
+      const amount = req.body?.amount == null ? Number(charge.amount || 0) - Number(charge.refunded_amount || 0) : Number(req.body.amount);
+      const remaining = Number(charge.amount || 0) - Number(charge.refunded_amount || 0);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > remaining + 0.005) { await db.query("rollback"); return res.status(400).json({ error: "Valor de reembolso inválido." }); }
+      if (!charge.external_id) { await db.query("rollback"); return res.status(400).json({ error: "A cobrança ainda não possui identificador no Mercado Pago." }); }
+      const idempotencyKey = charge.refund_idempotency_key || operationKey("charge-refund", org, charge.id, requestKey || `${cents(amount)}-${cents(charge.refunded_amount)}`);
+      await db.query("update charges set refund_idempotency_key=$1,provider_status='refunding' where id=$2 and organization_id=$3", [idempotencyKey, charge.id, org]);
+      await db.query("commit");
+      const result = await refundProviderOrder(charge.external_id, { amount: amount >= remaining - 0.005 ? undefined : amount, paymentId, idempotencyKey });
+      const reconcileDb = pool.connect ? await pool.connect() : pool;
+      try {
+        await reconcileDb.query("begin");
+        const liveResult = await reconcileDb.query("select * from charges where id=$1 and organization_id=$2 for update", [charge.id, org]);
+        const live = liveResult.rows[0] || charge;
+        const liveOperations = Array.isArray(live.refund_operations) ? live.refund_operations : [];
+        if (liveOperations.some((item) => item.key === idempotencyKey && item.status === "completed")) {
+          await reconcileDb.query("commit");
+          return res.json({ charge: live, provider: null, replayed: true, refunded_amount: amount });
+        }
+        const reconciled = await reconcileRefund({ db: reconcileDb, organizationId: org, charge: live, amount });
+        const oldPayload = live.provider_payload && typeof live.provider_payload === "object" ? live.provider_payload : {};
+        const oldOperations = Array.isArray(live.refund_operations) ? live.refund_operations : [];
+        const refundOperations = [...oldOperations.filter((item) => item.key !== idempotencyKey), { key: idempotencyKey, request_key: requestKey || null, amount, status: "completed", completed_at: new Date().toISOString() }].slice(-20);
+        const status = reconciled.refundedTotal >= Number(live.amount || 0) - 0.005 ? "refunded" : "partially_refunded";
+        const updated = await reconcileDb.query("update charges set status=$1,provider_status=$2,provider_payload=$3::jsonb,refunded_amount=$4,refund_operations=$5::jsonb,refund_idempotency_key=null where id=$6 and organization_id=$7 returning *", [status, result?.status || status, JSON.stringify({ ...oldPayload, provider_result: result || {}, last_refund_key: idempotencyKey }), reconciled.refundedTotal, JSON.stringify(refundOperations), live.id, org]);
+        await reconcileDb.query("commit");
+        return res.json({ charge: updated.rows[0], provider: result, replayed: false, refunded_amount: amount });
+      } catch (e) { await reconcileDb.query("rollback").catch(() => {}); throw e; } finally { reconcileDb.release?.(); }
+    } catch (e) { await db.query("rollback").catch(() => {}); return error(res, e, "Não foi possível reembolsar a cobrança no Mercado Pago."); } finally { db.release?.(); }
   });
   app.post("/api/contracts/:id/create-receivables", async (req, res) => {
     const org = tenant(req, res); if (!org) return;

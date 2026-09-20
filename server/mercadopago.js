@@ -128,7 +128,7 @@ export async function getOrder(orderId, { fetchImpl } = {}) {
   return normalizeOrder(await requestMercadoPago(`/v1/orders/${encodeURIComponent(orderId)}`, { fetchImpl }));
 }
 
-export async function createSubscription({ reason, email, amount, interval = "months", externalReference, backUrl = `${appUrl()}/configuracoes`, startDate, endDate, fetchImpl } = {}) {
+export async function createSubscription({ reason, email, amount, interval = "months", externalReference, backUrl = `${appUrl()}/configuracoes`, startDate, endDate, idempotencyKey, fetchImpl } = {}) {
   const body = {
     reason: String(reason || "Assinatura Focussdev").slice(0, 255),
     payer_email: String(email || ""),
@@ -144,11 +144,13 @@ export async function createSubscription({ reason, email, amount, interval = "mo
     },
     back_url: backUrl
   };
-  return requestMercadoPago("/preapproval", { method: "POST", body, fetchImpl });
+  const stableKey = idempotencyKey || (externalReference ? `focussdev:subscription:${String(externalReference).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 90)}` : undefined);
+  return requestMercadoPago("/preapproval", { method: "POST", body, idempotencyKey: stableKey, fetchImpl });
 }
 
-export async function updateSubscription(subscriptionId, changes, { fetchImpl } = {}) {
-  return requestMercadoPago(`/preapproval/${encodeURIComponent(subscriptionId)}`, { method: "PUT", body: changes, fetchImpl });
+export async function updateSubscription(subscriptionId, changes, { idempotencyKey, fetchImpl } = {}) {
+  const stableKey = idempotencyKey || `focussdev:subscription-update:${String(subscriptionId)}:${String(changes?.status || "update")}`;
+  return requestMercadoPago(`/preapproval/${encodeURIComponent(subscriptionId)}`, { method: "PUT", body: changes, idempotencyKey: stableKey, fetchImpl });
 }
 
 export async function getSubscription(subscriptionId, { fetchImpl } = {}) {

@@ -183,3 +183,73 @@ test("webhook correlaciona Payment pelo external_reference quando o id recebido 
   assert.match(lookup.sql, /provider_payload->>'external_reference'/);
   assert.deepEqual(lookup.params, ["PAY-1", "focussdev:org:receivable:7"]);
 });
+
+test("reembolso Mercado Pago reconcilia pagamento, receita e conta e aceita replay idempotente", async () => {
+  const previousToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  process.env.MERCADOPAGO_ACCESS_TOKEN = "test-token";
+  const state = {
+    charge: { id: 44, organization_id: ORG, receivable_id: 7, external_id: "ORDER-44", provider: "mercado_pago", status: "paid", amount: "100", refunded_amount: 0, refund_operations: [], provider_payload: {} },
+    payment: { id: 55, organization_id: ORG, charge_id: 44, receivable_id: 7, amount: 100, refunded_amount: 0, provider_status: "approved" },
+    revenue: { id: 66, organization_id: ORG, payment_id: 55, receivable_id: 7, amount: 100, refunded_amount: 0, net_amount: 100, status: "confirmed" },
+    receivable: { id: 7, organization_id: ORG, amount: 100, status: "paid" },
+    providerCalls: []
+  };
+  const query = async (sql, params = []) => {
+    if (sql === "begin" || sql === "commit" || sql === "rollback") return { rowCount: 0, rows: [] };
+    if (sql.startsWith("select * from charges")) return { rowCount: 1, rows: [{ ...state.charge }] };
+    if (sql.startsWith("update charges set refund_idempotency_key")) { state.charge.refund_idempotency_key = params[0]; state.charge.provider_status = "refunding"; return { rowCount: 1, rows: [] }; }
+    if (sql.startsWith("select * from payments")) return { rowCount: 1, rows: [{ ...state.payment }] };
+    if (sql.startsWith("update payments set refunded_amount")) { state.payment.refunded_amount = params[0]; state.payment.provider_status = params[1]; return { rowCount: 1, rows: [] }; }
+    if (sql.startsWith("update revenues set refunded_amount=$1")) { state.revenue.refunded_amount = params[0]; state.revenue.net_amount = 0; state.revenue.status = params[1]; return { rowCount: 1, rows: [] }; }
+    if (sql.startsWith("update receivables set status")) { state.receivable.status = params[0]; return { rowCount: 1, rows: [] }; }
+    if (sql.startsWith("update charges set status=$1")) { state.charge = { ...state.charge, status: params[0], provider_status: params[1], provider_payload: JSON.parse(params[2]), refunded_amount: params[3], refund_operations: JSON.parse(params[4]), refund_idempotency_key: null }; return { rowCount: 1, rows: [{ ...state.charge }] }; }
+    throw new Error(`SQL inesperado no teste de reembolso: ${sql}`);
+  };
+  const pool = { query, connect: async () => ({ query, release() {} }) };
+  // Registra uma aplicação mínima para injetar o pool controlado.
+  const app = express(); app.use(express.json());
+  register(app, { pool, tenant: (_req, res) => { res.locals.org = ORG; return ORG; }, asText: (v) => typeof v === "string" ? v.trim() : "", classifyDbError: (_e, fallback) => ({ status: 503, error: fallback }), validateRelations: async () => {}, refundOrder: async (_orderId, options) => { state.providerCalls.push(options); return { status: "refunded", id: "REF-44" }; } });
+  const server = createServer(app);
+  try {
+    const first = await request({ server }, "/api/charges/44/refund", { method: "POST", headers: { "idempotency-key": "refund-44" }, body: {} });
+    assert.equal(first.status, 200);
+    assert.equal(state.payment.provider_status, "refunded");
+    assert.equal(state.revenue.status, "refunded");
+    assert.equal(state.receivable.status, "refunded");
+    assert.equal(state.providerCalls.length, 1);
+    const second = await request({ server }, "/api/charges/44/refund", { method: "POST", headers: { "idempotency-key": "refund-44" }, body: {} });
+    assert.equal(second.status, 200);
+    assert.equal((await second.json()).replayed, true);
+    assert.equal(state.providerCalls.length, 1);
+  } finally {
+    if (previousToken === undefined) delete process.env.MERCADOPAGO_ACCESS_TOKEN; else process.env.MERCADOPAGO_ACCESS_TOKEN = previousToken;
+  }
+});
+
+test("cancelamento Mercado Pago persiste a chave e aceita replay sem nova chamada", async () => {
+  const previousToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  process.env.MERCADOPAGO_ACCESS_TOKEN = "test-token";
+  const state = { charge: { id: 45, organization_id: ORG, receivable_id: 8, external_id: "ORDER-45", provider: "mercado_pago", status: "pending", cancel_idempotency_key: null }, providerCalls: 0 };
+  const query = async (sql, params = []) => {
+    if (sql === "begin" || sql === "commit" || sql === "rollback") return { rowCount: 0, rows: [] };
+    if (sql.startsWith("select * from charges")) return { rowCount: 1, rows: [{ ...state.charge }] };
+    if (sql.startsWith("update charges set cancel_idempotency_key")) { state.charge.cancel_idempotency_key = params[0]; state.charge.provider_status = "cancelling"; return { rowCount: 1, rows: [] }; }
+    if (sql.startsWith("update charges set status='cancelled'")) { state.charge.status = "cancelled"; state.charge.provider_status = params[0]; return { rowCount: 1, rows: [{ ...state.charge }] }; }
+    if (sql.startsWith("update receivables set status='cancelled'")) return { rowCount: 1, rows: [] };
+    throw new Error(`SQL inesperado no teste de cancelamento: ${sql}`);
+  };
+  const pool = { query, connect: async () => ({ query, release() {} }) };
+  const app = express(); app.use(express.json());
+  register(app, { pool, tenant: (_req, res) => { res.locals.org = ORG; return ORG; }, asText: (v) => typeof v === "string" ? v.trim() : "", classifyDbError: (_e, fallback) => ({ status: 503, error: fallback }), validateRelations: async () => {}, cancelOrder: async (_orderId, options) => { state.providerCalls += 1; assert.match(options.idempotencyKey, /charge-cancel/); return { status: "cancelled" }; } });
+  const server = createServer(app);
+  try {
+    const first = await request({ server }, "/api/charges/45/cancel", { method: "POST", body: {} });
+    assert.equal(first.status, 200);
+    const second = await request({ server }, "/api/charges/45/cancel", { method: "POST", body: {} });
+    assert.equal(second.status, 200);
+    assert.equal((await second.json()).replayed, true);
+    assert.equal(state.providerCalls, 1);
+  } finally {
+    if (previousToken === undefined) delete process.env.MERCADOPAGO_ACCESS_TOKEN; else process.env.MERCADOPAGO_ACCESS_TOKEN = previousToken;
+  }
+});
