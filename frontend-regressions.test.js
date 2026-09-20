@@ -13,6 +13,35 @@ test("cadastro rápido abre a ficha pelo cliente retornado", () => {
   assert.match(contas, /FocusOpenClientDetails\?\.\(\{ \.\.\.payload, \.\.\.data\.client \}\)/);
 });
 
+test("visão 360 mantém abas, métricas e endpoint dedicado", () => {
+  const contas = source("modules/contas.js");
+  for (const tab of ["sheet-overview", "sheet-profile", "sheet-commercial", "sheet-projects", "sheet-finance", "sheet-history"]) assert.match(contas, new RegExp(`data-client-tab="${tab}"`));
+  assert.match(contas, /\/api\/clients\/\$\{record\.id\}\/overview/);
+  assert.match(contas, /data\.summary\.open_tickets/);
+  assert.match(contas, /data\.summary\.pending_changes/);
+});
+
+test("resposta da Visão 360 deduplica vínculos por id", () => {
+  const contas = source("server/routes/contas.js");
+  assert.match(contas, /const uniqueRows = \(items\) =>/);
+  assert.match(contas, /if \(seen\.has\(key\)\) return false/);
+  assert.match(contas, /const overviewRows = \{ contacts: uniqueRows\(contacts\.rows\)/);
+});
+
+test("ficha trata estado vazio e erro sem apagar o drawer", () => {
+  const contas = source("modules/contas.js");
+  assert.match(contas, /const rows = \(items, render, message\) => items\?\.length \? items\.map\(render\)\.join\(""\) : empty\(message\)/);
+  assert.match(contas, /contaState\("error", error\.message\)/);
+  assert.match(contas, /if \(overview\.isConnected\) overview\.insertAdjacentHTML\("beforeend", contaState\("error", error\.message\)\)/);
+});
+
+test("criação de cliente reabre a ficha pelo id canônico e respeita a rota", () => {
+  const app = source("app.js");
+  const contas = source("modules/contas.js");
+  assert.match(app, /renderHashRoute\(window\.location\.hash\); if \(method === "POST" && typeof config\.onCreated === "function"\) await config\.onCreated\(data, payload\)/);
+  assert.match(contas, /if \(location\.hash === "#clientes" && data\?\.client\?\.id\) window\.FocusOpenClientDetails\?\.\(\{ \.\.\.payload, \.\.\.data\.client \}\)/);
+});
+
 test("tarefas carrega clientes e preserva as opções de projetos", () => {
   const tarefas = source("modules/tarefas.js");
   assert.match(tarefas, /api\("\/api\/clients"\)/);

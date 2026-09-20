@@ -16,7 +16,7 @@ function harness() {
     if (sql.startsWith("select id,name,stage,amount,probability")) return { rows: [{ id: 81, name: "Site cliente", stage: "qualification", amount: "2500", client_id: 7 }] };
     if (sql.startsWith("select p.id,p.receivable_id")) return { rows: Array.from({ length: 30 }, (_, index) => ({ id: index + 1, amount: 1 })) };
     if (sql.startsWith("select id,title,status,priority,due_at,project_id,description from tickets")) return { rows: Array.from({ length: 30 }, (_, index) => ({ id: index + 1, status: "open" })) };
-    if (sql.startsWith("select id,title,status,project_id,description,impact_days")) return { rows: Array.from({ length: 30 }, (_, index) => ({ id: index + 1, status: "pending" })) };
+    if (sql.startsWith("select id,title,status,project_id,client_id,description,impact_days")) return { rows: Array.from({ length: 30 }, (_, index) => ({ id: index + 1, status: "pending" })) };
     if (sql.startsWith("select coalesce((select sum(p.amount)")) return { rows: [{ received_total: 75, balance_open: 125, confirmed_revenue: 90, open_tickets: 37, pending_changes: 42, opportunities_total: 1, open_opportunities: 1 }] };
     if (sql.startsWith("select id from clients")) return { rowCount: 1, rows: [{ id: params[0] }] };
     if (sql.startsWith("insert into client_portal_links")) return { rowCount: 1, rows: [] };
@@ -37,6 +37,26 @@ test("isValidCnpj rejeita dígitos repetidos e tamanho inválido", () => { asser
 test("GET CNPJ inválido responde 400", async () => { const h = harness(); const response = await request(h, "/api/cnpj/123"); assert.equal(response.status, 400); });
 test("portal-link gera token base64url de 32 bytes", async () => { const h = harness(); const response = await request(h, "/api/clients/7/portal-link", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }); assert.equal(response.status, 201); const body = await response.json(); assert.equal(Buffer.from(body.token, "base64url").length, 32); assert.equal(h.calls.some((x) => x.sql.includes("organization_id")), true); });
 test("overview usa agregados completos além dos limites da listagem", async () => { const h = harness(); const response = await request(h, "/api/clients/7/overview"); assert.equal(response.status, 200); const body = await response.json(); assert.equal(body.client.name, "Cliente teste"); assert.deepEqual(Object.keys(body), ["client", "contacts", "conversations", "contracts", "proposals", "opportunities", "receivables", "payments", "revenues", "projects", "tasks", "tickets", "files", "briefings", "change_requests", "infrastructure", "activities", "summary"]); assert.equal(body.proposals[0].title, "Proposta direta"); assert.equal(body.opportunities[0].client_id, 7); assert.equal(body.payments.length, 30); assert.equal(body.tickets.length, 30); assert.equal(body.change_requests.length, 30); assert.equal(body.summary.received_total, 75); assert.equal(body.summary.balance_open, 125); assert.equal(body.summary.confirmed_revenue, 90); assert.equal(body.summary.open_tickets, 37); assert.equal(body.summary.pending_changes, 42); assert.equal(body.summary.opportunities_total, 1); assert.equal(body.summary.open_opportunities, 1); const summaryCall = h.calls.find((x) => x.sql.startsWith("select coalesce((select sum(p.amount)")); assert.ok(summaryCall); assert.doesNotMatch(summaryCall.sql, /\blimit\b/i); assert.match(summaryCall.sql, /from tickets t where t\.organization_id=\$1 and t\.client_id=\$2/); assert.match(summaryCall.sql, /from change_requests cr where cr\.organization_id=\$1 and cr\.client_id=\$2/); assert.match(summaryCall.sql, /from opportunities o where o\.organization_id=\$1 and o\.client_id=\$2/); assert.deepEqual(summaryCall.params, [org, 7]); const opportunityCall = h.calls.find((x) => x.sql.startsWith("select id,name,stage,amount,probability")); assert.match(opportunityCall.sql, /organization_id=\$1 and client_id=\$2/); assert.deepEqual(opportunityCall.params, [org, 7]); const proposalCall = h.calls.find((x) => x.sql.startsWith("select p.id,p.title")); assert.match(proposalCall.sql, /p\.client_id=\$4/); assert.deepEqual(proposalCall.params, [org, null, null, 7]); assert.ok(h.calls.every((x) => x.sql.includes("organization_id"))); });
+test("overview agrega operações vinculadas aos projetos sem duplicar vínculo direto", async () => {
+  const h = harness();
+  const response = await request(h, "/api/clients/7/overview");
+  assert.equal(response.status, 200);
+  for (const prefix of ["select id,name,url,kind", "select id,name,status,project_id", "select id,title,status,project_id,client_id", "select id,kind,name,provider"]) {
+    const call = h.calls.find((item) => item.sql.startsWith(prefix));
+    assert.ok(call, `consulta ${prefix}`);
+    assert.match(call.sql, /client_id=\$2 or project_id in \(select id from projects/);
+  }
+});
+
+test("seção da ficha é carregada isoladamente e mantém escopo do cliente", async () => {
+  const h = harness();
+  const response = await request(h, "/api/clients/7/overview/section/files");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { files: [] });
+  const sectionCall = h.calls.find((item) => item.sql.startsWith("select id,name,url,kind"));
+  assert.deepEqual(sectionCall.params, [org, "7"]);
+  assert.match(sectionCall.sql, /project_id in \(select id from projects where organization_id=\$1 and client_id=\$2\)/);
+});
 test("portal com token errado responde 404", async () => { const h = harness(); const response = await request(h, "/api/portal/token-inexistente"); assert.equal(response.status, 404); });
 test("portal retorna somente dados do cliente da organização", async () => { const h = harness(); const response = await request(h, "/api/portal/valid-token"); assert.equal(response.status, 200); const body = await response.json(); assert.equal(body.client.name, "Cliente teste"); assert.deepEqual(Object.keys(body), ["client", "contracts", "receivables", "projects", "tickets"]); assert.ok(h.calls.filter((x) => x.sql.includes("organization_id")).length >= 5); });
 test("GET CEP invalid responds 400", async () => { const h = harness(); const response = await request(h, "/api/cep/123"); assert.equal(response.status, 400); });
