@@ -182,11 +182,24 @@ export function register(app, ctx) {
     };
     const sql = queries[req.params.section];
     if (!sql) return res.status(404).json({ error: "Seção da ficha não encontrada." });
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const requestedOffset = Number.parseInt(req.query.offset, 10);
+    const defaults = { tasks: 30, files: 40, briefings: 20, change_requests: 30, infrastructure: 40 };
+    const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : defaults[req.params.section], 1), 100);
+    const offset = Math.min(Math.max(Number.isFinite(requestedOffset) ? requestedOffset : 0, 0), 100000);
+    const pagedSql = sql.replace(/^select /, "select count(*) over()::int as __total_count, ").replace(/ limit \d+$/, " limit $3 offset $4");
     try {
       const client = await pool.query("select id from clients where id=$1 and organization_id=$2", [req.params.id, org]);
       if (!client.rowCount) return res.status(404).json({ error: "Cliente não encontrado." });
-      const result = await pool.query(sql, [org, req.params.id]);
-      res.json({ [req.params.section]: result.rows });
+      const result = await pool.query(pagedSql, [org, req.params.id, limit, offset]);
+      let total = result.rows[0]?.__total_count == null ? null : Number(result.rows[0].__total_count);
+      if (total === null || !Number.isFinite(total)) {
+        const countSql = sql.replace(/^select .*? from /, "select count(*)::int as total from ");
+        const count = await pool.query(countSql, [org, req.params.id]);
+        total = Number(count.rows[0]?.total || 0);
+      }
+      const rows = result.rows.map(({ __total_count: _total, ...row }) => row);
+      res.json({ [req.params.section]: rows, pagination: { limit, offset, returned: rows.length, total, has_more: offset + rows.length < total } });
     } catch (e) { const { status, error } = classifyDbError(e, "Não foi possível carregar esta seção da ficha."); res.status(status).json({ error }); }
   });
 

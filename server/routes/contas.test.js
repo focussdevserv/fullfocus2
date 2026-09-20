@@ -50,10 +50,30 @@ test("seção da ficha é carregada isoladamente e mantém escopo do cliente", a
   const h = harness();
   const response = await request(h, "/api/clients/7/overview/section/files");
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { files: [] });
-  const sectionCall = h.calls.find((item) => item.sql.startsWith("select id,name,url,kind"));
-  assert.deepEqual(sectionCall.params, [org, "7"]);
+  assert.deepEqual(await response.json(), { files: [], pagination: { limit: 40, offset: 0, returned: 0, total: 0, has_more: false } });
+  const sectionCall = h.calls.find((item) => item.sql.includes("from files") && item.sql.includes("count(*) over()"));
+  assert.deepEqual(sectionCall.params, [org, "7", 40, 0]);
   assert.match(sectionCall.sql, /project_id in \(select id from projects where organization_id=\$1 and client_id=\$2\)/);
+  assert.match(sectionCall.sql, /count\(\*\) over\(\)/);
+  assert.ok(h.calls.filter((item) => item.sql.includes("from files")).every((item) => item.sql.includes("organization_id=$1")));
+});
+test("seção da ficha retorna total real e paginação estável para retry", async () => {
+  const calls = [];
+  const pool = { query: async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql.startsWith("select id from clients")) return { rowCount: 1, rows: [{ id: 7 }] };
+    if (sql.includes("count(*) over()")) return { rows: [{ __total_count: 41, id: 1, name: "Arquivo" }] };
+    throw new Error("consulta inesperada");
+  } };
+  const app = express(); app.use(express.json()); register(app, { pool, tenant: () => org, asText: (v) => typeof v === "string" ? v.trim() : "", classifyDbError: () => ({ status: 503, error: "erro" }) });
+  const first = await request({ app }, "/api/clients/7/overview/section/files?limit=20&offset=20");
+  const second = await request({ app }, "/api/clients/7/overview/section/files?limit=20&offset=20");
+  for (const response of [first, second]) {
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { files: [{ id: 1, name: "Arquivo" }], pagination: { limit: 20, offset: 20, returned: 1, total: 41, has_more: true } });
+  }
+  assert.equal(calls.filter((item) => item.sql.includes("count(*) over()")).length, 2);
+  assert.ok(calls.filter((item) => item.sql.includes("from files")).every((item) => item.sql.includes("organization_id=$1")));
 });
 test("portal com token errado responde 404", async () => { const h = harness(); const response = await request(h, "/api/portal/token-inexistente"); assert.equal(response.status, 404); });
 test("portal retorna somente dados do cliente da organização", async () => { const h = harness(); const response = await request(h, "/api/portal/valid-token"); assert.equal(response.status, 200); const body = await response.json(); assert.equal(body.client.name, "Cliente teste"); assert.deepEqual(Object.keys(body), ["client", "contracts", "receivables", "projects", "tickets"]); assert.ok(h.calls.filter((x) => x.sql.includes("organization_id")).length >= 5); });
