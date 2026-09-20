@@ -124,3 +124,17 @@ test("ficha do cliente cria e lista oportunidades reais vinculadas", () => {
   assert.match(crm, /if \(boundClientId\) values\.client_id = boundClientId/);
   assert.match(crm, /Oportunidade criada e vinculada ao cliente\./);
 });
+
+test("ficha do cliente usa cadastro unificado, vínculos opcionais e ações relacionadas", () => {
+  const contas = source("modules/contas.js");
+  assert.match(contas, /endpoint: "\/api\/clients\/quick"/);
+  assert.match(contas, /field\("company_id", "Empresa", "select", \{ options: \[\] \}\)/);
+  assert.match(contas, /field\("company_name", "Empresa \(opcional\)"\)/);
+  assert.match(contas, /field\("contact_id", "Contato", "select", \{ options: \[\] \}\)/);
+  assert.match(contas, /window\.prepareCreate = async function prepareClientCreate/);
+  assert.match(contas, /await prepareCreate\(kind, shouldOpen && location\.hash !== "#portal-do-cliente"\)/);
+  for (const action of ["oportunidade", "projeto", "proposta", "contrato", "recebivel", "assinatura", "tarefa", "ticket"]) {
+    assert.match(contas, new RegExp(`data-client-create="${action}"`));
+  }
+  assert.match(contas, /clientField\.options = \[\["", "Sem cliente"\]/);
+});
