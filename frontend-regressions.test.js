@@ -214,3 +214,19 @@ test("ficha 360 isola respostas obsoletas e mantém layout móvel", () => {
   assert.match(css, /min-height:44px/);
   assert.match(css, /overflow-wrap:anywhere|word-break/);
 });
+
+test("agente comunica prontidão, ativa com segurança e mantém histórico legível", () => {
+  const agente = source("modules/agente.js");
+  const css = source("modules/agente.css");
+  assert.match(agente, /Configurar integração/);
+  assert.match(agente, /window\.confirm\("Ativar o Agente Focussdev/);
+  assert.match(agente, /Configure a IA antes de ativar o agente/);
+  assert.match(agente, /data-agent-capabilities-retry/);
+  assert.match(agente, /Histórico da sessão/);
+  assert.match(agente, /aria-live="polite"/);
+  assert.match(agente, /Salvando configuração…/);
+  assert.match(agente, /Consultando o agente…/);
+  assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /overscroll-behavior:contain/);
+  assert.match(css, /overflow-wrap:anywhere/);
+});
