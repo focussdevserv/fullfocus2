@@ -171,6 +171,8 @@ test("ficha do cliente usa cadastro unificado, vínculos opcionais e ações rel
 test("ficha mantém uma única configuração de cliente e bloqueia duplo envio das ações", () => {
   const contas = source("modules/contas.js");
   assert.equal((contas.match(/createConfig\.cliente\s*=/g) || []).length, 1);
+  assert.match(contas, /field\("status", "Status", "select"/);
+  assert.doesNotMatch(contas, /createConfig\.cliente\.fields\[5\]\.options/);
   assert.match(contas, /button\.disabled = true; button\.textContent = "Abrindo/);
   assert.match(contas, /if \(!kind \|\| !clientId \|\| button\.disabled\) return/);
   assert.match(contas, /finally \{ button\.disabled = false; button\.textContent = original; \}/);
