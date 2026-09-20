@@ -40,7 +40,7 @@ class CommercialFixture {
     if (sql.startsWith("select id,status,client_id,project_id from proposals")) return result(this.state.proposals.filter((row) => String(row.id) === String(params[0]) && row.organization_id === params[1]).map(clone));
     if (sql.startsWith("select * from contracts where proposal_id")) return result(this.state.contracts.filter((row) => String(row.proposal_id) === String(params[0]) && row.organization_id === params[1]).map(clone));
     if (sql.startsWith("select count(*)::int total from contracts")) return result([{ total: this.state.contracts.filter((row) => row.organization_id === params[0]).length }]);
-    if (sql.startsWith("insert into contracts") || (sql.startsWith("with lock as") && sql.includes("insert into contracts"))) { const row = this.fromInsert(sql, params, "contracts"); if (sql.startsWith("with lock as")) { row.client_id = params[3]; row.value = params[4]; row.status = params[7] || "draft"; row.proposal_id = params[9] ?? null; row.project_id = params[10] ?? null; } row.id = this.next.contracts++; row.status ||= "draft"; this.state.contracts.push(row); return result([clone(row)]); }
+    if (sql.startsWith("insert into contracts") || (sql.startsWith("with lock as") && sql.includes("insert into contracts"))) { const row = this.fromInsert(sql, params, "contracts"); if (sql.startsWith("with lock as")) { row.client_id = params[3]; row.value = params[4]; row.status = params[7] || "draft"; row.proposal_id = params[9] ?? null; row.project_id = params[10] ?? null; } else { Object.assign(row, { client_id: params[1], opportunity_id: params[2], proposal_id: params[3], name: params[4], status: "draft", value: params[5], total_value: params[5], down_payment: params[6], discount: params[7], installments: params[8], installment_value: params[9], payment_method: params[10], scope_included: params[11], description: params[12] }); } row.id = this.next.contracts++; if (!sql.includes("status") || row.status !== "draft") row.status = "draft"; this.state.contracts.push(row); return result([clone(row)]); }
     if (sql.startsWith("update contracts set public_token_hash")) { const row = this.state.contracts.find((item) => String(item.id) === String(params[1]) && item.organization_id === params[2]); if (!row) return result(); row.public_token_hash = params[0]; if (row.status === "draft") row.status = "awaiting_signature"; return result([clone(row)]); }
     if (sql.startsWith("select * from contracts where public_token_hash")) return result(this.state.contracts.filter((row) => row.public_token_hash === params[0]).map(clone));
     if (sql.startsWith("update contracts set status='signed'")) { const row = this.state.contracts.find((item) => String(item.id) === String(params[1]) && item.organization_id === params[2]); if (!row) return result(); row.status = "signed"; row.signature_data = JSON.parse(params[0]); return result([clone(row)]); }
@@ -108,12 +108,14 @@ test("fluxo comercial ponta a ponta (fixture transacional, não PostgreSQL real)
   assert.equal(proposal.response.status, 201); const proposalId = proposal.payload.proposal.id;
   const accepted = await request(server, `/api/proposals/${proposalId}`, { method: "PATCH", body: { status: "accepted" } });
   assert.equal(accepted.response.status, 200); assert.equal(accepted.payload.replayed, false);
+  assert.equal(accepted.payload.contract_created, true); assert.equal(accepted.payload.contract.proposal_id, proposalId);
+  assert.equal(fixture.state.contracts.length, 1);
   assert.equal((await request(server, `/api/proposals/${proposalId}`, { method: "PATCH", body: { status: "accepted" } })).payload.replayed, true);
   assert.equal((await request(server, `/api/proposals/${proposalId}`, { method: "PATCH", body: { status: "rejected" } })).response.status, 409);
 
   const contractRequest = { name: "Contrato E2E", client_id: clientId, proposal_id: proposalId, value: 100, total_value: 100, down_payment: 20, installments: 3, payment_method: "pix" };
   const contract = await request(server, "/api/contracts", { method: "POST", body: contractRequest });
-  assert.equal(contract.response.status, 201); const contractId = contract.payload.contract.id;
+  assert.equal(contract.response.status, 200); assert.equal(contract.payload.created, false); const contractId = contract.payload.contract.id;
   const contractReplay = await request(server, "/api/contracts", { method: "POST", body: contractRequest });
   assert.equal(contractReplay.response.status, 200); assert.equal(contractReplay.payload.contract.id, contractId); assert.equal(contractReplay.payload.created, false);
   const rejected = await request(server, "/api/proposals", { method: "POST", body: { title: "Recusada", client_id: clientId, amount: 10 } });

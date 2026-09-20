@@ -8,6 +8,19 @@ export const CAMPAIGN_STATUSES = ["draft", "active", "paused", "done"];
 export const PROPOSAL_STATUSES = ["draft", "sent", "viewed", "negotiation", "accepted", "rejected", "expired", "cancelled"];
 export const OPPORTUNITY_STAGES = ["prospecting", "qualification", "proposal", "negotiation", "won", "lost"];
 
+const ensureAcceptedContract = async (db, proposal, org) => {
+  if (!proposal.client_id) return { contract: null, created: false };
+  const name = proposal.title || "Contrato de prestação de serviços";
+  const amount = Number(proposal.final_amount ?? proposal.amount ?? 0);
+  const downPayment = Number(proposal.down_payment ?? 0);
+  const installments = Number.isInteger(Number(proposal.installments)) && Number(proposal.installments) > 0 ? Number(proposal.installments) : 1;
+  const installmentValue = proposal.installment_amount ?? Math.max(0, amount - downPayment) / installments;
+  const inserted = await db.query("insert into contracts (organization_id,client_id,opportunity_id,proposal_id,name,status,value,total_value,down_payment,discount,installments,installment_value,payment_method,scope_included,description) values ($1,$2,$3,$4,$5,'draft',$6,$6,$7,$8,$9,$10,$11,$12,$13) on conflict (organization_id,proposal_id) where proposal_id is not null do nothing returning *", [org, proposal.client_id, proposal.opportunity_id || null, proposal.id, name, amount, downPayment, proposal.discount ?? 0, installments, installmentValue, proposal.payment_method || null, proposal.scope_included || null, proposal.notes || null]);
+  if (inserted.rowCount) return { contract: inserted.rows[0], created: true };
+  const existing = await db.query("select * from contracts where organization_id=$1 and proposal_id=$2", [org, proposal.id]);
+  return { contract: existing.rows[0] || null, created: false };
+};
+
 const toNumber = (value, fallback = null) => { if (value === undefined || value === null || value === "") return fallback; const n = Number(String(value).replace(",", ".")); return Number.isFinite(n) ? n : NaN; };
 const dateOrNull = (value) => (value ? (Number.isNaN(Date.parse(value)) ? NaN : value) : null);
 
@@ -214,7 +227,11 @@ export function register(app, ctx) {
           try { await validateLinks({ ...Object.fromEntries(relationFields.map(field => [field, current.rows[0][field] ?? null])), ...relationPatch }, org, db); }
           catch (e) { await db.query("rollback"); return bad(res, e.message); }
         }
-        if (current.rows[0].status === status) { await db.query("commit"); return res.json({ proposal: current.rows[0], replayed: true }); }
+        if (current.rows[0].status === status) {
+          const onboarding = status === "accepted" ? await ensureAcceptedContract(db, current.rows[0], org) : { contract: null, created: false };
+          await db.query("commit");
+          return res.json({ proposal: current.rows[0], contract: onboarding.contract, contract_created: onboarding.created, onboarding: { status: onboarding.contract ? "contract_draft_ready" : "awaiting_client_or_scope" }, replayed: true });
+        }
         if (["accepted", "rejected"].includes(current.rows[0].status)) { await db.query("rollback"); return res.status(409).json({ error: "A proposta já possui uma decisão definitiva." }); }
       } else if (Object.keys(relationPatch).length) {
         const current = await db.query("select client_id,project_id,opportunity_id,lead_id from proposals where id=$1 and organization_id=$2", [req.params.id, org]);
@@ -228,8 +245,9 @@ export function register(app, ctx) {
       if (status === "accepted" && row.opportunity_id) await db.query("update opportunities set stage='won', updated_at=now() where id=$1 and organization_id=$2", [row.opportunity_id, org]);
       if (status === "rejected" && row.opportunity_id) await db.query("update opportunities set stage='lost', updated_at=now() where id=$1 and organization_id=$2 and stage <> 'won'", [row.opportunity_id, org]);
       if (status === "accepted") await db.query("update leads set status='won', updated_at=now() where organization_id=$2 and (id=$1 or id=(select lead_id from opportunities where id=$3 and organization_id=$2))", [row.lead_id || null, org, row.opportunity_id || null]);
+      const onboarding = status === "accepted" ? await ensureAcceptedContract(db, row, org) : { contract: null, created: false };
       if (decision) await db.query("commit");
-      res.json({ proposal: row, replayed: false });
+      res.json({ proposal: row, contract: onboarding.contract, contract_created: onboarding.created, onboarding: { status: onboarding.contract ? "contract_draft_ready" : "awaiting_client_or_scope" }, replayed: false });
     } catch (e) { if (decision) await db.query("rollback").catch(() => {}); fail(res, e, "Não foi possível atualizar a proposta."); }
     finally { if (decision) db.release?.(); }
   });
