@@ -2,7 +2,8 @@
 // tratados pelo middleware principal; este helper decide os demais cargos.
 export const permissionAllows = (permissions, domain, table, action) => {
   if (!permissions || typeof permissions !== "object") return false;
-  for (const value of [permissions[table], permissions[domain], permissions[`${domain}.${action}`], permissions[`${table}.${action}`]]) {
+  const readPath = (value, path) => String(path).split(".").reduce((current, key) => current && typeof current === "object" ? current[key] : undefined, value);
+  for (const value of [permissions[table], permissions[domain], permissions[`${domain}.${action}`], permissions[`${table}.${action}`], readPath(permissions, `${domain}.${action}`), readPath(permissions, `${table}.${action}`)]) {
     if (Array.isArray(value)) return value.includes(action) || value.includes("admin") || value.includes("administrate");
     if (typeof value === "boolean") return value;
     if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, action)) return Boolean(value[action]);
@@ -37,8 +38,25 @@ export const permissionTarget = (requestPath, method) => {
   if (table === "contracts" && parts[2] === "create-receivables" && action === "create") {
     return { domain: "finance", table: "receivables", action };
   }
+  if (["contracts", "proposals", "clients"].includes(table) && parts[2] === "public-link") {
+    return { domain: permissionDomains[table], table, action: `public_link.${action === "create" ? "create" : action === "delete" ? "revoke" : action}` };
+  }
   const domain = permissionDomains[table];
   return domain ? { domain, table, action } : null;
+};
+
+// Ações que expõem ou invalidam credenciais de acesso público não devem herdar
+// silenciosamente a capacidade ampla do módulo (por exemplo, contracts.create).
+// O helper é opcionalmente usado pelas rotas registradas antes do middleware
+// genérico de /api.
+export const authorizeSensitiveAction = async ({ req, res, pool, domain, table, action }) => {
+  if (!req.user) { res.status(401).json({ error: "Autenticação necessária." }); return false; }
+  if (["owner", "admin"].includes(req.user.role)) return true;
+  try {
+    const q = await pool.query("select tr.permissions from users u left join team_roles tr on tr.id=u.team_role_id and tr.organization_id=u.organization_id where u.id=$1 and u.organization_id=$2", [req.user.id, req.user.organization_id]);
+    if (!permissionAllows(q.rows[0]?.permissions, domain, table, action)) { res.status(403).json({ error: "Seu cargo não permite esta ação sensível." }); return false; }
+    return true;
+  } catch { res.status(503).json({ error: "Não foi possível validar as permissões." }); return false; }
 };
 
 export const isExplicitPublicApiRoute = (requestPath, method) => String(method || "").toUpperCase() === "POST"

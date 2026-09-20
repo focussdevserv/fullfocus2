@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
+import { authorizeSensitiveAction } from "../permissions.js";
 
 const hashToken = (token) => crypto.createHash("sha256").update(String(token)).digest("hex");
+const publicLinkTtlSeconds = () => Math.min(Math.max(Number(process.env.PUBLIC_LINK_TTL_SECONDS) || 60 * 60 * 24 * 30, 60), 60 * 60 * 24 * 365);
+const audit = (pool, organizationId, actorId, action, entityId, changes = {}) => pool.query("insert into audit_events (organization_id,actor_id,action,entity_type,entity_id,changes,ip_address,user_agent) values ($1,$2,$3,'public_link',$4,$5::jsonb,$6,$7)", [organizationId, actorId || null, action, entityId || null, JSON.stringify(changes), null, null]).catch(() => {});
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
 const publicContract = (contract) => ({ id: contract.id, status: contract.status });
 const publicProject = (project) => project ? { id: project.id, name: project.name, status: project.status } : null;
@@ -16,20 +19,34 @@ const publicContractDetails = (contract) => ({
 export function registerContractPublicRoutes(app, { pool, tenant, requireAuth, classifyDbError }) {
   app.post("/api/contracts/:id/public-link", requireAuth, async (req, res) => {
     const org = tenant(req, res); if (!org) return;
+    if (!await authorizeSensitiveAction({ req, res, pool, domain: "operation", table: "contracts", action: "public_link.create" })) return;
     try {
       const token = crypto.randomBytes(32).toString("base64url");
       const q = await pool.query("update contracts set public_token_hash=$1,public_token_created_at=now(),status=case when status='draft' then 'awaiting_signature' else status end,updated_at=now() where id=$2 and organization_id=$3 returning id,name,status", [hashToken(token), req.params.id, org]);
       if (!q.rowCount) return res.status(404).json({ error: "Contrato não encontrado." });
+      audit(pool, org, req.user?.id, "public_link_created", q.rows[0].id, { resource: "contract", ttl_seconds: publicLinkTtlSeconds() });
       res.status(201).json({ contract: q.rows[0], token, path: `/contract/${token}` });
     } catch (error) { const out = classifyDbError(error, "Não foi possível gerar o link do contrato."); res.status(out.status).json({ error: out.error }); }
   });
 
+  app.delete("/api/contracts/:id/public-link", requireAuth, async (req, res) => {
+    const org = tenant(req, res); if (!org) return;
+    if (!await authorizeSensitiveAction({ req, res, pool, domain: "operation", table: "contracts", action: "public_link.revoke" })) return;
+    try {
+      const q = await pool.query("update contracts set public_token_hash=null,public_token_created_at=null,updated_at=now() where id=$1 and organization_id=$2 returning id", [req.params.id, org]);
+      if (!q.rowCount) return res.status(404).json({ error: "Contrato não encontrado." });
+      audit(pool, org, req.user?.id, "public_link_revoked", q.rows[0].id, { resource: "contract" });
+      return res.json({ revoked: true, contract_id: q.rows[0].id });
+    } catch (error) { const out = classifyDbError(error, "Não foi possível revogar o link do contrato."); return res.status(out.status).json({ error: out.error }); }
+  });
+
   app.get("/api/contracts/public/:token", async (req, res) => {
     try {
-      const q = await pool.query("select c.id,c.name,c.contract_number,c.contract_type,c.description,c.scope_included,c.scope_excluded,c.deliverables,c.technologies,c.milestones,c.value,c.total_value,c.down_payment,c.discount,c.installments,c.installment_value,c.payment_method,c.starts_on,c.ends_on,c.status,cl.name client_name from contracts c left join clients cl on cl.id=c.client_id and cl.organization_id=c.organization_id where c.public_token_hash=$1 and c.status in ('sent','viewed','awaiting_signature','signed','active')", [hashToken(req.params.token)]);
+      const q = await pool.query("select c.id,c.organization_id,c.name,c.contract_number,c.contract_type,c.description,c.scope_included,c.scope_excluded,c.deliverables,c.technologies,c.milestones,c.value,c.total_value,c.down_payment,c.discount,c.installments,c.installment_value,c.payment_method,c.starts_on,c.ends_on,c.status,cl.name client_name from contracts c left join clients cl on cl.id=c.client_id and cl.organization_id=c.organization_id where c.public_token_hash=$1 and (c.public_token_created_at is null or c.public_token_created_at > now() - ($2 * interval '1 second')) and c.status in ('sent','viewed','awaiting_signature','signed','active')", [hashToken(req.params.token), publicLinkTtlSeconds()]);
       if (!q.rowCount) return res.status(404).json({ error: "Contrato não encontrado ou indisponível." });
       const contract = q.rows[0];
       if (contract.status === "sent") await pool.query("update contracts set status='viewed',updated_at=now() where id=$1", [contract.id]);
+      audit(pool, contract.organization_id, null, "public_link_viewed", contract.id, { resource: "contract" });
       res.json({ contract: publicContractDetails({ ...contract, status: contract.status === "sent" ? "viewed" : contract.status }), can_sign: ["sent", "viewed", "awaiting_signature"].includes(contract.status) });
     } catch { res.status(503).json({ error: "Não foi possível carregar o contrato." }); }
   });
@@ -42,7 +59,7 @@ export function registerContractPublicRoutes(app, { pool, tenant, requireAuth, c
     try {
       await db.query("begin");
       const signature = { name, document: document || null, email, comment: comment || null, accepted_terms: true, signed_at: new Date().toISOString(), ip: req.ip || null, user_agent: req.get("user-agent") || null };
-      const locked = await db.query("select * from contracts where public_token_hash=$1 for update", [hashToken(req.params.token)]);
+      const locked = await db.query("select * from contracts where public_token_hash=$1 and (public_token_created_at is null or public_token_created_at > now() - ($2 * interval '1 second')) for update", [hashToken(req.params.token), publicLinkTtlSeconds()]);
       if (!locked.rowCount || !["sent", "viewed", "awaiting_signature", "signed", "active"].includes(locked.rows[0].status)) { await db.query("rollback"); return res.status(404).json({ error: "Contrato não encontrado ou indisponível." }); }
       const source = locked.rows[0];
       let contract = source, replayed = ["signed", "active"].includes(source.status);
@@ -69,6 +86,7 @@ export function registerContractPublicRoutes(app, { pool, tenant, requireAuth, c
       const linked = await db.query("update contracts set project_id=$1,updated_at=now() where id=$2 and organization_id=$3 returning *", [project.id, contract.id, contract.organization_id]);
       if (!linked.rowCount) throw new Error("O projeto não pôde ser vinculado ao contrato.");
       await db.query("commit");
+      audit(pool, contract.organization_id, null, replayed ? "public_contract_sign_replayed" : "public_contract_signed", contract.id, { resource: "contract", replayed });
       res.json({ contract: publicContract(linked.rows[0]), project: publicProject(project), signed: true, replayed, project_created: projectCreated });
     } catch (error) { await db.query("rollback").catch(() => {}); const out = classifyDbError(error, "Não foi possível registrar a assinatura."); res.status(out.status).json({ error: out.error }); }
     finally { db.release?.(); }
@@ -76,7 +94,7 @@ export function registerContractPublicRoutes(app, { pool, tenant, requireAuth, c
 
   app.get("/contract/:token", async (req, res) => {
     try {
-      const q = await pool.query("select c.name,c.contract_number,c.description,c.scope_included,c.value,c.total_value,c.starts_on,c.ends_on,c.status,cl.name client_name from contracts c left join clients cl on cl.id=c.client_id and cl.organization_id=c.organization_id where c.public_token_hash=$1 and c.status in ('sent','viewed','awaiting_signature','signed','active')", [hashToken(req.params.token)]);
+      const q = await pool.query("select c.name,c.contract_number,c.description,c.scope_included,c.value,c.total_value,c.starts_on,c.ends_on,c.status,cl.name client_name from contracts c left join clients cl on cl.id=c.client_id and cl.organization_id=c.organization_id where c.public_token_hash=$1 and (c.public_token_created_at is null or c.public_token_created_at > now() - ($2 * interval '1 second')) and c.status in ('sent','viewed','awaiting_signature','signed','active')", [hashToken(req.params.token), publicLinkTtlSeconds()]);
       if (!q.rowCount) return res.status(404).send("Contrato não encontrado ou indisponível.");
       const c = q.rows[0], canSign = ["sent", "viewed", "awaiting_signature"].includes(c.status), token = escapeHtml(req.params.token);
       const form = canSign ? `<form id="sign"><label>Nome completo<input name="name" required></label><label>CPF/CNPJ<input name="document"></label><label>E-mail<input name="email" type="email" required></label><label>Comentário<textarea name="comment"></textarea></label><label><input name="accepted_terms" type="checkbox" value="true" required> Li e aceito as condições deste contrato.</label><button type="submit">Assinar contrato</button><div id="status" role="status"></div></form>` : `<p class="success">Este contrato já foi assinado ou está ativo.</p>`;
