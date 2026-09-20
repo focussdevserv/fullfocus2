@@ -233,21 +233,24 @@ openEditDialog = function openContaEditDialog(kind, record, endpoint) {
 
 async function openClientDetails(record) {
   if (!record) return;
+  const sheetRequest = ++contaClientSheetEpoch;
+  document.querySelectorAll(".conta-drawer-wide").forEach((drawer) => drawer.remove());
   const previouslyFocused = document.activeElement;
-  const panel = document.createElement("aside"); panel.className = "conta-drawer conta-drawer-wide"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-modal", "true"); panel.setAttribute("aria-label", `Visão 360 · ${record.name || "Cliente"}`);
+  const panel = document.createElement("aside"); panel.className = "conta-drawer conta-drawer-wide"; panel.dataset.clientId = String(record.id); panel.dataset.sheetRequest = String(sheetRequest); panel.setAttribute("role", "dialog"); panel.setAttribute("aria-modal", "true"); panel.setAttribute("aria-label", `Visão 360 · ${record.name || "Cliente"}`);
   panel.innerHTML = `<button class="conta-close" type="button" aria-label="Fechar painel">&times;</button><p class="card-kicker">Visão 360</p><h2>${contaEsc(record.name)}</h2><div class="conta-overview" data-overview>${contaState("loading", "Carregando dados do cliente…")}</div>`;
   document.body.append(panel); const closePanel = () => { if (!panel.isConnected) return; panel.remove(); document.removeEventListener("keydown", onKey); if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus(); }; const onKey = (event) => trapContaDrawerKey(event, panel, closePanel); document.addEventListener("keydown", onKey); panel.querySelector(".conta-close").onclick = closePanel; panel.querySelector(".conta-close").focus();
   try {
-    const data = await api(`/api/clients/${record.id}/overview`); if (!panel.isConnected) return; panel._focusClientOverview = data; const money = (v) => contaMoney(v);
+    const data = await api(`/api/clients/${record.id}/overview`); if (!panel.isConnected || sheetRequest !== contaClientSheetEpoch) return; panel._focusClientOverview = data; const money = (v) => contaMoney(v);
     const rows = (items, empty) => items.length ? items : `<p class="conta-muted">${empty}</p>`;
     panel.querySelector("[data-overview]").innerHTML = `<div class="conta-overview-stats"><div><small>Conversas</small><strong>${data.conversations.length}</strong></div><div><small>Projetos ativos</small><strong>${data.summary.active_projects}</strong></div><div><small>Tarefas</small><strong>${data.tasks.length}</strong></div><div><small>A receber</small><strong>${money(data.receivables.filter((x) => !x.paid_at).reduce((a, x) => a + Number(x.amount || 0), 0))}</strong></div></div><section><h3>Contato e empresa</h3><p>${contaEsc(data.client.contact_name || "Sem contato")} · ${contaEsc(data.client.contact_phone || data.client.phone || "Sem telefone")}</p><p>${contaEsc(data.client.company_name || "Sem empresa")}</p></section><section><h3>WhatsApp e conversas</h3>${rows(data.conversations.map((x) => `<p><strong>${contaEsc(x.subject)}</strong> · ${contaEsc(x.last_message || "Sem mensagens")}</p>`).join(""), "Nenhuma conversa vinculada.")}</section><section><h3>Projetos e tarefas</h3>${rows([...data.projects.map((x) => `<p><strong>${contaEsc(x.name)}</strong> · ${contaEsc(contaStatus[x.status] || x.status)} · ${Number(x.progress || 0)}%</p>`), ...data.tasks.slice(0, 10).map((x) => `<p>↳ ${contaEsc(x.title)} · ${contaEsc(x.status || "pendente")}</p>`)].join(""), "Nenhum projeto ou tarefa vinculada.")}</section><section><h3>Contratos</h3>${rows(data.contracts.map((x) => `<p><strong>${contaEsc(x.name)}</strong> · ${contaEsc(contaStatus[x.status] || x.status)} · ${money(x.value)}</p>`).join(""), "Nenhum contrato.")}</section><section><h3>Propostas</h3>${rows(data.proposals.map((x) => `<p><strong>${contaEsc(x.title)}</strong> · ${contaEsc(x.status)} · ${money(x.amount)}</p>`).join(""), "Nenhuma proposta.")}</section><section><h3>Contas a receber</h3>${rows(data.receivables.map((x) => `<p><strong>${contaEsc(x.description)}</strong> · ${money(x.amount)} · ${contaEsc(x.status)}</p>`).join(""), "Nenhuma conta encontrada.")}</section><section><h3>Histórico de atividades</h3>${rows(data.activities.map((x) => `<p><strong>${contaEsc(x.action)}</strong> · ${contaEsc(x.entity_type)} · ${new Date(x.created_at).toLocaleString("pt-BR")}</p>`).join(""), "Nenhuma atividade registrada.")}</section>`;
     const nextActions = [...data.tasks.filter((item) => item.status !== "done").slice(0, 3).map((item) => ({ label: `Concluir tarefa: ${item.title}`, href: "#tarefas" })), ...data.receivables.filter((item) => !item.paid_at).slice(0, 2).map((item) => ({ label: `Acompanhar pagamento: ${item.description}`, href: "#contas-a-receber" })), ...data.conversations.filter((item) => Number(item.unread_count) > 0).slice(0, 2).map((item) => ({ label: `Responder conversa: ${item.subject}`, href: "#conversas" }))];
     panel.querySelector("[data-overview]").insertAdjacentHTML("afterbegin", `<section class="client-next-actions"><h3>Próximas ações</h3>${nextActions.length ? nextActions.map((item) => `<a class="client-next-action" href="${item.href}">${contaEsc(item.label)} <span>→</span></a>`).join("") : "<p class=\"conta-muted\">Nenhuma pendência urgente para este cliente.</p>"}</section>`);
-  } catch (error) { if (!panel.isConnected) return; panel.querySelector("[data-overview]").innerHTML = contaState("error", error.message); }
+  } catch (error) { if (!panel.isConnected || sheetRequest !== contaClientSheetEpoch) return; panel.querySelector("[data-overview]").innerHTML = `${contaState("error", error.message)}<button type="button" class="compact-action" data-client-summary-retry>Tentar novamente</button>`; panel.querySelector("[data-client-summary-retry]")?.addEventListener("click", () => { panel.remove(); openClientDetails(record); }); }
 }
 
 /* Ficha 360: transforma o resumo em uma área de trabalho completa sem alterar o cadastro simples. */
 /* Cada bloco operacional tem ciclo de vida próprio: um erro em arquivos não bloqueia tarefas. */
+let contaClientSheetEpoch = 0;
 async function hydrateClientOperationSections(overview, record, data, helpers) {
   const panel = overview.querySelector('[data-client-panel="sheet-projects"]');
   if (!panel) return;
@@ -267,18 +270,26 @@ async function hydrateClientOperationSections(overview, record, data, helpers) {
   ];
   liveGrid.innerHTML = sections.map(([key, title]) => `<article data-client-live-section="${key}"><h3>${title}</h3>${contaState("loading", "Carregando…")}</article>`).join("");
   panel.append(liveGrid);
-  await Promise.all(sections.map(async ([key, _title, emptyMessage, render]) => {
-    const target = liveGrid.querySelector(`[data-client-live-section="${key}"]`); if (!target) return;
-    try { const result = Array.isArray(data[key]) && data[key].length ? { [key]: data[key] } : await api(`/api/clients/${record.id}/overview/section/${key}`); target.innerHTML = `<h3>${target.querySelector("h3")?.textContent || key}</h3>${helpers.rows(result[key] || [], render, emptyMessage)}`; }
-    catch (error) { target.innerHTML = `<h3>${target.querySelector("h3")?.textContent || key}</h3>${contaState("error", error.message || "Não foi possível carregar esta seção.")}`; }
-  }));
+  const loadSection = async ([key, _title, emptyMessage, render], target) => {
+    if (!target?.isConnected) return;
+    target.setAttribute("aria-busy", "true");
+    target.innerHTML = `<h3>${target.querySelector("h3")?.textContent || key}</h3>${contaState("loading", "Carregando…")}`;
+    try {
+      const result = Array.isArray(data[key]) && data[key].length ? { [key]: data[key] } : await api(`/api/clients/${record.id}/overview/section/${key}`);
+      target.innerHTML = `<h3>${target.querySelector("h3")?.textContent || key}</h3>${helpers.rows(result[key] || [], render, emptyMessage, { limit: 30, href: "#projetos", label: "Ver todos" })}`;
+    } catch (error) {
+      target.innerHTML = `<h3>${target.querySelector("h3")?.textContent || key}</h3>${contaState("error", error.message || "Não foi possível carregar esta seção.")}<button type="button" class="compact-action client-section-retry" data-client-section-retry="${key}">Tentar novamente</button>`;
+      target.querySelector("[data-client-section-retry]")?.addEventListener("click", () => loadSection(sections.find((section) => section[0] === key), target));
+    } finally { target.removeAttribute("aria-busy"); }
+  };
+  await Promise.all(sections.map((section) => loadSection(section, liveGrid.querySelector(`[data-client-live-section="${section[0]}"]`))));
 }
 
 const contaSummaryOpenClientDetails = openClientDetails;
 openClientDetails = async function openCompleteClientSheet(record) {
   await contaSummaryOpenClientDetails(record);
   const panel = document.querySelector(".conta-drawer-wide");
-  if (!panel?.isConnected) return;
+  if (!panel?.isConnected || panel.dataset.clientId !== String(record.id) || panel.dataset.sheetRequest !== String(contaClientSheetEpoch)) return;
   const header = panel.querySelector(".card-kicker")?.parentElement;
   if (header && !panel.querySelector("[data-client-sheet-tools]")) {
     const tools = document.createElement("div");
@@ -302,7 +313,14 @@ openClientDetails = async function openCompleteClientSheet(record) {
     const money = (value) => contaMoney(value);
     const label = (value) => contaStatus[value] || value || "Sem status";
     const empty = (message) => `<p class="conta-muted">${message}</p>`;
-    const rows = (items, render, message) => items?.length ? items.map(render).join("") : empty(message);
+    const rows = (items, render, message, options = {}) => {
+      const values = Array.isArray(items) ? items : [];
+      const content = values.length ? values.map(render).join("") : empty(message);
+      const limit = Number(options.limit || 0);
+      if (!limit || values.length < limit) return content;
+      const href = options.href || "#clientes";
+      return `${content}<div class="client-list-limit" role="status"><span>Exibindo os primeiros ${limit} registros.</span><a class="compact-action" href="${contaEsc(href)}">${contaEsc(options.label || "Ver todos")}</a></div>`;
+    };
     const editRelated = (kind, item, endpoint) => item?.id ? `<button type="button" class="compact-action client-related-edit" data-client-related-edit="${contaEsc(kind)}" data-client-related-id="${contaEsc(item.id)}" data-client-related-endpoint="${contaEsc(endpoint)}">Editar</button>` : "";
     const openAmount = (data.receivables || []).filter((item) => !item.paid_at).reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const facts = contaFacts(data.client || record, 80);
@@ -312,7 +330,56 @@ openClientDetails = async function openCompleteClientSheet(record) {
     overviewStats?.firstElementChild?.insertAdjacentHTML("afterend", `<div><small>Oportunidades</small><strong>${opportunityCount}</strong></div>`);
     const commercialGrid = overview.querySelector('[data-client-panel="sheet-commercial"] .client-sheet-grid');
     commercialGrid?.insertAdjacentHTML("afterbegin", `<article><h3>Oportunidades <small class="conta-muted">${opportunityCount}</small></h3>${rows(data.opportunities, (item) => `<div class="client-related-row"><strong>${contaEsc(item.name)}</strong><span>${contaEsc(label(item.stage))}${item.probability != null ? ` · ${Number(item.probability)}%` : ""}</span><small>${money(item.amount)}${item.expected_close ? ` · previsão ${contaFieldValue("expected_close", item.expected_close)}` : ""}</small></div>`, "Nenhuma oportunidade vinculada.")}</article>`);
-    overview.querySelectorAll("[data-client-tab]").forEach((button) => button.addEventListener("click", () => { const selected = button.dataset.clientTab; overview.querySelectorAll("[data-client-tab]").forEach((item) => { const active = item === button; item.classList.toggle("is-active", active); item.setAttribute("aria-selected", String(active)); }); overview.querySelectorAll("[data-client-panel]").forEach((section) => { section.hidden = section.dataset.clientPanel !== selected; }); if (selected === "sheet-projects" && overview.dataset.operationSectionsLoaded !== "1") { overview.dataset.operationSectionsLoaded = "1"; hydrateClientOperationSections(overview, record, data, { money, label, rows }).catch(() => { overview.dataset.operationSectionsLoaded = "0"; }); } }));
+    const limitedLists = [
+      ["[data-client-panel=sheet-profile] .client-sheet-grid article:nth-child(2)", data.contacts, 20, "#contatos"],
+      ["[data-client-panel=sheet-commercial] .client-sheet-grid article:first-child", data.proposals, 20, "#propostas"],
+      ["[data-client-panel=sheet-projects] .client-sheet-grid article:first-child", data.projects, 20, "#projetos"],
+      ["[data-client-panel=sheet-finance] .client-sheet-grid article:first-child", data.receivables, 20, "#contas-a-receber"],
+      ["[data-client-panel=sheet-history] article", data.activities, 30, "#auditoria"],
+    ];
+    limitedLists.forEach(([selector, items, limit, href]) => {
+      const target = overview.querySelector(selector);
+      if (!target || !Array.isArray(items) || items.length < limit || target.querySelector("[data-client-list-limit]")) return;
+      target.insertAdjacentHTML("beforeend", `<div class="client-list-limit" data-client-list-limit role="status"><span>Exibindo os primeiros ${limit} registros.</span><a class="compact-action" href="${href}">Ver todos</a></div>`);
+    });
+    const tabList = overview.querySelector(".client-sheet-tabs");
+    const tabs = [...overview.querySelectorAll("[data-client-tab]")];
+    tabList?.setAttribute("role", "tablist");
+    tabs.forEach((button, index) => {
+      const panelId = button.dataset.clientTab;
+      button.id = `${panelId}-tab`;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", panelId);
+      button.setAttribute("tabindex", index === 0 ? "0" : "-1");
+    });
+    overview.querySelectorAll("[data-client-panel]").forEach((section) => {
+      const panelId = section.dataset.clientPanel;
+      section.id = panelId;
+      section.setAttribute("role", "tabpanel");
+      section.setAttribute("aria-labelledby", `${panelId}-tab`);
+      section.setAttribute("tabindex", "0");
+    });
+    const selectTab = (button, focus = false) => {
+      const selected = button.dataset.clientTab;
+      tabs.forEach((item) => {
+        const active = item === button;
+        item.classList.toggle("is-active", active);
+        item.setAttribute("aria-selected", String(active));
+        item.setAttribute("tabindex", active ? "0" : "-1");
+      });
+      overview.querySelectorAll("[data-client-panel]").forEach((section) => { section.hidden = section.dataset.clientPanel !== selected; });
+      if (focus) button.focus();
+      if (selected === "sheet-projects" && overview.dataset.operationSectionsLoaded !== "1") { overview.dataset.operationSectionsLoaded = "1"; hydrateClientOperationSections(overview, record, data, { money, label, rows }).catch(() => { overview.dataset.operationSectionsLoaded = "0"; }); }
+    };
+    tabs.forEach((button, index) => {
+      button.addEventListener("click", () => selectTab(button));
+      button.addEventListener("keydown", (event) => {
+        if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + tabs.length) % tabs.length;
+        selectTab(tabs[next], true);
+      });
+    });
     const relatedItems = { proposta: data.proposals, projeto: data.projects, tarefa: data.tasks, contrato: data.contracts, ticket: data.tickets, recebivel: data.receivables, contato: data.contacts };
     const relatedModules = { proposta: "crm", projeto: "projetos", tarefa: "tarefas", contrato: "contratos", ticket: "tickets", recebivel: "contas-a-receber", contato: "contatos" };
     overview.querySelectorAll("[data-client-related-edit]").forEach((button) => button.addEventListener("click", async () => {

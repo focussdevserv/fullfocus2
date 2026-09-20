@@ -30,7 +30,7 @@ test("resposta da Visão 360 deduplica vínculos por id", () => {
 
 test("ficha trata estado vazio e erro sem apagar o drawer", () => {
   const contas = source("modules/contas.js");
-  assert.match(contas, /const rows = \(items, render, message\) => items\?\.length \? items\.map\(render\)\.join\(""\) : empty\(message\)/);
+  assert.match(contas, /const rows = \(items, render, message, options = \{\}\) =>/);
   assert.match(contas, /contaState\("error", error\.message\)/);
   assert.match(contas, /if \(overview\.isConnected\) overview\.insertAdjacentHTML\("beforeend", contaState\("error", error\.message\)\)/);
 });
@@ -175,4 +175,32 @@ test("ficha 360 evita requisicoes operacionais imediatas", () => {
   assert.match(contas, /overview\.dataset\.operationSectionsLoaded = "0"/);
   assert.match(contas, /api\/clients\/\$\{record\.id\}\/overview\/section\/\$\{key\}/);
   for (const section of ["tasks", "files", "briefings", "change_requests", "infrastructure"]) assert.match(contas, new RegExp(`\\["${section}"`));
+});
+
+test("ficha 360 oferece abas acessíveis, retry e indicação de listas limitadas", () => {
+  const contas = source("modules/contas.js");
+  const css = source("modules/contas.css");
+  assert.match(contas, /setAttribute\("role", "tablist"\)/);
+  assert.match(contas, /setAttribute\("role", "tab"\)/);
+  assert.match(contas, /aria-controls/);
+  assert.match(contas, /setAttribute\("role", "tabpanel"\)/);
+  assert.match(contas, /ArrowRight.*ArrowDown.*ArrowLeft.*ArrowUp/);
+  assert.match(contas, /data-client-section-retry/);
+  assert.match(contas, /Tentar novamente/);
+  assert.match(contas, /data-client-list-limit/);
+  assert.match(contas, /Ver todos/);
+  assert.match(css, /client-list-limit/);
+  assert.match(css, /aria-selected="true"/);
+});
+
+test("ficha 360 isola respostas obsoletas e mantém layout móvel", () => {
+  const contas = source("modules/contas.js");
+  const css = source("modules/contas.css");
+  assert.match(contas, /const sheetRequest = \+\+contaClientSheetEpoch/);
+  assert.match(contas, /sheetRequest !== contaClientSheetEpoch/);
+  assert.match(contas, /panel\.dataset\.clientId !== String\(record\.id\)/);
+  assert.match(contas, /document\.querySelectorAll\("\.conta-drawer-wide"\)/);
+  assert.match(css, /@media\(max-width:420px\)/);
+  assert.match(css, /min-height:44px/);
+  assert.match(css, /overflow-wrap:anywhere|word-break/);
 });
